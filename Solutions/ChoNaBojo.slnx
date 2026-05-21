@@ -2,5 +2,13 @@
   <Folder Name="/Context/">
     <File Path="../Context/idea-notes.md" />
   </Folder>
-  <Folder Name="/Context/Foundation/" />
+  <Folder Name="/Context/Archive/">
+    <File Path="../context/archive/README.md" />
+  </Folder>
+  <Folder Name="/Context/Changes/">
+    <File Path="../context/changes/README.md" />
+  </Folder>
+  <Folder Name="/Context/Foundation/">
+    <File Path="../context/foundation/README.md" />
+  </Folder>
 </Solution>
