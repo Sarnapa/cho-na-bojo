@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/context/">
+    <File Path="../Context/idea-notes.md" />
+  </Folder>
+  <Folder Name="/context/archive/">
+    <File Path="../context/archive/README.md" />
+  </Folder>
+  <Folder Name="/context/changes/">
+    <File Path="../context/changes/README.md" />
+  </Folder>
+  <Folder Name="/context/foundation/">
+    <File Path="../context/foundation/README.md" />
+  </Folder>
+</Solution>
