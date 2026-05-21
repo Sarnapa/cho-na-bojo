@@ -1,1 +1,6 @@
-<Solution />
+<Solution>
+  <Folder Name="/Context/">
+    <File Path="../Context/idea-notes.md" />
+  </Folder>
+  <Folder Name="/Context/Foundation/" />
+</Solution>
