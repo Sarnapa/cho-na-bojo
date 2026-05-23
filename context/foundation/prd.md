@@ -91,12 +91,12 @@ Scope: individuals across many cities and regions.
   > Socrates: Counter-argument considered: "Forcing sport selection first slows down users who just want to browse nearby events regardless of sport." Resolution: revised — sport selection is now an optional filter, not a mandatory first step.
 
 - FR-004: User can view a map centered on their current location showing nearby venues for the selected sport. Priority: must-have
-  > Socrates: Counter-argument considered: "Map requires location permission — users who deny it get a broken experience." Resolution: kept; a fallback for denied location permission (e.g., manual city/address entry) is needed.
+  > Socrates: Counter-argument considered: "Map requires location permission — users who deny it get a broken experience." Resolution: kept; as a fallback for denied location permission, user can enter the address of the place to which the map view will be redirected.
 
 ### Event Management
 
 - FR-005: User can create an event at a selected venue, specifying date, estimated end time, participant limit, and optionally enabling auto-accept for join requests. Priority: must-have
-  > Socrates: Counter-argument considered: "No minimum participant count means events with 1 slot are pointless." Resolution: kept; minimum participant limit should be enforced (≥ 2). Auto-accept is an optional organizer preference.
+  > Socrates: Counter-argument considered: "No minimum participant count means events with 1 slot are pointless." Resolution: kept; minimum participant limit should be enforced (≥ 2), where the organiser is counted as one participant. Due to local restrictions in Poland regarding mass gatherings, the maximum number of participants is 300. Auto-accept is an optional organizer preference.
 
 - FR-006: User can view existing events at a selected venue and request to join one. Priority: must-have
   > Socrates: Counter-argument considered: "No preview of who's already in the event — joining is a blind leap." Resolution: kept; users should see how many spots are filled vs. the limit before requesting to join.
@@ -142,7 +142,7 @@ Scope: individuals across many cities and regions.
 
 The app surfaces sports venues and their events within the user's current map viewport, filtered by optional sport preference and time availability.
 
-Inputs: Map viewport (position + zoom level), optional sport filter.
+Inputs: Map viewport (position + zoom level), optional sport filter and time availability.
 
 Output: Venues visible on the current map view. Panning/zooming dynamically reveals more venues. Selecting a venue shows events available to join (not past end time, spots open) or the option to create one.
 
@@ -158,19 +158,15 @@ Role → capability matrix:
 
 - **Organizer** (of a specific event): create event, accept/reject join requests, remove participants, cancel event, view participant contact info (after acceptance).
 - **Participant** (of a specific event): request to join, leave event, view organizer contact info (after acceptance).
-- **Any authenticated user**: browse map, view venues, view event listings (participant count, sport, time), filter by sport, create new events.
+- **Any authenticated user**: browse map, view venues, view event listings (participant count, sport, time), filter by sport and time availability, create new events.
 - **Unauthenticated user**: no access. Cannot browse or interact with events.
 
 ## Non-Goals
 
-- No user-contributed venue additions — the app uses a predefined venue database only. Rationale: venue curation is a separate product concern; a fixed list keeps the MVP scope tight.
+- No user-contributed venue additions — the app uses a predefined venue database only. For the MVP, venue data will be manually uploaded to the database system and will pertain exclusively to Warsaw. Rationale: venue curation is a separate product concern; a fixed list keeps the MVP scope tight.
 - No inviting specific users to an event — discovery is open, not social-graph-based. Rationale: the product's value is meeting new people, not coordinating with existing contacts.
 - No user rating or reputation system — no trust scoring in MVP. Rationale: adds significant complexity; defer until scale demands it.
 - No in-app messaging — users coordinate via external messengers after contact info reveal. Rationale: building a messenger is a product unto itself; contact sharing is sufficient for MVP.
 - No iOS support — Android-only for MVP. Rationale: single-platform focus reduces development and testing scope by half.
 
 ## Open Questions
-
-1. **What is the fallback UX when location permission is denied?** — FR-004 requires a map centered on the user's location, but the Socrates challenge identified that denied permission breaks the experience. A manual city/address entry fallback was suggested but not specified. Owner: user. Block: no (core flow works with permission granted; fallback is a UX enhancement).
-2. **What is the source of the predefined venue database?** — The app uses a fixed list of sports venues (Non-Goals: no user-contributed additions), but the origin and maintenance of this list is unspecified. Owner: user. Block: yes (the app needs venue data to function).
-3. **What is the exact minimum participant limit for event creation?** — FR-005 Socrates challenge identified that a minimum ≥ 2 should be enforced, but the precise lower bound is not locked. Owner: user. Block: no (≥ 2 is a reasonable default).
