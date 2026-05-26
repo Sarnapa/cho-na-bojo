@@ -363,4 +363,5 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Includes materials from the training
-.github/
+.github/skills
+.github/.10x-cli-manifest.json
