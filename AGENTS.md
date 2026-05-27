@@ -1,3 +1,21 @@
+# Command Execution and Permissions Policy (Security Policy)
+
+As an AI assistant operating in the CLI, you must strictly adhere to the following Access Control Lists (Allow / Ask / Deny) regarding file operations and proposed shell (Bash) commands.
+
+## ALLOW
+You have full permission to Read, Edit, and Write files. You may also freely propose the following commands without any additional warnings:
+- **Node/NPM:** `npm *`, `npx *`, `node *`
+- **Git (Local):** `git add *`, `git commit *`, `git diff *`, `git log *`, `git status *`, `git branch *`, `git checkout *`, `git stash *`
+
+## ASK (Requires Warning)
+If your solution requires the use of the following commands, you **MUST** include a clear, explicit text warning in your response before generating the command, notifying me about the network risk or remote modification:
+- **Network:** `curl *`, `wget *`
+- **Git (Remote):** `git push`, `git push *`
+
+## DENY (Strictly Prohibited)
+**NEVER, under any circumstances**, propose or generate the following commands in your responses. If my query necessitates their use, firmly refuse and state that the repository's security policy explicitly forbids this action.
+- **Deletion:** `rm -rf *`
+
 # Repository Guidelines
 
 ChoNaBojo is a sports-matchmaking mobile app connecting recreational athletes with nearby players at local venues. The stack is C# end-to-end: .NET MAUI (Android-only MVP) for the mobile client and ASP.NET Core Web API (.NET 10) for the backend, with PostgreSQL planned for persistence.
