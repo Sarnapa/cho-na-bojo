@@ -20,6 +20,9 @@
   <Folder Name="/context/changes/bootstrap-verification/">
     <File Path="../context/changes/bootstrap-verification/verification.md" />
   </Folder>
+  <Folder Name="/context/changes/deployment/">
+    <File Path="../context/changes/deployment/deployment-plan.md" />
+  </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
     <File Path="../context/foundation/prd.md" />
