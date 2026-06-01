@@ -1,6 +1,9 @@
 [build]
 builder = "RAILPACK"
 
+[build.variables]
+DOTNET_GENERATE_ASPNET_CERTIFICATE = "false"
+
 [deploy]
 healthcheckPath = "/health"
 healthcheckTimeout = 60
