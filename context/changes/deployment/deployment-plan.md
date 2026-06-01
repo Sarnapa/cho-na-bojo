@@ -12,48 +12,48 @@ Six sequential phases: Account & secrets prerequisites → Railway backend deplo
 
 ## Phase 0: Account Creation & Secrets Configuration (Prerequisites)
 
-### 0.1 Create Railway account
-- Sign up at `railway.app` using GitHub OAuth (links directly to your repos)
-- Select the **Hobby plan** ($5/month) — required for persistent services and custom domains
-- Verify email
+### 0.1 Create Railway account ✅
+- ~~Sign up at `railway.app` using GitHub OAuth (links directly to your repos)~~
+- ~~Select the **Hobby plan** ($5/month) — required for persistent services and custom domains~~
+- ~~Verify email~~
 
-### 0.2 Create Supabase account & project
-- Sign up at `supabase.com` using GitHub OAuth
-- Create a new project (region: EU West or closest available)
-- Note down:
-  - **Project URL**: `https://<project-ref>.supabase.co`
-  - **Anon key** (public, safe for client): found in Settings → API
-  - **Service role key** (server-only, never expose to client): found in Settings → API
-  - **Connection string** (for direct Postgres access): Settings → Database → Connection string (URI)
-- Enable Row Level Security (RLS) on all future tables by default
+### 0.2 Create Supabase account & project ✅
+- ~~Sign up at `supabase.com` using GitHub OAuth~~
+- ~~Create a new project (region: EU West or closest available)~~
+- ~~Note down:~~
+  - ~~**Project URL**: `https://<project-ref>.supabase.co`~~
+  - ~~**Anon key** (public, safe for client): found in Settings → API~~
+  - ~~**Service role key** (server-only, never expose to client): found in Settings → API~~
+  - ~~**Connection string** (for direct Postgres access): Settings → Database → Connection string (URI)~~
+- ~~Enable Row Level Security (RLS) on all future tables by default~~
 
-### 0.3 Create Google Play Developer account (manual)
-- Register at `play.google.com/apps/publish/signup` — **$25 one-time fee**
-- Complete identity verification (may take 24–48 hours for new personal accounts)
+### 0.3 Create Google Play Developer account (manual) ⏳
+- ~~Register at `play.google.com/apps/publish/signup` — **$25 one-time fee**~~
+- ⏳ Complete identity verification (may take 24–48 hours for new personal accounts) — **waiting**
 - Create the app in Play Console → All apps → Create app
 - Complete all mandatory dashboard tasks (content rating, privacy policy, etc.)
 - Set up Internal Testing track: Testing → Internal testing → Create new release
 - Add tester email addresses
 
-### 0.4 Configure GitHub repository secrets
+### 0.4 Configure GitHub repository secrets ⏳
 Navigate to: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
 
-| Secret | Source | Description |
-|--------|--------|-------------|
-| `RAILWAY_TOKEN` | Railway dashboard → Account → Tokens | For optional CI access to Railway |
-| `SUPABASE_URL` | Supabase project settings → API | Project API URL |
-| `SUPABASE_ANON_KEY` | Supabase project settings → API | Public anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings → API | Server-side key (never expose to client) |
-| `SUPABASE_CONNECTION_STRING` | Supabase project settings → Database | Direct Postgres URI |
-| `ANDROID_KEYSTORE_BASE64` | Generated in Phase 3.3 | Base64 of `.keystore` file |
-| `ANDROID_KEYSTORE_PASSWORD` | Generated in Phase 3.3 | Keystore password |
-| `ANDROID_KEY_ALIAS` | Generated in Phase 3.3 | `cho-na-bojo` |
-| `ANDROID_KEY_PASSWORD` | Generated in Phase 3.3 | Key password |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | GCP console (Phase 3.6) | Service account JSON for Play uploads |
-| `PFX_BASE64` | Generated in Phase 4.2 | Base64 of Windows signing `.pfx` |
-| `PFX_PASSWORD` | Generated in Phase 4.2 | PFX password |
+| Secret | Source | Description | Status |
+|--------|--------|-------------|--------|
+| `RAILWAY_TOKEN` | Railway dashboard → Account → Tokens | For optional CI access to Railway | ✅ |
+| `SUPABASE_URL` | Supabase project settings → API | Project API URL | ✅ |
+| `SUPABASE_ANON_KEY` | Supabase project settings → API | Public anon key | ✅ |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings → API | Server-side key (never expose to client) | ✅ |
+| `SUPABASE_CONNECTION_STRING` | Supabase project settings → Database | Direct Postgres URI | ✅ |
+| `ANDROID_KEYSTORE_BASE64` | Generated in Phase 3.3 | Base64 of `.keystore` file | ⏳ Phase 3 |
+| `ANDROID_KEYSTORE_PASSWORD` | Generated in Phase 3.3 | Keystore password | ⏳ Phase 3 |
+| `ANDROID_KEY_ALIAS` | Generated in Phase 3.3 | `cho-na-bojo` | ⏳ Phase 3 |
+| `ANDROID_KEY_PASSWORD` | Generated in Phase 3.3 | Key password | ⏳ Phase 3 |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | GCP console (Phase 3.6) | Service account JSON for Play uploads | ⏳ Phase 3 |
+| `PFX_BASE64` | Generated in Phase 4.2 | Base64 of Windows signing `.pfx` | ⏳ Phase 4 |
+| `PFX_PASSWORD` | Generated in Phase 4.2 | PFX password | ⏳ Phase 4 |
 
-> **Note**: Android and Windows signing secrets will be populated as they are generated in Phases 3 and 4. Supabase and Railway secrets should be configured immediately after account creation.
+> **Note**: Railway and Supabase secrets are configured ✅. Android and Windows signing secrets will be populated as they are generated in Phases 3 and 4.
 
 ### 0.5 Configure Railway service environment variables
 After Railway project is created (Phase 1.4), set via CLI or dashboard:
