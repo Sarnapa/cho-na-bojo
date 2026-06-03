@@ -27,13 +27,13 @@ Six sequential phases: Account & secrets prerequisites → Railway backend deplo
   - ~~**Connection string** (for direct Postgres access): Settings → Database → Connection string (URI)~~
 - ~~Enable Row Level Security (RLS) on all future tables by default~~
 
-### 0.3 Create Google Play Developer account (manual) ⏳
+### 0.3 Create Google Play Developer account (manual) ✅
 - ~~Register at `play.google.com/apps/publish/signup` — **$25 one-time fee**~~
-- ⏳ Complete identity verification (may take 24–48 hours for new personal accounts) — **waiting**
-- Create the app in Play Console → All apps → Create app
-- Complete all mandatory dashboard tasks (content rating, privacy policy, etc.)
-- Set up Internal Testing track: Testing → Internal testing → Create new release
-- Add tester email addresses
+- ~~Complete identity verification (may take 24–48 hours for new personal accounts)~~
+- ~~Create the app in Play Console → All apps → Create app~~
+- ~~Complete all mandatory dashboard tasks (content rating, privacy policy, etc.)~~
+- ~~Set up Internal Testing track: Testing → Internal testing → Create new release~~
+- ~~Add tester email addresses~~
 
 ### 0.4 Configure GitHub repository secrets ⏳
 Navigate to: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
@@ -70,32 +70,23 @@ railway variables set SUPABASE_CONNECTION_STRING=<connection-string>
 
 ## Phase 1: Railway Setup & API Deployment
 
-### 1.1 Install Railway CLI (local)
-- Install via Scoop: `scoop install railway`
-- Authenticate: `railway login`
+### 1.1 Install Railway CLI (local) ✅
+- ~~Install via Scoop: `scoop install railway`~~
+- ~~Authenticate: `railway login`~~
 
-### 1.2 Add health-check endpoint to API
-- Add `GET /health` endpoint to `server/Program.cs` returning `200 OK` with `{ "status": "healthy" }`
-- This will be used by Railway's built-in healthcheck and by the mobile app for connectivity verification
+### 1.2 Add health-check endpoint to API ✅
+- ~~Add `GET /health` endpoint to `server/Program.cs` returning `200 OK` with `{ "status": "healthy" }`~~
+- ~~This will be used by Railway's built-in healthcheck and by the mobile app for connectivity verification~~
 
-### 1.3 Create `railway.toml` config
-- Place in `server/` directory with:
-  ```toml
-  [build]
-  builder = "RAILPACK"
+### 1.3 Create `railway.toml` config ✅
+- ~~Place in `server/` directory with build/deploy configuration~~
 
-  [deploy]
-  healthcheckPath = "/health"
-  healthcheckTimeout = 60
-  restartPolicyType = "ON_FAILURE"
-  ```
-
-### 1.4 Connect GitHub repo to Railway
-- Install Railway GitHub App: `https://github.com/apps/railway-app/installations/new`
-- In Railway dashboard: create project → add service → connect `Sarnapa/cho-na-bojo` repo
-- Set root directory to `server/` in service settings
-- Set branch to `master` for auto-deploy on push
-- Configure start command: `ASPNETCORE_URLS=http://0.0.0.0:${PORT:-8080} ./out/server`
+### 1.4 Connect GitHub repo to Railway ✅
+- ~~Install Railway GitHub App~~
+- ~~In Railway dashboard: create project → add service → connect `Sarnapa/cho-na-bojo` repo~~
+- ~~Set root directory to `server/` in service settings~~
+- ~~Set branch to `master` for auto-deploy on push~~
+- ~~Configure start command~~
 
 ### 1.5 Set environment variables
 - Configured in Phase 0.5 — verify they're set via `railway variables list`
