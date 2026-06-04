@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-
-namespace ChoNaBojoApp
+﻿namespace ChoNaBojo.App
 {
 	public partial class App: Application
 	{

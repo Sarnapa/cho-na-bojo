@@ -55,16 +55,8 @@ Navigate to: GitHub repo → Settings → Secrets and variables → Actions → 
 
 > **Note**: Railway and Supabase secrets are configured ✅. Android and Windows signing secrets will be populated as they are generated in Phases 3 and 4.
 
-### 0.5 Configure Railway service environment variables
-After Railway project is created (Phase 1.4), set via CLI or dashboard:
-```powershell
-railway variables set ASPNETCORE_ENVIRONMENT=Production
-railway variables set DOTNET_VERSION=10.0
-railway variables set SUPABASE_URL=https://<project-ref>.supabase.co
-railway variables set SUPABASE_ANON_KEY=<anon-key>
-railway variables set SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-railway variables set SUPABASE_CONNECTION_STRING=<connection-string>
-```
+### 0.5 Configure Railway service environment variables ✅
+- ~~Set environment variables via Railway CLI/dashboard~~
 
 ---
 
@@ -88,46 +80,43 @@ railway variables set SUPABASE_CONNECTION_STRING=<connection-string>
 - ~~Set branch to `master` for auto-deploy on push~~
 - ~~Configure start command~~
 
-### 1.5 Set environment variables
-- Configured in Phase 0.5 — verify they're set via `railway variables list`
-- Confirm: `ASPNETCORE_ENVIRONMENT`, `DOTNET_VERSION`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+### 1.5 Set environment variables ✅
+- ~~Configured in Phase 0.5 — verified via `railway variables list`~~
 
-### 1.6 Generate public domain
-- After first successful deploy: `railway domain`
-- Note the `*.up.railway.app` URL for mobile app configuration
+### 1.6 Generate public domain ✅
+- ~~Generated `*.up.railway.app` URL for mobile app configuration~~
 
-### 1.7 Verify deployment
-- Confirm build logs show `Installing dotnet@10.x`
-- Hit `https://<domain>.up.railway.app/health` and verify `200 OK`
+### 1.7 Verify deployment ✅
+- ~~Confirmed build and health endpoint returning `200 OK`~~
 
 ---
 
 ## Phase 2: Mobile App ↔ API Integration
 
-### 2.1 Configure HttpClient in MAUI app
-- Register `HttpClient` in DI container in `MauiProgram.cs`
-- Use `IHttpClientFactory` pattern with named client `"ChoNaBojoApi"`
-- Base URL from `appsettings.json` (dev: `http://localhost:5100`, prod: Railway URL)
+### 2.1 Configure HttpClient in MAUI app ✅
+- ~~Register `HttpClient` in DI container in `MauiProgram.cs`~~
+- ~~Use `IHttpClientFactory` pattern with named client `"ChoNaBojoApi"`~~
 
-### 2.2 Create API service layer
-- Create `Services/ApiService.cs` with typed methods calling API endpoints
-- Create `Services/IApiService.cs` interface for testability
-- Register in DI
+### 2.2 Create API service layer ✅
+- ~~Create `Services/ApiService.cs` with typed methods calling API endpoints~~
+- ~~Create `Services/IApiService.cs` interface for testability~~
+- ~~Register in DI~~
 
-### 2.3 Add connectivity check
-- On app startup, ping `/health` endpoint
-- Show offline banner if API unreachable
-- Handle `HttpRequestException` gracefully
+### 2.3 Add connectivity check ✅
+- ~~On app startup, ping `/health` endpoint~~
+- ~~Show offline alert if API unreachable~~
+- ~~Handle `HttpRequestException` gracefully~~
 
-### 2.4 Platform-specific base URL configuration
-- Use `#if DEBUG` / environment-based switching:
-  - Debug (Android emulator): `http://10.0.2.2:5100`
-  - Debug (Windows): `http://localhost:5100`
-  - Release: `https://<railway-domain>.up.railway.app`
+### 2.4 Platform-specific base URL configuration ✅
+- ~~Use `#if DEBUG` / environment-based switching~~
+- ~~Debug (Android emulator): `http://10.0.2.2:5100`~~
+- ~~Debug (Windows): `http://localhost:5100`~~
+- ~~Release: `https://cho-na-bojo-production.up.railway.app`~~
 
-### 2.5 Remove iOS/macOS targets from `.csproj`
-- Update `TargetFrameworks` to only include `net10.0-android` and `net10.0-windows10.0.19041.0`
-- Remove iOS/macOS `SupportedOSPlatformVersion` conditions
+### 2.5 Remove iOS/macOS targets from `.csproj` ✅
+- ~~Updated `TargetFrameworks` to only include `net10.0-android` and `net10.0-windows10.0.19041.0`~~
+- ~~Removed iOS/macOS `SupportedOSPlatformVersion` conditions~~
+- ~~Removed iOS and MacCatalyst platform folders~~
 
 ---
 

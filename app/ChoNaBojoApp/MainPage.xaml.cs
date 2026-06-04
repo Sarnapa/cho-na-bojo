@@ -1,12 +1,26 @@
-﻿namespace ChoNaBojoApp
+﻿using ChoNaBojo.App.Services;
+
+namespace ChoNaBojo.App
 {
 	public partial class MainPage: ContentPage
 	{
-		int count = 0;
+		private readonly IApiService _apiService;
+		private int count = 0;
 
-		public MainPage()
+		public MainPage(IApiService apiService)
 		{
 			InitializeComponent();
+			_apiService = apiService;
+		}
+
+		protected override async void OnAppearing()
+		{
+			base.OnAppearing();
+			var isHealthy = await _apiService.CheckHealthAsync();
+			if (!isHealthy)
+			{
+				await DisplayAlertAsync("Offline", "Unable to reach the server. Some features may be unavailable.", "OK");
+			}
 		}
 
 		private void OnCounterClicked(object? sender, EventArgs e)
