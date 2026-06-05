@@ -362,6 +362,11 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
+# Sensitive data
+*.keystore
+*.pfx
+secrets/
+
 # Includes materials from the training
 .github/.10x-cli-manifest.json
 .github/prompts

@@ -122,34 +122,23 @@ Navigate to: GitHub repo → Settings → Secrets and variables → Actions → 
 
 ## Phase 3: Android Build & Google Play Internal Testing
 
-### 3.1 Create Google Play Developer account (manual)
-- Register at `play.google.com/apps/publish/signup` ($25 one-time fee)
-- Complete identity verification
+### 3.1 Create Google Play Developer account (manual) ✅
+- ~~Register at `play.google.com/apps/publish/signup` ($25 one-time fee)~~
+- ~~Complete identity verification~~
 
-### 3.2 Create app in Google Play Console (manual)
-- All apps → Create app → fill required dashboard tasks
-- Set up Internal Testing track → add tester email list
+### 3.2 Create app in Google Play Console (manual) ✅
+- ~~All apps → Create app → fill required dashboard tasks~~
+- ~~Set up Internal Testing track → add tester email list~~
 
-### 3.3 Generate Android signing keystore (manual, one-time)
-```powershell
-keytool -genkeypair -v -keystore cho-na-bojo.keystore -alias cho-na-bojo -keyalg RSA -keysize 2048 -validity 10000
-```
-- **CRITICAL**: Back up keystore + password securely — cannot be regenerated
+### 3.3 Generate Android signing keystore (manual, one-time) ✅
+- ~~Generated keystore in `secrets/cho-na-bojo.keystore`~~
 
-### 3.4 Configure `.csproj` for Android release signing
-```xml
-<PropertyGroup Condition="$(TargetFramework.Contains('-android')) and '$(Configuration)' == 'Release'">
-    <AndroidKeyStore>true</AndroidKeyStore>
-    <AndroidSigningKeyStore>cho-na-bojo.keystore</AndroidSigningKeyStore>
-    <AndroidSigningKeyAlias>cho-na-bojo</AndroidSigningKeyAlias>
-    <AndroidPackageFormats>aab</AndroidPackageFormats>
-</PropertyGroup>
-```
+### 3.4 Configure `.csproj` for Android release signing ✅
+- ~~Configured Android signing with local keystore path fallback~~
 
-### 3.5 First manual upload to Play Console (mandatory)
-- Build locally: `dotnet publish app/ChoNaBojoApp/ChoNaBojoApp.csproj -f net10.0-android -c Release -p:AndroidSigningStorePass=... -p:AndroidSigningKeyPass=...`
-- Upload the `*-Signed.aab` to Internal Testing track manually
-- Google locks the signing key to this first upload
+### 3.5 First manual upload to Play Console (mandatory) ✅
+- ~~Built signed AAB and uploaded to Internal Testing track~~
+- ~~ApplicationId set to `com.cho_na_bojo`~~
 
 ### 3.6 Set up Google Play Service Account for automation
 - Enable Android Publisher API in GCP console

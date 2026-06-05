@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFrameworks>net10.0-android</TargetFrameworks>
@@ -14,10 +14,10 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Display name -->
-		<ApplicationTitle>ChoNaBojoApp</ApplicationTitle>
+		<ApplicationTitle>Cho Na Bojo</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.chonabojoapp</ApplicationId>
+		<ApplicationId>com.cho_na_bojo</ApplicationId>
 
 		<!-- Versions -->
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -53,5 +53,18 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
 	</ItemGroup>
+
+	<!-- Android release signing -->
+	<PropertyGroup Condition="$(TargetFramework.Contains('-android')) and '$(Configuration)' == 'Release'">
+		<AndroidKeyStore>true</AndroidKeyStore>
+		<AndroidSigningKeyStore>$(AndroidSigningKeyStore)</AndroidSigningKeyStore>
+		<AndroidSigningKeyAlias>cho-na-bojo</AndroidSigningKeyAlias>
+		<AndroidPackageFormats>aab</AndroidPackageFormats>
+	</PropertyGroup>
+
+	<!-- Default keystore path for local builds (overridden by CI) -->
+	<PropertyGroup Condition="$(TargetFramework.Contains('-android')) and '$(Configuration)' == 'Release' and '$(AndroidSigningKeyStore)' == ''">
+		<AndroidSigningKeyStore>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\secrets\cho-na-bojo.keystore'))</AndroidSigningKeyStore>
+	</PropertyGroup>
 
 </Project>
