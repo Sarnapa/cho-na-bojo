@@ -35,8 +35,8 @@ Six sequential phases: Account & secrets prerequisites → Railway backend deplo
 - ~~Set up Internal Testing track: Testing → Internal testing → Create new release~~
 - ~~Add tester email addresses~~
 
-### 0.4 Configure GitHub repository secrets ⏳
-Navigate to: GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+### 0.4 Configure GitHub repository secrets ✅
+~~Navigate to: GitHub repo → Settings → Secrets and variables → Actions → New repository secret~~
 
 | Secret | Source | Description | Status |
 |--------|--------|-------------|--------|
@@ -50,10 +50,8 @@ Navigate to: GitHub repo → Settings → Secrets and variables → Actions → 
 | `ANDROID_KEY_ALIAS` | Generated in Phase 3.3 | `cho-na-bojo` | ✅ |
 | `ANDROID_KEY_PASSWORD` | Generated in Phase 3.3 | Key password | ✅ |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | GCP console (Phase 3.6) | Service account JSON for Play uploads | ✅ |
-| `PFX_BASE64` | Generated in Phase 4.2 | Base64 of Windows signing `.pfx` | ⏳ Phase 4 |
-| `PFX_PASSWORD` | Generated in Phase 4.2 | PFX password | ⏳ Phase 4 |
-
-> **Note**: Railway and Supabase secrets are configured ✅. Android and Windows signing secrets will be populated as they are generated in Phases 3 and 4.
+| `PFX_BASE64` | Generated in Phase 4.2 | Base64 of Windows signing `.pfx` | ✅ |
+| `PFX_PASSWORD` | Generated in Phase 4.2 | PFX password | ✅ |
 
 ### 0.5 Configure Railway service environment variables ✅
 - ~~Set environment variables via Railway CLI/dashboard~~
@@ -249,26 +247,11 @@ Get-Content secrets\google-play-service-account.json -Raw | Set-Clipboard
 
 > Added to `app/ChoNaBojoApp/ChoNaBojoApp.csproj`. Local Debug build verified green. `WindowsPackageType=None` kept in csproj for local unpackaged dev runs; CI overrides with `-p:WindowsPackageType=MSIX`.
 
-### 4.2 Create self-signed certificate for MSIX (manual, one-time) ⏳
-```powershell
-$cert = New-SelfSignedCertificate -Type Custom -Subject "CN=ChoNaBojo Dev" `
-  -KeyUsage DigitalSignature -FriendlyName "ChoNaBojo Dev Signing" `
-  -CertStoreLocation "Cert:\CurrentUser\My" `
-  -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
+### 4.2 Create self-signed certificate for MSIX (manual, one-time) ✅
+~~Generated `secrets\cho-na-bojo-dev.pfx` via `New-SelfSignedCertificate` + `Export-PfxCertificate` (subject `CN=ChoNaBojo Dev`, EKU code-signing).~~
 
-Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
-  -FilePath "secrets\cho-na-bojo-dev.pfx" -Password (ConvertTo-SecureString "YourPassword" -AsPlainText -Force)
-```
-
-> Suggested output path: `secrets\cho-na-bojo-dev.pfx` (already gitignored via `secrets/`). Pick a strong password — it goes into `PFX_PASSWORD` secret in 4.3.
-
-### 4.3 Configure GitHub Secrets for Windows ⏳
-| Secret | Description | How to generate |
-|--------|-------------|-----------------|
-| `PFX_BASE64` | Base64-encoded `.pfx` certificate | `[Convert]::ToBase64String([IO.File]::ReadAllBytes("secrets\cho-na-bojo-dev.pfx")) \| Set-Clipboard` |
-| `PFX_PASSWORD` | PFX password | Plain text — same as `-Password` from 4.2 |
-
-After adding both secrets, mark their rows in the Phase 0.4 table as ✅.
+### 4.3 Configure GitHub Secrets for Windows ✅
+~~Added `PFX_BASE64` and `PFX_PASSWORD` to repository secrets; Phase 0.4 table updated.~~
 
 ### 4.4 Create GitHub Actions workflow: Windows MSIX ✅
 - ~~File: `.github/workflows/windows-deploy.yml` — created~~
@@ -276,7 +259,7 @@ After adding both secrets, mark their rows in the Phase 0.4 table as ✅.
 - ~~Runner: `windows-latest` (mandatory for MSIX)~~
 - ~~Steps: checkout → setup .NET 10 → install `maui-windows` workload → restore → decode PFX → compute versioned build → `dotnet publish` with `RuntimeIdentifierOverride=win-x64`, `WindowsPackageType=MSIX`, `AppxPackageSigningEnabled=true`, `PackageCertificateKeyFile`/`PackageCertificatePassword` (passwords forwarded via step `env:`, NOT inline `${{ secrets.X }}` interpolation) → locate MSIX recursively → export public `.cer` via `X509Certificate2.Export(Cert)` (ephemeral key set, no store import) → write `INSTALL.txt` with sideloading steps → stage MSIX + `.cer` + `INSTALL.txt` → upload as single artifact (30-day retention)~~
 
-> Workflow will fail until 4.2 + 4.3 are completed (missing `PFX_BASE64` / `PFX_PASSWORD` secrets). Trigger via `workflow_dispatch` after secrets are in place, then via tag for releases.
+> **Fix applied 2026-06-07 after first dry-run hit `NETSDK1147: workload 'android' must be installed`**: Both `restore` and `publish` now pass `-p:TargetFrameworks=net10.0-windows10.0.19041.0`. MSBuild evaluates workload requirements for every TF listed in the csproj's `TargetFrameworks`, even when `-f` narrows the actual build — so `-f net10.0-windows10.0.19041.0` alone is not enough on a Windows runner that only has `maui-windows` installed. The override drops the android TF from evaluation entirely.
 
 ---
 

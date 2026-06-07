@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/agents/.github/workflows/">
     <File Path="../.github/workflows/android-deploy.yml" />
+    <File Path="../.github/workflows/windows-deploy.yml" />
   </Folder>
   <Folder Name="/app/">
     <Project Path="../app/ChoNaBojoApp/ChoNaBojoApp.csproj" Id="cac6a2d5-7d1b-41ad-9271-0e5331091291" />
