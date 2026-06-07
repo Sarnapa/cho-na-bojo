@@ -304,6 +304,9 @@ Set `RAILWAY_DOCKERFILE_PATH=Dockerfile` in Railway service variables.
 - **APPX1101 duplicate file**: You used `-r win-x64` directly — must use `-p:RuntimeIdentifierOverride=win-x64` instead
 - **MSIX won't install on tester machine**: Tester must import the public `.cer` into `LocalMachine\TrustedPeople` certificate store first
 - **App crashes on launch from publish folder**: By-design — MSIX apps must be installed and launched from Start Menu
+- **`NETSDK1147: workload 'android' must be installed` on a Windows runner**: MSBuild evaluates workload requirements for every TF in the csproj's `TargetFrameworks`, even when `-f` narrows the build target. Pass `-p:TargetFrameworks=net10.0-windows10.0.19041.0` to **both** `restore` and `publish` so the android TF is dropped from evaluation entirely. Installing only `maui-windows` on the runner is not sufficient on its own.
+- **`MakeAppx C00CE169: '<id>' violates pattern '[-.A-Za-z0-9]+'`**: MSIX `Identity Name` schema disallows underscores, but Android `ApplicationId` allows them. If your Android ID is already live on Play Console (immutable per 5.6), override only for the Windows publish via `-p:ApplicationId=com.cho-na-bojo`. Android and Windows have separate identity namespaces — divergence is fine.
+- **`APPX0105: Cannot import the key file ... may be password protected`**: WindowsAppSDK's signing pipeline can't reliably decrypt a PFX via `PackageCertificatePassword`. Switch to **thumbprint signing**: run `Import-PfxCertificate -CertStoreLocation Cert:\CurrentUser\My` first, then pass `-p:PackageCertificateThumbprint=$thumbprint` (drop both `PackageCertificateKeyFile` and `PackageCertificatePassword`). Ephemeral CI runners discard the cert store with the VM, so no cleanup needed.
 
 ### 5.5 Railway monitoring & rollback
 - Stream logs: `railway logs --filter "@level:error"`
