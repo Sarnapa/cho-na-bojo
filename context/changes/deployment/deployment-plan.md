@@ -45,11 +45,11 @@ Navigate to: GitHub repo → Settings → Secrets and variables → Actions → 
 | `SUPABASE_ANON_KEY` | Supabase project settings → API | Public anon key | ✅ |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase project settings → API | Server-side key (never expose to client) | ✅ |
 | `SUPABASE_CONNECTION_STRING` | Supabase project settings → Database | Direct Postgres URI | ✅ |
-| `ANDROID_KEYSTORE_BASE64` | Generated in Phase 3.3 | Base64 of `.keystore` file | ⏳ Phase 3 |
-| `ANDROID_KEYSTORE_PASSWORD` | Generated in Phase 3.3 | Keystore password | ⏳ Phase 3 |
-| `ANDROID_KEY_ALIAS` | Generated in Phase 3.3 | `cho-na-bojo` | ⏳ Phase 3 |
-| `ANDROID_KEY_PASSWORD` | Generated in Phase 3.3 | Key password | ⏳ Phase 3 |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | GCP console (Phase 3.6) | Service account JSON for Play uploads | ⏳ Phase 3 |
+| `ANDROID_KEYSTORE_BASE64` | Generated in Phase 3.3 | Base64 of `.keystore` file | ✅ |
+| `ANDROID_KEYSTORE_PASSWORD` | Generated in Phase 3.3 | Keystore password | ✅ |
+| `ANDROID_KEY_ALIAS` | Generated in Phase 3.3 | `cho-na-bojo` | ✅ |
+| `ANDROID_KEY_PASSWORD` | Generated in Phase 3.3 | Key password | ✅ |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | GCP console (Phase 3.6) | Service account JSON for Play uploads | ✅ |
 | `PFX_BASE64` | Generated in Phase 4.2 | Base64 of Windows signing `.pfx` | ⏳ Phase 4 |
 | `PFX_PASSWORD` | Generated in Phase 4.2 | PFX password | ⏳ Phase 4 |
 
@@ -140,26 +140,97 @@ Navigate to: GitHub repo → Settings → Secrets and variables → Actions → 
 - ~~Built signed AAB and uploaded to Internal Testing track~~
 - ~~ApplicationId set to `com.cho_na_bojo`~~
 
-### 3.6 Set up Google Play Service Account for automation
-- Enable Android Publisher API in GCP console
-- Create service account → download JSON key
-- Invite service account email in Play Console → grant "Release to Internal Testing" permission
+### 3.6 Set up Google Play Service Account for automation ✅
+~~A service account is required so GitHub Actions can upload AABs to the Internal Testing track without a human Google login.~~
 
-### 3.7 Configure GitHub Secrets
-| Secret | Description |
-|--------|-------------|
-| `ANDROID_KEYSTORE_BASE64` | Base64-encoded `.keystore` file |
-| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
-| `ANDROID_KEY_ALIAS` | `cho-na-bojo` |
-| `ANDROID_KEY_PASSWORD` | Key password |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | GCP service account JSON |
+#### 3.6.1 Link Play Console to a Google Cloud project ✅
+- ~~Play Console → **Setup → API access**~~
+- ~~If no project is linked: click **Create new project** (Google creates a fresh GCP project) **or** **Link existing project** if you already have one~~
+- ~~Once linked, the page shows the GCP project ID~~
 
-### 3.8 Create GitHub Actions workflow: Android
-- File: `.github/workflows/android-deploy.yml`
+#### 3.6.2 Enable the Google Play Android Developer API in GCP ✅
+- ~~Open `https://console.cloud.google.com/` → select the linked project~~
+- ~~**APIs & Services → Library** → search for **"Google Play Android Developer API"** → click **Enable**~~
+- ~~(No billing required for this API at our usage level)~~
+
+#### 3.6.3 Create the service account ✅
+- ~~GCP Console → **IAM & Admin → Service Accounts → Create service account**~~
+- ~~Name: `cho-na-bojo-play-publisher` (description: "GitHub Actions Play Store uploads")~~
+- ~~Skip the optional "Grant this service account access to project" step (Play permissions are granted in Play Console, not GCP IAM)~~
+- ~~Click **Done**~~
+
+#### 3.6.4 Create and download the JSON key ✅
+- ~~Open the new service account → **Keys** tab → **Add key → Create new key → JSON** → **Create**~~
+- ~~Browser downloads a `*.json` file — save it to `secrets/google-play-service-account.json` (already gitignored via `secrets/`)~~
+- ~~**Never commit this file.** It grants release-upload rights to the app.~~
+
+#### 3.6.5 Grant the service account Play Console permissions ✅
+- ~~Play Console → **Setup → API access** → find the new service account in the list (matches the email from the JSON, e.g. `cho-na-bojo-play-publisher@<project-id>.iam.gserviceaccount.com`)~~
+- ~~Click **Manage Play Console permissions** (or **Invite user** if not auto-listed, pasting the service account email)~~
+- ~~**App permissions** tab → **Add app** → select `Cho Na Bojo`~~
+- ~~**Account permissions** tab → grant the minimum needed:~~
+  - ~~✅ View app information and download bulk reports~~
+  - ~~✅ Manage testing track releases (this covers internal testing uploads)~~
+  - ~~❌ Do **not** grant production release permissions yet~~
+- ~~Click **Invite user** / **Apply**~~
+
+#### 3.6.6 Verify access (optional but recommended)
+- Wait ~5 minutes for permissions to propagate
+- Test locally with `fastlane supply` or by triggering the workflow with `workflow_dispatch` after step 3.8
+
+### 3.7 Configure GitHub Secrets for Android ✅
+~~Add these via GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**. Generate values from the keystore created in 3.3 and the JSON key from 3.6.4.~~
+
+#### 3.7.1 Encode the keystore as base64 ✅
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("secrets\cho-na-bojo.keystore")) | Set-Clipboard
+```
+~~Paste the clipboard content into the `ANDROID_KEYSTORE_BASE64` secret.~~
+
+#### 3.7.2 Encode the service account JSON as a secret ✅
+~~The JSON file contents go directly into the secret (no base64 needed — GitHub stores multiline strings fine):~~
+```powershell
+Get-Content secrets\google-play-service-account.json -Raw | Set-Clipboard
+```
+~~Paste into the `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` secret.~~
+
+#### 3.7.3 Required secrets summary ✅
+| Secret | Value source | Notes |
+|--------|-------------|-------|
+| `ANDROID_KEYSTORE_BASE64` | Output of 3.7.1 | Single-line base64 string | ✅ |
+| `ANDROID_KEYSTORE_PASSWORD` | Set during keystore creation in 3.3 | Plain text | ✅ |
+| `ANDROID_KEY_ALIAS` | `cho-na-bojo` | Matches `<AndroidSigningKeyAlias>` in `.csproj` | ✅ |
+| `ANDROID_KEY_PASSWORD` | Set during keystore creation in 3.3 | Plain text (often same as keystore password) | ✅ |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Output of 3.7.2 | Multi-line raw JSON | ✅ |
+
+#### 3.7.4 Update Phase 0.4 status ✅
+~~After adding all five secrets, mark their rows in the Phase 0.4 table as ✅.~~
+
+### 3.8 Create GitHub Actions workflow: Android ✅
+- ~~File: `.github/workflows/android-deploy.yml` ✅ created~~
 - Trigger: push tag `v*.*.*` + manual `workflow_dispatch`
-- Steps: checkout → setup .NET 10 → install `maui-android` workload → setup Java 17 → decode keystore → build signed AAB → upload to Play Console internal track via `r0adkll/upload-google-play@v1`
-- Version code: `10000 + github.run_number` (strictly incrementing)
-- Upload AAB as artifact for backup
+- Runner: `ubuntu-latest`
+- Steps (final, post-critique):
+  1. Checkout (`actions/checkout@v4`)
+  2. Setup .NET 10 (`actions/setup-dotnet@v4`, `10.0.x`)
+  3. Setup Java 21 (Temurin) — .NET 10 Android tooling prefers JDK 21 over 17
+  4. Install `maui-android` workload
+  5. `dotnet build -t:InstallAndroidDependencies` with `-p:AcceptAndroidSDKLicenses=True` to provision SDK packages on the runner
+  6. Restore dependencies
+  7. `chmod +x` on any `gradlew` to avoid Linux runner permission errors
+  8. Decode `ANDROID_KEYSTORE_BASE64` to `${{ runner.temp }}/cho-na-bojo.keystore` via step `env:` (avoids YAML char-expansion bugs in passwords)
+  9. Compute `versionCode = 10000 + run_number * 10 + run_attempt` so workflow re-runs don't collide with Play's strictly-increasing version-code rule
+  10. `dotnet publish ChoNaBojoApp.csproj -f net10.0-android -c Release` with signing properties passed as MSBuild `-p:` args; passwords forwarded via step `env:` and referenced as `$VAR` (NOT inline `${{ secrets.X }}` interpolation, which bash can mangle on special chars)
+  11. Find signed AAB via case-insensitive `find -iname "*-signed.aab"` rooted at the publish dir; fail loudly if missing (prevents accidental upload of unsigned bundle)
+  12. Upload AAB as artifact for backup (30-day retention)
+  13. Upload to Play Console internal track via `r0adkll/upload-google-play@v1` using `serviceAccountJsonPlainText`
+
+> Critique gates closed (rubber-duck pass on 2026-06-07):
+> - Password handling moved from inline interpolation to step `env:` + bash `$VAR`
+> - AAB discovery is case-insensitive and fails if unsigned-only
+> - Java bumped 17 → 21
+> - Added `InstallAndroidDependencies` MSBuild target to prep SDK on runner
+> - versionCode includes `run_attempt` to survive re-runs
 
 ---
 

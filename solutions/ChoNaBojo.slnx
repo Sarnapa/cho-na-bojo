@@ -5,6 +5,9 @@
   <Folder Name="/agents/.github/">
     <File Path="../.github/copilot-instructions.md" />
   </Folder>
+  <Folder Name="/agents/.github/workflows/">
+    <File Path="../.github/workflows/android-deploy.yml" />
+  </Folder>
   <Folder Name="/app/">
     <Project Path="../app/ChoNaBojoApp/ChoNaBojoApp.csproj" Id="cac6a2d5-7d1b-41ad-9271-0e5331091291" />
   </Folder>

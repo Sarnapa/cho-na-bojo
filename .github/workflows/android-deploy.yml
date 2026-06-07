@@ -1,0 +1,109 @@
+name: Android Deploy
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  PROJECT_PATH: 'app/ChoNaBojoApp/ChoNaBojoApp.csproj'
+  ANDROID_PACKAGE: 'com.cho_na_bojo'
+  PUBLISH_DIR: 'app/ChoNaBojoApp/bin/Release/net10.0-android/publish'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android --ignore-failed-sources
+
+      - name: Install Android SDK dependencies
+        run: |
+          dotnet build ${{ env.PROJECT_PATH }} \
+            -t:InstallAndroidDependencies \
+            -f net10.0-android \
+            -p:AcceptAndroidSDKLicenses=True
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Make gradlew executable
+        run: find . -name "gradlew" -exec chmod +x {} \; || true
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > "${{ runner.temp }}/cho-na-bojo.keystore"
+          ls -la "${{ runner.temp }}/cho-na-bojo.keystore"
+
+      - name: Compute version code
+        id: vcode
+        run: |
+          VALUE=$((10000 + ${{ github.run_number }} * 10 + ${{ github.run_attempt }}))
+          echo "value=$VALUE" >> "$GITHUB_OUTPUT"
+          echo "Computed versionCode=$VALUE"
+
+      - name: Build & sign AAB
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          dotnet publish "${{ env.PROJECT_PATH }}" \
+            -f net10.0-android \
+            -c Release \
+            -p:ApplicationVersion=${{ steps.vcode.outputs.value }} \
+            -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore="${{ runner.temp }}/cho-na-bojo.keystore" \
+            -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS" \
+            -p:AndroidSigningKeyPass="$ANDROID_KEY_PASSWORD" \
+            -p:AndroidSigningStorePass="$ANDROID_KEYSTORE_PASSWORD" \
+            -p:AndroidPackageFormats=aab
+
+      - name: Locate signed AAB
+        id: aab
+        run: |
+          AAB_PATH=$(find "${{ env.PUBLISH_DIR }}" -iname "*-signed.aab" -print -quit)
+          if [ -z "$AAB_PATH" ]; then
+            echo "::error::Signed AAB not found under ${{ env.PUBLISH_DIR }}"
+            echo "Files present under bin/Release/net10.0-android:"
+            find app/ChoNaBojoApp/bin/Release/net10.0-android -name "*.aab" -print || true
+            exit 1
+          fi
+          echo "path=$AAB_PATH" >> "$GITHUB_OUTPUT"
+          echo "Found signed AAB at: $AAB_PATH"
+
+      - name: Upload AAB artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cho-na-bojo-${{ steps.vcode.outputs.value }}
+          path: ${{ steps.aab.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload to Google Play Internal Testing
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.ANDROID_PACKAGE }}
+          releaseFiles: ${{ steps.aab.outputs.path }}
+          track: internal
+          status: completed
