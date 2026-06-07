@@ -263,6 +263,8 @@ Get-Content secrets\google-play-service-account.json -Raw | Set-Clipboard
 
 > **Fix applied 2026-06-07 after second dry-run hit `MakeAppx C00CE169: 'com.cho_na_bojo' violates pattern '[-.A-Za-z0-9]+'`**: MSIX `Identity Name` schema disallows underscores, but the Android `ApplicationId` (`com.cho_na_bojo`) is already live on Play Console Internal Testing and per Phase 5.6 cannot be changed. The Windows publish now passes `-p:ApplicationId=com.cho-na-bojo` (hyphens) to override only for the MSIX build. Android keeps `com.cho_na_bojo`; Windows ships as `com.cho-na-bojo` — acceptable because Android and Windows have separate stores and separate identity namespaces.
 
+> **Fix applied 2026-06-07 after third dry-run hit `APPX0105: Cannot import the key file ... may be password protected`**: WindowsAppSDK's MSBuild signing pipeline can't reliably decrypt a PFX via `PackageCertificatePassword` — a long-standing quirk where it tries to import into the cert store and fails on the password handshake. Switched signing to **thumbprint mode**: an `Import-PfxCertificate -CertStoreLocation Cert:\CurrentUser\My` step runs first, captures the thumbprint, and the publish step passes `-p:PackageCertificateThumbprint=...` (no `PackageCertificateKeyFile` / `PackageCertificatePassword`). The runner is ephemeral, so the cert-store side effect is discarded with the VM.
+
 ---
 
 ## Phase 5: Edge Cases, Fallbacks & Support
