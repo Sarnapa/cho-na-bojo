@@ -67,4 +67,10 @@
 		<AndroidSigningKeyStore>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\secrets\cho-na-bojo.keystore'))</AndroidSigningKeyStore>
 	</PropertyGroup>
 
+	<!-- WindowsAppSDK issue #3337 workaround: honour RuntimeIdentifierOverride for Windows publish.
+	     Use win-x64 (NOT win10-x64) — .NET 10 removed version-specific RIDs (NETSDK1083). -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' and '$(RuntimeIdentifierOverride)' != ''">
+		<RuntimeIdentifier>$(RuntimeIdentifierOverride)</RuntimeIdentifier>
+	</PropertyGroup>
+
 </Project>

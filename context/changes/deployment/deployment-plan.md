@@ -238,16 +238,18 @@ Get-Content secrets\google-play-service-account.json -Raw | Set-Clipboard
 
 ## Phase 4: Windows WinUI3 MSIX Build
 
-### 4.1 Fix `.csproj` for .NET 10 Windows known issues
-Add WindowsAppSDK #3337 workaround:
+### 4.1 Fix `.csproj` for .NET 10 Windows known issues ✅
+~~Add WindowsAppSDK #3337 workaround:~~
 ```xml
 <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' and '$(RuntimeIdentifierOverride)' != ''">
     <RuntimeIdentifier>$(RuntimeIdentifierOverride)</RuntimeIdentifier>
 </PropertyGroup>
 ```
-**CRITICAL**: Use `win-x64` (NOT `win10-x64`) — .NET 10 removed version-specific RIDs (NETSDK1083).
+~~**CRITICAL**: Use `win-x64` (NOT `win10-x64`) — .NET 10 removed version-specific RIDs (NETSDK1083).~~
 
-### 4.2 Create self-signed certificate for MSIX (manual, one-time)
+> Added to `app/ChoNaBojoApp/ChoNaBojoApp.csproj`. Local Debug build verified green. `WindowsPackageType=None` kept in csproj for local unpackaged dev runs; CI overrides with `-p:WindowsPackageType=MSIX`.
+
+### 4.2 Create self-signed certificate for MSIX (manual, one-time) ⏳
 ```powershell
 $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=ChoNaBojo Dev" `
   -KeyUsage DigitalSignature -FriendlyName "ChoNaBojo Dev Signing" `
@@ -255,21 +257,26 @@ $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=ChoNaBojo Dev" `
   -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3")
 
 Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" `
-  -FilePath "cho-na-bojo-dev.pfx" -Password (ConvertTo-SecureString "YourPassword" -AsPlainText -Force)
+  -FilePath "secrets\cho-na-bojo-dev.pfx" -Password (ConvertTo-SecureString "YourPassword" -AsPlainText -Force)
 ```
 
-### 4.3 Configure GitHub Secrets for Windows
-| Secret | Description |
-|--------|-------------|
-| `PFX_BASE64` | Base64-encoded `.pfx` certificate |
-| `PFX_PASSWORD` | PFX password |
+> Suggested output path: `secrets\cho-na-bojo-dev.pfx` (already gitignored via `secrets/`). Pick a strong password — it goes into `PFX_PASSWORD` secret in 4.3.
 
-### 4.4 Create GitHub Actions workflow: Windows MSIX
-- File: `.github/workflows/windows-deploy.yml`
-- Trigger: push tag `v*.*.*` + manual `workflow_dispatch`
-- Runner: `windows-latest` (mandatory for MSIX)
-- Steps: checkout → setup .NET 10 → install `maui` workload → restore → import PFX cert → build with `RuntimeIdentifierOverride=win-x64` → collect MSIX + public cert → upload as artifact
-- Include `INSTALL.txt` with sideloading instructions for testers
+### 4.3 Configure GitHub Secrets for Windows ⏳
+| Secret | Description | How to generate |
+|--------|-------------|-----------------|
+| `PFX_BASE64` | Base64-encoded `.pfx` certificate | `[Convert]::ToBase64String([IO.File]::ReadAllBytes("secrets\cho-na-bojo-dev.pfx")) \| Set-Clipboard` |
+| `PFX_PASSWORD` | PFX password | Plain text — same as `-Password` from 4.2 |
+
+After adding both secrets, mark their rows in the Phase 0.4 table as ✅.
+
+### 4.4 Create GitHub Actions workflow: Windows MSIX ✅
+- ~~File: `.github/workflows/windows-deploy.yml` — created~~
+- ~~Trigger: push tag `v*.*.*` + manual `workflow_dispatch`~~
+- ~~Runner: `windows-latest` (mandatory for MSIX)~~
+- ~~Steps: checkout → setup .NET 10 → install `maui-windows` workload → restore → decode PFX → compute versioned build → `dotnet publish` with `RuntimeIdentifierOverride=win-x64`, `WindowsPackageType=MSIX`, `AppxPackageSigningEnabled=true`, `PackageCertificateKeyFile`/`PackageCertificatePassword` (passwords forwarded via step `env:`, NOT inline `${{ secrets.X }}` interpolation) → locate MSIX recursively → export public `.cer` via `X509Certificate2.Export(Cert)` (ephemeral key set, no store import) → write `INSTALL.txt` with sideloading steps → stage MSIX + `.cer` + `INSTALL.txt` → upload as single artifact (30-day retention)~~
+
+> Workflow will fail until 4.2 + 4.3 are completed (missing `PFX_BASE64` / `PFX_PASSWORD` secrets). Trigger via `workflow_dispatch` after secrets are in place, then via tag for releases.
 
 ---
 

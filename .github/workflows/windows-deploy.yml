@@ -1,0 +1,150 @@
+name: Windows Deploy
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  PROJECT_PATH: 'app/ChoNaBojoApp/ChoNaBojoApp.csproj'
+  TARGET_FRAMEWORK: 'net10.0-windows10.0.19041.0'
+  WIN_RID: 'win-x64'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install MAUI Windows workload
+        run: dotnet workload install maui-windows --ignore-failed-sources
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Decode PFX certificate
+        env:
+          PFX_B64: ${{ secrets.PFX_BASE64 }}
+        shell: pwsh
+        run: |
+          $pfxPath = Join-Path "${{ runner.temp }}" "cho-na-bojo-dev.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_B64))
+          Write-Host "PFX written to $pfxPath ($((Get-Item $pfxPath).Length) bytes)"
+          "PFX_PATH=$pfxPath" >> $env:GITHUB_ENV
+
+      - name: Compute application version
+        id: vinfo
+        shell: pwsh
+        run: |
+          $build = 10000 + [int]${{ github.run_number }} * 10 + [int]${{ github.run_attempt }}
+          "value=$build" >> $env:GITHUB_OUTPUT
+          Write-Host "Computed ApplicationVersion=$build"
+
+      - name: Publish & sign MSIX
+        env:
+          PFX_PASSWORD: ${{ secrets.PFX_PASSWORD }}
+        shell: pwsh
+        run: |
+          dotnet publish "${{ env.PROJECT_PATH }}" `
+            -f ${{ env.TARGET_FRAMEWORK }} `
+            -c Release `
+            -p:RuntimeIdentifierOverride=${{ env.WIN_RID }} `
+            -p:WindowsPackageType=MSIX `
+            -p:AppxPackageSigningEnabled=true `
+            -p:PackageCertificateKeyFile="$env:PFX_PATH" `
+            -p:PackageCertificatePassword="$env:PFX_PASSWORD" `
+            -p:ApplicationVersion=${{ steps.vinfo.outputs.value }}
+
+      - name: Locate MSIX package
+        id: msix
+        shell: pwsh
+        run: |
+          $searchRoot = "app/ChoNaBojoApp/bin/Release/${{ env.TARGET_FRAMEWORK }}"
+          $msix = Get-ChildItem -Path $searchRoot -Filter "*.msix" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $msix) {
+            Write-Host "::error::MSIX package not found under $searchRoot"
+            Write-Host "Files present:"
+            Get-ChildItem -Path $searchRoot -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
+          "path=$($msix.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Host "Found MSIX at: $($msix.FullName)"
+
+      - name: Export public certificate (.cer) for testers
+        env:
+          PFX_PASSWORD: ${{ secrets.PFX_PASSWORD }}
+        shell: pwsh
+        run: |
+          $cerPath = Join-Path "${{ runner.temp }}" "cho-na-bojo-dev.cer"
+          $pfx = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $env:PFX_PATH,
+            $env:PFX_PASSWORD,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+          )
+          [IO.File]::WriteAllBytes(
+            $cerPath,
+            $pfx.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+          )
+          Write-Host "Public cert exported to $cerPath"
+          "CER_PATH=$cerPath" >> $env:GITHUB_ENV
+
+      - name: Write INSTALL.txt for testers
+        shell: pwsh
+        run: |
+          $installTxt = @'
+          ChoNaBojo Windows Test Build - Installation Instructions
+          =========================================================
+
+          This MSIX package is signed with a self-signed development certificate.
+          Before installing, import the public certificate so Windows trusts it.
+
+          STEP 1 - Trust the certificate (one-time per machine):
+            1. Right-click "cho-na-bojo-dev.cer" -> Install Certificate
+            2. Store Location: "Local Machine" (will prompt for admin)
+            3. Choose "Place all certificates in the following store"
+               -> Browse... -> select "Trusted People" -> OK
+            4. Next -> Finish
+
+          STEP 2 - Install the app:
+            1. Double-click the .msix file
+            2. Click "Install"
+            3. Launch the app from the Start Menu (NOT from any extracted folder)
+
+          Troubleshooting:
+            - "Package signature validation failed" -> certificate was not
+              imported into "Trusted People" (Local Machine), repeat Step 1.
+            - App crashes if launched from the publish folder -> by design,
+              MSIX apps must be launched from the Start Menu.
+          '@
+          $path = Join-Path "${{ runner.temp }}" "INSTALL.txt"
+          $installTxt | Out-File -FilePath $path -Encoding UTF8
+          "INSTALL_TXT=$path" >> $env:GITHUB_ENV
+
+      - name: Stage artifact bundle
+        id: stage
+        shell: pwsh
+        run: |
+          $stage = Join-Path "${{ runner.temp }}" "artifact"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item -Path "${{ steps.msix.outputs.path }}" -Destination $stage
+          Copy-Item -Path $env:CER_PATH -Destination $stage
+          Copy-Item -Path $env:INSTALL_TXT -Destination $stage
+          Get-ChildItem $stage | ForEach-Object { Write-Host $_.FullName }
+          "dir=$stage" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Windows MSIX bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: cho-na-bojo-windows-${{ steps.vinfo.outputs.value }}
+          path: ${{ steps.stage.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 30
