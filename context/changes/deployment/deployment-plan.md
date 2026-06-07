@@ -174,9 +174,9 @@ Navigate to: GitHub repo → Settings → Secrets and variables → Actions → 
   - ~~❌ Do **not** grant production release permissions yet~~
 - ~~Click **Invite user** / **Apply**~~
 
-#### 3.6.6 Verify access (optional but recommended)
-- Wait ~5 minutes for permissions to propagate
-- Test locally with `fastlane supply` or by triggering the workflow with `workflow_dispatch` after step 3.8
+#### 3.6.6 Verify access (optional but recommended) ✅
+- ~~Wait ~5 minutes for permissions to propagate~~
+- ~~Test locally with `fastlane supply` or by triggering the workflow with `workflow_dispatch` after step 3.8~~
 
 ### 3.7 Configure GitHub Secrets for Android ✅
 ~~Add these via GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**. Generate values from the keystore created in 3.3 and the JSON key from 3.6.4.~~
@@ -195,8 +195,8 @@ Get-Content secrets\google-play-service-account.json -Raw | Set-Clipboard
 ~~Paste into the `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` secret.~~
 
 #### 3.7.3 Required secrets summary ✅
-| Secret | Value source | Notes |
-|--------|-------------|-------|
+| Secret | Value source | Notes | Status |
+|--------|--------------|-------|--------|
 | `ANDROID_KEYSTORE_BASE64` | Output of 3.7.1 | Single-line base64 string | ✅ |
 | `ANDROID_KEYSTORE_PASSWORD` | Set during keystore creation in 3.3 | Plain text | ✅ |
 | `ANDROID_KEY_ALIAS` | `cho-na-bojo` | Matches `<AndroidSigningKeyAlias>` in `.csproj` | ✅ |
@@ -208,29 +208,31 @@ Get-Content secrets\google-play-service-account.json -Raw | Set-Clipboard
 
 ### 3.8 Create GitHub Actions workflow: Android ✅
 - ~~File: `.github/workflows/android-deploy.yml` ✅ created~~
-- Trigger: push tag `v*.*.*` + manual `workflow_dispatch`
-- Runner: `ubuntu-latest`
-- Steps (final, post-critique):
-  1. Checkout (`actions/checkout@v4`)
-  2. Setup .NET 10 (`actions/setup-dotnet@v4`, `10.0.x`)
-  3. Setup Java 21 (Temurin) — .NET 10 Android tooling prefers JDK 21 over 17
-  4. Install `maui-android` workload
-  5. `dotnet build -t:InstallAndroidDependencies` with `-p:AcceptAndroidSDKLicenses=True` to provision SDK packages on the runner
-  6. Restore dependencies
-  7. `chmod +x` on any `gradlew` to avoid Linux runner permission errors
-  8. Decode `ANDROID_KEYSTORE_BASE64` to `${{ runner.temp }}/cho-na-bojo.keystore` via step `env:` (avoids YAML char-expansion bugs in passwords)
-  9. Compute `versionCode = 10000 + run_number * 10 + run_attempt` so workflow re-runs don't collide with Play's strictly-increasing version-code rule
-  10. `dotnet publish ChoNaBojoApp.csproj -f net10.0-android -c Release` with signing properties passed as MSBuild `-p:` args; passwords forwarded via step `env:` and referenced as `$VAR` (NOT inline `${{ secrets.X }}` interpolation, which bash can mangle on special chars)
-  11. Find signed AAB via case-insensitive `find -iname "*-signed.aab"` rooted at the publish dir; fail loudly if missing (prevents accidental upload of unsigned bundle)
-  12. Upload AAB as artifact for backup (30-day retention)
-  13. Upload to Play Console internal track via `r0adkll/upload-google-play@v1` using `serviceAccountJsonPlainText`
+- ~~Trigger: push tag `v*.*.*` + manual `workflow_dispatch`~~
+- ~~Runner: `ubuntu-latest`~~
+- ~~Steps (final, post-critique):~~
+  1. ~~Checkout (`actions/checkout@v4`)~~
+  2. ~~Setup .NET 10 (`actions/setup-dotnet@v4`, `10.0.x`)~~
+  3. ~~Setup Java 21 (Temurin) — .NET 10 Android tooling prefers JDK 21 over 17~~
+  4. ~~Install `maui-android` workload~~
+  5. ~~`dotnet build -t:InstallAndroidDependencies` with `-p:AcceptAndroidSDKLicenses=True` to provision SDK packages on the runner~~
+  6. ~~Restore dependencies~~
+  7. ~~`chmod +x` on any `gradlew` to avoid Linux runner permission errors~~
+  8. ~~Decode `ANDROID_KEYSTORE_BASE64` to `${{ runner.temp }}/cho-na-bojo.keystore` via step `env:` (avoids YAML char-expansion bugs in passwords)~~
+  9. ~~Compute `versionCode = 10000 + run_number * 10 + run_attempt` so workflow re-runs don't collide with Play's strictly-increasing version-code rule~~
+  10. ~~`dotnet publish ChoNaBojoApp.csproj -f net10.0-android -c Release` with signing properties passed as MSBuild `-p:` args; passwords forwarded via step `env:` and referenced as `$VAR` (NOT inline `${{ secrets.X }}` interpolation, which bash can mangle on special chars)~~
+  11. ~~Find signed AAB via case-insensitive `find -iname "*-signed.aab"` rooted at the publish dir; fail loudly if missing (prevents accidental upload of unsigned bundle)~~
+  12. ~~Upload AAB as artifact for backup (30-day retention)~~
+  13. ~~Upload to Play Console internal track via `r0adkll/upload-google-play@v1` using `serviceAccountJsonPlainText`~~
 
-> Critique gates closed (rubber-duck pass on 2026-06-07):
-> - Password handling moved from inline interpolation to step `env:` + bash `$VAR`
-> - AAB discovery is case-insensitive and fails if unsigned-only
-> - Java bumped 17 → 21
-> - Added `InstallAndroidDependencies` MSBuild target to prep SDK on runner
-> - versionCode includes `run_attempt` to survive re-runs
+> ~~Critique gates closed (rubber-duck pass on 2026-06-07):~~
+> - ~~Password handling moved from inline interpolation to step `env:` + bash `$VAR`~~
+> - ~~AAB discovery is case-insensitive and fails if unsigned-only~~
+> - ~~Java bumped 17 → 21~~
+> - ~~Added `InstallAndroidDependencies` MSBuild target to prep SDK on runner~~
+> - ~~versionCode includes `run_attempt` to survive re-runs~~
+
+> **Verified end-to-end 2026-06-07**: Workflow ran green, AAB uploaded to Play Console Internal Testing track, testers received & installed the build (after correcting from `details?id=...` Play Store link to the proper `play.google.com/apps/internaltest/<id>` opt-in URL).
 
 ---
 
