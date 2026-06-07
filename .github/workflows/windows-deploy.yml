@@ -11,6 +11,7 @@ env:
   PROJECT_PATH: 'app/ChoNaBojoApp/ChoNaBojoApp.csproj'
   TARGET_FRAMEWORK: 'net10.0-windows10.0.19041.0'
   WIN_RID: 'win-x64'
+  WIN_APP_ID: 'com.cho-na-bojo'
 
 jobs:
   build:
@@ -60,6 +61,7 @@ jobs:
             -p:TargetFrameworks=${{ env.TARGET_FRAMEWORK }} `
             -p:RuntimeIdentifierOverride=${{ env.WIN_RID }} `
             -p:WindowsPackageType=MSIX `
+            -p:ApplicationId=${{ env.WIN_APP_ID }} `
             -p:AppxPackageSigningEnabled=true `
             -p:PackageCertificateKeyFile="$env:PFX_PATH" `
             -p:PackageCertificatePassword="$env:PFX_PASSWORD" `

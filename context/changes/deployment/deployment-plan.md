@@ -261,6 +261,8 @@ Get-Content secrets\google-play-service-account.json -Raw | Set-Clipboard
 
 > **Fix applied 2026-06-07 after first dry-run hit `NETSDK1147: workload 'android' must be installed`**: Both `restore` and `publish` now pass `-p:TargetFrameworks=net10.0-windows10.0.19041.0`. MSBuild evaluates workload requirements for every TF listed in the csproj's `TargetFrameworks`, even when `-f` narrows the actual build — so `-f net10.0-windows10.0.19041.0` alone is not enough on a Windows runner that only has `maui-windows` installed. The override drops the android TF from evaluation entirely.
 
+> **Fix applied 2026-06-07 after second dry-run hit `MakeAppx C00CE169: 'com.cho_na_bojo' violates pattern '[-.A-Za-z0-9]+'`**: MSIX `Identity Name` schema disallows underscores, but the Android `ApplicationId` (`com.cho_na_bojo`) is already live on Play Console Internal Testing and per Phase 5.6 cannot be changed. The Windows publish now passes `-p:ApplicationId=com.cho-na-bojo` (hyphens) to override only for the MSIX build. Android keeps `com.cho_na_bojo`; Windows ships as `com.cho-na-bojo` — acceptable because Android and Windows have separate stores and separate identity namespaces.
+
 ---
 
 ## Phase 5: Edge Cases, Fallbacks & Support
