@@ -29,7 +29,7 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 
 | ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
 |---|---|---|---|---|---|
-| F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Venues` table seeded with Warsaw data | — | NFR (privacy, perf), tech-stack `database: PostgreSQL` | ready |
+| F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Sports` lookup seeded with the predefined list, `Venues` table seeded with Warsaw data, and the `VenueSports` join populated | — | FR-003 (predefined sport list), Non-Goals §1 (Warsaw venue seed), NFR (privacy, perf), tech-stack `database: PostgreSQL` | ready |
 | F-02 | auth-scaffold | (foundation) Email+password register/login on the API, password hashing, JWT issue+validate, authorization middleware on protected routes | F-01 | FR-001, FR-002, NFR (privacy boundary), Access Control | proposed |
 | S-01 | account-and-session | register an account with email, password, and at least one contact; log in and stay logged in across app restarts | F-02 | FR-001, FR-002, FR-011 (contact collection), US-01, US-02 | proposed |
 | S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | proposed |
@@ -61,17 +61,20 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 
 ## Foundations
 
-### F-01: Data layer — Supabase Postgres connection + migrations + seeded Warsaw venues
+### F-01: Data layer — Supabase Postgres connection + migrations + seeded sports & Warsaw venues
 
-- **Outcome:** (foundation) The backend has a working Postgres connection (Supabase per `infrastructure.md`), migration tooling (EF Core or Npgsql + Fluent Migrator) configured, one initial migration that creates the `Venues` table, and Warsaw venue data seeded (manual seed per Non-Goals PRD §1).
+- **Outcome:** (foundation) The backend has a working Postgres connection (Supabase per `infrastructure.md`), migration tooling (EF Core or Npgsql + Fluent Migrator) configured, and one initial migration that creates and seeds the reference data needed before any user-facing slice runs:
+  - `Sports` — the predefined list of supported sport disciplines (FR-003), seeded once with: **football, basketball, volleyball, tennis, running, cycling, rollerblading, gym, street workout, swimming** (10 sports). Downstream code references rows by stable id/code, never by free-text label.
+  - `Venues` — Warsaw venues seeded (manual seed per Non-Goals PRD §1).
+  - `VenueSports` — many-to-many join populated from the seed so each venue declares which sports it supports (used by the S-02 filter and the S-03 sport picker at a venue).
 - **Change ID:** data-layer-foundation
-- **PRD refs:** Non-Goals §1 ("predefined venue database … manually uploaded … Warsaw"), NFR (privacy boundary requires durable storage), tech-stack `database: PostgreSQL`.
-- **Unlocks:** S-02 (the map needs the Venues table), S-03 (events are created at a venue), S-04 (event listing), F-02 (Users table), and every later S-NN. Also reduces the unknown "where do venues come from" — answer: a seeded migration.
+- **PRD refs:** FR-003 ("optionally filter venues and events by sport discipline from a predefined list"), Non-Goals §1 ("predefined venue database … manually uploaded … Warsaw"), NFR (privacy boundary requires durable storage), tech-stack `database: PostgreSQL`.
+- **Unlocks:** S-02 (map needs `Venues` + `Sports` to render the filter UI), S-03 (event creation reads sports supported by the chosen venue), S-04 (event listing inherits the sport reference), F-02 (`Users` table sits on the same migration tooling), and every later S-NN. Also closes the unknowns "where do venues come from" and "what's the predefined sport list" — answer for both: seeded migrations, with the sport list locked at 10 entries above.
 - **Prerequisites:** —
 - **Parallel with:** —
 - **Blockers:** —
 - **Unknowns:** —
-- **Risk:** Sequenced first because nothing else can run without the DB; minimal enabler — only `Venues` and the runtime connection. The remaining tables (Users, Events, JoinRequests) ship in the slices that actually use them (progressive disclosure). Real risk: configuring Supabase RLS / connection string / pooler on Railway requires touching three systems at once.
+- **Risk:** Sequenced first because nothing else can run without the DB; minimal enabler — only the three reference tables and the runtime connection. Domain tables (`Users`, `Events`, `JoinRequests`) ship in the slices that actually use them (progressive disclosure). The sport lookup is intentionally id-keyed so renaming a label later doesn't cascade through events/venues; the 10-sport list is also iterable post-seed via a follow-up migration if the MVP scope shifts. Real risk: configuring Supabase RLS / connection string / pooler on Railway requires touching three systems at once.
 - **Status:** ready
 
 ### F-02: Auth scaffold — User, password hash, JWT issue+validate, middleware
@@ -103,10 +106,10 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 
 ### S-02: Map of sports venues with discipline filter
 
-- **Outcome:** A logged-in user opens the map screen centered on their location (with a manual-address fallback when permissions are denied), sees venues from the database within the current viewport, pans/zooms (the viewport is the proximity boundary per Business Logic), and optionally enables a discipline filter — by default, all sports are visible.
+- **Outcome:** A logged-in user opens the map screen centered on their location (with a manual-address fallback when permissions are denied), sees venues from the database within the current viewport, pans/zooms (the viewport is the proximity boundary per Business Logic), and optionally enables a sport filter populated from the `Sports` lookup — by default, all sports are visible.
 - **Change ID:** map-venue-discovery
 - **PRD refs:** FR-003, FR-004, NFR ("Map loads and responds to pan/zoom within 2 seconds"), US-01 (the "open the map, tap a nearby venue" part), Business Logic.
-- **Prerequisites:** S-01, the seeded `Venues` table from F-01.
+- **Prerequisites:** S-01, the seeded `Venues` / `Sports` / `VenueSports` tables from F-01.
 - **Parallel with:** —
 - **Blockers:** —
 - **Unknowns:**
@@ -116,9 +119,9 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 
 ### S-03: Creating an event at a selected venue
 
-- **Outcome:** A logged-in user opens "Create event" from the map/venue list: picks a discipline (if the venue supports several), date, estimated end time, participant limit (≥ 2, ≤ 300 per Polish gathering rules), and optionally toggles auto-accept; the event is saved and visible at the venue.
+- **Outcome:** A logged-in user opens "Create event" from the map/venue list: picks a sport from those that the chosen venue supports (read from `VenueSports`), date, estimated end time, participant limit (≥ 2, ≤ 300 per Polish gathering rules), and optionally toggles auto-accept; the event is saved (with a foreign key to `Sports`) and visible at the venue.
 - **Change ID:** event-creation
-- **PRD refs:** FR-005, US-02 (the "create an event" part).
+- **PRD refs:** FR-005, FR-003 (event inherits a sport from the predefined list), US-02 (the "create an event" part).
 - **Prerequisites:** S-02 (picker via the map).
 - **Parallel with:** —
 - **Blockers:** —
@@ -179,7 +182,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes |
 |---|---|---|---|---|
-| F-01 | data-layer-foundation | Foundation: Supabase Postgres + migrations + seeded Warsaw venues | yes | Run `/10x-plan data-layer-foundation` |
+| F-01 | data-layer-foundation | Foundation: Supabase Postgres + migrations + seeded sports & Warsaw venues | yes | Run `/10x-plan data-layer-foundation` |
 | F-02 | auth-scaffold | Foundation: Email+password auth scaffold (User, JWT issuer/validator, middleware) | no | Waiting on F-01 |
 | S-01 | account-and-session | User can register, log in, and stay logged in across app restarts | no | Waiting on F-02 |
 | S-02 | map-venue-discovery | User can browse a map of nearby venues with optional sport filter | no | Waiting on S-01 |
