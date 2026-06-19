@@ -17,7 +17,7 @@ top_blocker: time
 
 ## Vision recap
 
-Recreational athletes want to play team sports in their neighborhood but can't gather enough friends to fill the roster. ChoNaBojo connects strangers around specific local sports venues — proximity, sport, and timing converge into a single "let's go play" action. The MVP is Android-only, scoped to a Warsaw-only venue database, delivered solo after-hours against a hard deadline of 2026-07-01.
+Recreational athletes want to play team sports in their neighborhood but can't gather enough friends to fill the roster. ChoNaBojo connects strangers around specific local sports venues — proximity, sport, and timing converge into a single "let's go play" action. The MVP is Android-only, scoped to a Warsaw-only venue database, delivered solo after-hours against a hard deadline of 2026-08-01.
 
 ## North star
 

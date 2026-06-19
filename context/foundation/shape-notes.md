@@ -8,7 +8,7 @@ target_scale:
   data_volume: small
 timeline_budget:
   mvp_weeks: 3
-  hard_deadline: 2026-07-01
+  hard_deadline: 2026-08-01
   after_hours_only: true
 created: 2026-05-23
 updated: 2026-05-23
@@ -39,7 +39,7 @@ checkpoint:
     - topic: "target scale"
       decision: "dozens to a hundred for MVP launch"
     - topic: "timeline"
-      decision: "hard deadline 2026-07-01, after-hours only"
+      decision: "hard deadline 2026-08-01, after-hours only"
   frs_drafted: 14
   quality_check_status: accepted
 ---
