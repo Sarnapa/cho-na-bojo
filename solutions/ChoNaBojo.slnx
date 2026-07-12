@@ -22,6 +22,9 @@
   </Folder>
   <Folder Name="/context/changes/data-layer-foundation/">
     <File Path="../context/changes/data-layer-foundation/change.md" />
+    <File Path="../context/changes/data-layer-foundation/npgsql-docs.md" />
+    <File Path="../context/changes/data-layer-foundation/research-libraries.md" />
+    <File Path="../context/changes/data-layer-foundation/research.md" />
   </Folder>
   <Folder Name="/context/changes/deployment/">
     <File Path="../context/changes/deployment/deployment-plan.md" />
