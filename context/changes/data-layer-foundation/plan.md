@@ -320,13 +320,13 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 
 #### Automated
 
-- [x] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 2.2 Model validates: `dotnet ef dbcontext info --project server`
+- [x] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — 5eab4a0
+- [x] 2.2 Model validates: `dotnet ef dbcontext info --project server` — 5eab4a0
 
 #### Manual
 
-- [x] 2.3 The 10 seeded sport ids/codes match the frozen contract exactly; Polish Name values correct and UTF-8-clean
-- [x] 2.4 Venue.Id is an explicit stable CSV id; Venue.Location maps to geometry(Point,4326); Name/Description/Address are single Polish strings; schema member names are English
+- [x] 2.3 The 10 seeded sport ids/codes match the frozen contract exactly; Polish Name values correct and UTF-8-clean — 5eab4a0
+- [x] 2.4 Venue.Id is an explicit stable CSV id; Venue.Location maps to geometry(Point,4326); Name/Description/Address are single Polish strings; schema member names are English — 5eab4a0
 
 ### Phase 3: CSV Runtime Seeding
 
