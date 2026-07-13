@@ -332,15 +332,10 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 
 #### Automated
 
-- [ ] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 3.2 CSV parses without error and validates 100 unique positive venue ids in a smoke run (all 100 rows read)
+- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 3.2 CSV parses without error and validates 100 unique positive venue ids in a smoke run (all 100 rows read)
 
 #### Manual
-
-- [ ] 3.3 After a migrate run, Venues has 100 rows with ids matching the CSV, non-null Location, and every CSV discipline id produced a VenueSports row
-- [ ] 3.4 Spatial spot-check shows correct lng/lat order (Location.X=longitude, Location.Y=latitude)
-- [ ] 3.5 Re-running the migrate step adds zero duplicate venues or join rows
-- [ ] 3.6 Polish characters in Name/Address/Description persist correctly (UTF-8)
 
 ### Phase 4: Initial Migration & Apply
 
@@ -355,3 +350,5 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 - [ ] 4.4 A bbox viewport query returns venues and uses the GiST index (EXPLAIN)
 - [ ] 4.5 A second database update using `--connection "<ConnectionStrings:AppDbMigrations session-mode string>"` is a no-op for data (no duplicate rows)
 - [ ] 4.6 Tables reachable through the Supavisor pooler with SSL Mode=Require; app starts without auto-migrating
+- [ ] 4.7 Spatial spot-check shows correct lng/lat order (Location.X=longitude, Location.Y=latitude)
+- [ ] 4.8 Polish characters in Name/Address/Description persist correctly (UTF-8)

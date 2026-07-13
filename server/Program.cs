@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using ChoNaBojo.Server.Data;
+using ChoNaBojo.Server.Data.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,13 +23,17 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+var warsawVenuesCsvPath = builder.Configuration["DataSeeding:WarsawVenuesCsvPath"];
 
 // Register the data-layer DbContext (Supabase Postgres via Npgsql + PostGIS/NetTopologySuite).
 // Runtime uses the transaction-mode pooler string (AppDb, port 6543); the app never auto-migrates.
 builder.Services.AddDbContext<ChoNaBojoContext>(opt =>
     opt.UseNpgsql(
         builder.Configuration.GetConnectionString("AppDb"),
-        npgsql => npgsql.UseNetTopologySuite()));
+        npgsql => npgsql.UseNetTopologySuite())
+    .UseSeeding((context, _) => WarsawVenueSeeder.Seed(context, warsawVenuesCsvPath))
+    .UseAsyncSeeding((context, _, cancellationToken) =>
+        WarsawVenueSeeder.SeedAsync(context, warsawVenuesCsvPath, cancellationToken)));
 
 var app = builder.Build();
 
