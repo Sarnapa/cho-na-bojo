@@ -60,6 +60,7 @@ Roadmap status at issue creation: `<status>`
 | `stream:B` | `#0366d6` | Around the loop (notifications + lifecycle). |
 | `status:ready` | `#c2e0c6` | Ready for `/10x-plan`. |
 | `status:preparing` | `#fbca04` | In preparation — research/plan underway (pre-implementation). |
+| `status:prepared` | `#d4c5f9` | Implementation plan ready; next step is `/10x-implement`. |
 | `status:implementing` | `#0052cc` | Implementation underway (plan approved, coding in progress). |
 | `status:proposed` | `#fef2c0` | Waiting on prerequisites. |
 | `north-star` | `#b60205` | The slice that closes the matchmaking loop (S-05 only). |
