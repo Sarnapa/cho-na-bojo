@@ -23,8 +23,13 @@
   <Folder Name="/context/changes/data-layer-foundation/">
     <File Path="../context/changes/data-layer-foundation/change.md" />
     <File Path="../context/changes/data-layer-foundation/npgsql-docs.md" />
+    <File Path="../context/changes/data-layer-foundation/plan-brief.md" />
+    <File Path="../context/changes/data-layer-foundation/plan.md" />
     <File Path="../context/changes/data-layer-foundation/research-libraries.md" />
     <File Path="../context/changes/data-layer-foundation/research.md" />
+  </Folder>
+  <Folder Name="/context/changes/data-layer-foundation/reviews/">
+    <File Path="../context/changes/data-layer-foundation/reviews/plan-review.md" />
   </Folder>
   <Folder Name="/context/changes/deployment/">
     <File Path="../context/changes/deployment/deployment-plan.md" />
@@ -37,6 +42,9 @@
     <File Path="../context/foundation/shape-notes.md" />
     <File Path="../context/foundation/tasks-github.md" />
     <File Path="../context/foundation/tech-stack.md" />
+  </Folder>
+  <Folder Name="/data/">
+    <File Path="../data/warsaw-venues.csv" />
   </Folder>
   <Folder Name="/server/">
     <Project Path="../server/server.csproj" />
