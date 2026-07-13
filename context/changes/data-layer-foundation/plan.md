@@ -332,8 +332,8 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 
 #### Automated
 
-- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 3.2 CSV parses without error and validates 100 unique positive venue ids in a smoke run (all 100 rows read)
+- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — ec40efa
+- [x] 3.2 CSV parses without error and validates 100 unique positive venue ids in a smoke run (all 100 rows read) — ec40efa
 
 #### Manual
 
