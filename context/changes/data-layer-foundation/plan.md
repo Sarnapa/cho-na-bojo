@@ -307,14 +307,14 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 
 #### Automated
 
-- [x] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 1.2 Tool manifest resolves: `dotnet tool restore` then `dotnet ef --version` reports 10.0.x
-- [x] 1.3 Packages restored with no version conflict: `dotnet restore server`
+- [x] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — c5d8d3e
+- [x] 1.2 Tool manifest resolves: `dotnet tool restore` then `dotnet ef --version` reports 10.0.x — c5d8d3e
+- [x] 1.3 Packages restored with no version conflict: `dotnet restore server` — c5d8d3e
 
 #### Manual
 
-- [x] 1.4 appsettings files contain no password/connection secret
-- [x] 1.5 User-secrets holds working `ConnectionStrings:AppDb` (6543) and `ConnectionStrings:AppDbMigrations` (5432) values pointing at the Supavisor pooler host
+- [x] 1.4 appsettings files contain no password/connection secret — c5d8d3e
+- [x] 1.5 User-secrets holds working `ConnectionStrings:AppDb` (6543) and `ConnectionStrings:AppDbMigrations` (5432) values pointing at the Supavisor pooler host — c5d8d3e
 
 ### Phase 2: Domain Model & DbContext
 
@@ -325,8 +325,8 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 
 #### Manual
 
-- [ ] 2.3 The 10 seeded sport ids/codes match the frozen contract exactly; Polish Name values correct and UTF-8-clean
-- [ ] 2.4 Venue.Id is an explicit stable CSV id; Venue.Location maps to geometry(Point,4326); Name/Description/Address are single Polish strings; schema member names are English
+- [x] 2.3 The 10 seeded sport ids/codes match the frozen contract exactly; Polish Name values correct and UTF-8-clean
+- [x] 2.4 Venue.Id is an explicit stable CSV id; Venue.Location maps to geometry(Point,4326); Name/Description/Address are single Polish strings; schema member names are English
 
 ### Phase 3: CSV Runtime Seeding
 
