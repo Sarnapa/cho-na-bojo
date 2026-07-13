@@ -307,21 +307,21 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 
 #### Automated
 
-- [ ] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 1.2 Tool manifest resolves: `dotnet tool restore` then `dotnet ef --version` reports 10.0.x
-- [ ] 1.3 Packages restored with no version conflict: `dotnet restore server`
+- [x] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 1.2 Tool manifest resolves: `dotnet tool restore` then `dotnet ef --version` reports 10.0.x
+- [x] 1.3 Packages restored with no version conflict: `dotnet restore server`
 
 #### Manual
 
-- [ ] 1.4 appsettings files contain no password/connection secret
-- [ ] 1.5 User-secrets holds working `ConnectionStrings:AppDb` (6543) and `ConnectionStrings:AppDbMigrations` (5432) values pointing at the Supavisor pooler host
+- [x] 1.4 appsettings files contain no password/connection secret
+- [x] 1.5 User-secrets holds working `ConnectionStrings:AppDb` (6543) and `ConnectionStrings:AppDbMigrations` (5432) values pointing at the Supavisor pooler host
 
 ### Phase 2: Domain Model & DbContext
 
 #### Automated
 
-- [ ] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 2.2 Model validates: `dotnet ef dbcontext info --project server`
+- [x] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 2.2 Model validates: `dotnet ef dbcontext info --project server`
 
 #### Manual
 

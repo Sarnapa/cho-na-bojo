@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
+using ChoNaBojo.Server.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +22,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Register the data-layer DbContext (Supabase Postgres via Npgsql + PostGIS/NetTopologySuite).
+// Runtime uses the transaction-mode pooler string (AppDb, port 6543); the app never auto-migrates.
+builder.Services.AddDbContext<ChoNaBojoContext>(opt =>
+    opt.UseNpgsql(
+        builder.Configuration.GetConnectionString("AppDb"),
+        npgsql => npgsql.UseNetTopologySuite()));
 
 var app = builder.Build();
 

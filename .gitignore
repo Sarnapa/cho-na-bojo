@@ -371,3 +371,4 @@ secrets/
 .github/.10x-cli-manifest.json
 .github/prompts
 .github/skills
+/server/Properties/serviceDependencies.local.json

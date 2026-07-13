@@ -8,6 +8,9 @@
   <Folder Name="/app/">
     <Project Path="../app/ChoNaBojoApp/ChoNaBojoApp.csproj" Id="cac6a2d5-7d1b-41ad-9271-0e5331091291" />
   </Folder>
+  <Folder Name="/config/">
+    <File Path="../.config/dotnet-tools.json" />
+  </Folder>
   <Folder Name="/context/">
     <File Path="../Context/idea-notes.md" />
   </Folder>
