@@ -366,9 +366,9 @@ FodyWeavers.xsd
 *.keystore
 *.pfx
 secrets/
+/server/Properties/serviceDependencies.local.json
 
 # Includes materials from the training
 .github/.10x-cli-manifest.json
 .github/prompts
 .github/skills
-/server/Properties/serviceDependencies.local.json
