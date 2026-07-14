@@ -29,8 +29,8 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 
 | ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
 |---|---|---|---|---|---|
-| F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Sports` lookup seeded with the predefined list, `Venues` table seeded with Warsaw data, and the `VenueSports` join populated | — | FR-003 (predefined sport list), Non-Goals §1 (Warsaw venue seed), NFR (privacy, perf), tech-stack `database: PostgreSQL` | implemented |
-| F-02 | auth-scaffold | (foundation) Email+password register/login on the API, password hashing, JWT issue+validate, authorization middleware on protected routes | F-01 | FR-001, FR-002, NFR (privacy boundary), Access Control | proposed |
+| F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Sports` lookup seeded with the predefined list, `Venues` table seeded with Warsaw data, and the `VenueSports` join populated | — | FR-003 (predefined sport list), Non-Goals §1 (Warsaw venue seed), NFR (privacy, perf), tech-stack `database: PostgreSQL` | done |
+| F-02 | auth-scaffold | (foundation) Email+password register/login on the API, password hashing, JWT issue+validate, authorization middleware on protected routes | F-01 | FR-001, FR-002, NFR (privacy boundary), Access Control | ready |
 | S-01 | account-and-session | register an account with email, password, and at least one contact; log in and stay logged in across app restarts | F-02 | FR-001, FR-002, FR-011 (contact collection), US-01, US-02 | proposed |
 | S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | proposed |
 | S-03 | event-creation | create an event at a selected venue with date, estimated end time, participant limit (≥ 2, ≤ 300), and optional auto-accept | S-02 | FR-005, US-02 | proposed |
@@ -75,7 +75,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Sequenced first because nothing else can run without the DB; minimal enabler — only the three reference tables and the runtime connection. Domain tables (`Users`, `Events`, `JoinRequests`) ship in the slices that actually use them (progressive disclosure). The sport lookup is intentionally id-keyed so renaming a label later doesn't cascade through events/venues; the 10-sport list is also iterable post-seed via a follow-up migration if the MVP scope shifts. Real risk: configuring Supabase RLS / connection string / pooler on Railway requires touching three systems at once.
-- **Status:** implemented
+- **Status:** done
 
 ### F-02: Auth scaffold — User, password hash, JWT issue+validate, middleware
 
@@ -88,7 +88,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** "Invest deeply" area per Step 5 — the privacy boundary ("contact info never visible to unapproved users") is a launch gate; a slip here kills the product. Contract is minimal (issuer + validator + register/login), no fancy password reset (Parked) and no OAuth (out of MVP scope), so it doesn't bloat — but the per-event role check has to be designed solidly once, because S-05 and S-07 both rely on it.
-- **Status:** proposed
+- **Status:** ready
 
 ## Slices
 
@@ -182,8 +182,8 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes |
 |---|---|---|---|---|
-| F-01 | data-layer-foundation | Foundation: Supabase Postgres + migrations + seeded sports & Warsaw venues | yes | Implemented — implementation done; implementation review in progress: `/10x-impl-review data-layer-foundation` |
-| F-02 | auth-scaffold | Foundation: Email+password auth scaffold (User, JWT issuer/validator, middleware) | no | Waiting on F-01 |
+| F-01 | data-layer-foundation | Foundation: Supabase Postgres + migrations + seeded sports & Warsaw venues | yes | Done — implementation review complete (`context/changes/data-layer-foundation/reviews/impl-review.md`, verdict APPROVED); issue #1 closed |
+| F-02 | auth-scaffold | Foundation: Email+password auth scaffold (User, JWT issuer/validator, middleware) | yes | Ready — F-01 done; ready for `/10x-new` → `/10x-plan` |
 | S-01 | account-and-session | User can register, log in, and stay logged in across app restarts | no | Waiting on F-02 |
 | S-02 | map-venue-discovery | User can browse a map of nearby venues with optional sport filter | no | Waiting on S-01 |
 | S-03 | event-creation | Organizer can create an event at a selected venue | no | Waiting on S-02 |
