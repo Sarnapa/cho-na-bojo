@@ -17,26 +17,29 @@
   <Folder Name="/context/archive/">
     <File Path="../context/archive/README.md" />
   </Folder>
+  <Folder Name="/context/archive/2026-07-12-data-layer-foundation/">
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/change.md" />
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/npgsql-docs.md" />
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/plan-brief.md" />
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/plan.md" />
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/research-libraries.md" />
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/research.md" />
+  </Folder>
+  <Folder Name="/context/archive/2026-07-12-data-layer-foundation/reviews/">
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/reviews/impl-review.md" />
+    <File Path="../context/archive/2026-07-12-data-layer-foundation/reviews/plan-review.md" />
+  </Folder>
+  <Folder Name="/context/archive/bootstrap-verification/">
+    <File Path="../context/archive/bootstrap-verification/verification.md" />
+  </Folder>
+  <Folder Name="/context/archive/deployment/">
+    <File Path="../context/archive/deployment/deployment-plan.md" />
+  </Folder>
   <Folder Name="/context/changes/">
     <File Path="../context/changes/README.md" />
   </Folder>
-  <Folder Name="/context/changes/bootstrap-verification/">
-    <File Path="../context/changes/bootstrap-verification/verification.md" />
-  </Folder>
-  <Folder Name="/context/changes/data-layer-foundation/">
-    <File Path="../context/changes/data-layer-foundation/change.md" />
-    <File Path="../context/changes/data-layer-foundation/npgsql-docs.md" />
-    <File Path="../context/changes/data-layer-foundation/plan-brief.md" />
-    <File Path="../context/changes/data-layer-foundation/plan.md" />
-    <File Path="../context/changes/data-layer-foundation/research-libraries.md" />
-    <File Path="../context/changes/data-layer-foundation/research.md" />
-  </Folder>
-  <Folder Name="/context/changes/data-layer-foundation/reviews/">
-    <File Path="../context/changes/data-layer-foundation/reviews/impl-review.md" />
-    <File Path="../context/changes/data-layer-foundation/reviews/plan-review.md" />
-  </Folder>
-  <Folder Name="/context/changes/deployment/">
-    <File Path="../context/changes/deployment/deployment-plan.md" />
+  <Folder Name="/context/changes/auth-scaffold/">
+    <File Path="../context/changes/auth-scaffold/change.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
