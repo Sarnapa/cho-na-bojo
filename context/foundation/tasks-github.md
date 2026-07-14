@@ -62,6 +62,7 @@ Roadmap status at issue creation: `<status>`
 | `status:preparing` | `#fbca04` | In preparation — research/plan underway (pre-implementation). |
 | `status:prepared` | `#d4c5f9` | Implementation plan ready; next step is `/10x-implement`. |
 | `status:implementing` | `#0052cc` | Implementation underway (plan approved, coding in progress). |
+| `status:implemented` | `#1f883d` | Implementation done, but implementation review is in progress. |
 | `status:proposed` | `#fef2c0` | Waiting on prerequisites. |
 | `north-star` | `#b60205` | The slice that closes the matchmaking loop (S-05 only). |
 
@@ -92,7 +93,7 @@ A small PowerShell driver script (held in session `files/`, not committed) reads
 ## Todos
 
 1. **doctor-check** — Confirm target repo is `Sarnapa/cho-na-bojo` and list any existing issues whose titles match `[F-NN]`/`[S-NN]` prefixes; if duplicates found, stop and ask. (Auth already verified.)
-2. **create-labels** — Create the 7 labels above (idempotent: `gh label create ... || gh label edit ...`).
+2. **create-labels** — Create labels above (idempotent: `gh label create ... || gh label edit ...`).
 3. **build-bodies** — Generate 9 issue body Markdown files in session `files/issues/` from the template, one per roadmap item, leaving `<prereq-number>` placeholders.
 4. **create-F-01** — `gh issue create` for F-01, capture number, save to mapping.
 5. **create-F-02** — Substitute F-01's number into F-02 body, create, capture number.

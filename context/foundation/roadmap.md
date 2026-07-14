@@ -3,7 +3,7 @@ project: "ChoNaBojo"
 version: 1
 status: draft
 created: 2026-06-13
-updated: 2026-07-12
+updated: 2026-07-15
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -29,7 +29,7 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 
 | ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
 |---|---|---|---|---|---|
-| F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Sports` lookup seeded with the predefined list, `Venues` table seeded with Warsaw data, and the `VenueSports` join populated | — | FR-003 (predefined sport list), Non-Goals §1 (Warsaw venue seed), NFR (privacy, perf), tech-stack `database: PostgreSQL` | implementing |
+| F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Sports` lookup seeded with the predefined list, `Venues` table seeded with Warsaw data, and the `VenueSports` join populated | — | FR-003 (predefined sport list), Non-Goals §1 (Warsaw venue seed), NFR (privacy, perf), tech-stack `database: PostgreSQL` | implemented |
 | F-02 | auth-scaffold | (foundation) Email+password register/login on the API, password hashing, JWT issue+validate, authorization middleware on protected routes | F-01 | FR-001, FR-002, NFR (privacy boundary), Access Control | proposed |
 | S-01 | account-and-session | register an account with email, password, and at least one contact; log in and stay logged in across app restarts | F-02 | FR-001, FR-002, FR-011 (contact collection), US-01, US-02 | proposed |
 | S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | proposed |
@@ -75,7 +75,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Sequenced first because nothing else can run without the DB; minimal enabler — only the three reference tables and the runtime connection. Domain tables (`Users`, `Events`, `JoinRequests`) ship in the slices that actually use them (progressive disclosure). The sport lookup is intentionally id-keyed so renaming a label later doesn't cascade through events/venues; the 10-sport list is also iterable post-seed via a follow-up migration if the MVP scope shifts. Real risk: configuring Supabase RLS / connection string / pooler on Railway requires touching three systems at once.
-- **Status:** implementing
+- **Status:** implemented
 
 ### F-02: Auth scaffold — User, password hash, JWT issue+validate, middleware
 
@@ -182,7 +182,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes |
 |---|---|---|---|---|
-| F-01 | data-layer-foundation | Foundation: Supabase Postgres + migrations + seeded sports & Warsaw venues | yes | Implementing — plan approved, coding in progress: `/10x-implement data-layer-foundation` |
+| F-01 | data-layer-foundation | Foundation: Supabase Postgres + migrations + seeded sports & Warsaw venues | yes | Implemented — implementation done; implementation review in progress: `/10x-impl-review data-layer-foundation` |
 | F-02 | auth-scaffold | Foundation: Email+password auth scaffold (User, JWT issuer/validator, middleware) | no | Waiting on F-01 |
 | S-01 | account-and-session | User can register, log in, and stay logged in across app restarts | no | Waiting on F-02 |
 | S-02 | map-venue-discovery | User can browse a map of nearby venues with optional sport filter | no | Waiting on S-01 |
