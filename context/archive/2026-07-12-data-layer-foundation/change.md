@@ -1,10 +1,10 @@
 ---
 change_id: data-layer-foundation
 title: Data layer foundation — Supabase Postgres connection, migrations, seeded sports & Warsaw venues
-status: impl_reviewed
+status: archived
 created: 2026-07-12
-updated: 2026-07-15
-archived_at: null
+updated: 2026-07-14
+archived_at: 2026-07-14T23:25:10Z
 ---
 
 ## Notes

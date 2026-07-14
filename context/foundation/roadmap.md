@@ -3,7 +3,7 @@ project: "ChoNaBojo"
 version: 1
 status: draft
 created: 2026-06-13
-updated: 2026-07-15
+updated: 2026-07-14
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -213,3 +213,5 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 ## Done
 
 (Empty on first generation. `/10x-archive` will append an entry here — and flip the matching item's `Status` to `done` — when a change whose `Change ID` matches the item is archived.)
+
+- **F-01: (foundation) The backend has a working Postgres connection (Supabase per `infrastructure.md`), migration tooling (EF Core or Npgsql + Fluent Migrator) configured, and one initial migration that creates and seeds the reference data needed before any user-facing slice runs:** — Archived 2026-07-14 → `context/archive/2026-07-12-data-layer-foundation/`. Lesson: —.
