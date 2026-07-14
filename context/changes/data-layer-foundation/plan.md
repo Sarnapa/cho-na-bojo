@@ -341,14 +341,14 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 
 #### Automated
 
-- [ ] 4.1 Migration listed: `dotnet ef migrations list --project server` shows InitialCreate
-- [ ] 4.2 Solution builds after migration files added: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 4.1 Migration listed: `dotnet ef migrations list --project server` shows InitialCreate
+- [x] 4.2 Solution builds after migration files added: `dotnet build solutions/ChoNaBojo.slnx`
 
 #### Manual
 
-- [ ] 4.3 Against Supabase: Sports = 10, Venues = 100 (all with Location), VenueSports = total CSV links; PostGIS enabled
-- [ ] 4.4 A bbox viewport query returns venues and uses the GiST index (EXPLAIN)
-- [ ] 4.5 A second database update using `--connection "<ConnectionStrings:AppDbMigrations session-mode string>"` is a no-op for data (no duplicate rows)
-- [ ] 4.6 Tables reachable through the Supavisor pooler with SSL Mode=Require; app starts without auto-migrating
-- [ ] 4.7 Spatial spot-check shows correct lng/lat order (Location.X=longitude, Location.Y=latitude)
-- [ ] 4.8 Polish characters in Name/Address/Description persist correctly (UTF-8)
+- [x] 4.3 Against Supabase: Sports = 10, Venues = 100 (all with Location), VenueSports = total CSV links; PostGIS enabled
+- [x] 4.4 A bbox viewport query returns venues and uses the GiST index (EXPLAIN)
+- [x] 4.5 A second database update using `--connection "<ConnectionStrings:AppDbMigrations session-mode string>"` is a no-op for data (no duplicate rows)
+- [x] 4.6 Tables reachable through the Supavisor pooler with SSL Mode=Require; app starts without auto-migrating
+- [x] 4.7 Spatial spot-check shows correct lng/lat order (Location.X=longitude, Location.Y=latitude)
+- [x] 4.8 Polish characters in Name/Address/Description persist correctly (UTF-8)

@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualBasic.FileIO;
-using NetTopologySuite.Geometries;
 using ChoNaBojo.Server.Data.Entities;
 
 namespace ChoNaBojo.Server.Data.Seeding;
@@ -43,14 +42,14 @@ public static class WarsawVenueSeeder
 		bool isAsync,
 		CancellationToken cancellationToken)
 	{
-		var csvFilePath = ResolveCsvPath(configuredCsvPath);
+		string csvFilePath = ResolveCsvPath(configuredCsvPath);
 		var csvRows = LoadCsvRows(csvFilePath);
 
 		var sportIds = isAsync
 			? await dbContext.Sports.AsNoTracking().Select(s => s.Id).ToHashSetAsync(cancellationToken)
 			: dbContext.Sports.AsNoTracking().Select(s => s.Id).ToHashSet();
 
-		var missingSportIds = csvRows
+		int[] missingSportIds = csvRows
 			.SelectMany(row => row.SportIds)
 			.Distinct()
 			.Where(sportId => !sportIds.Contains(sportId))
@@ -79,19 +78,30 @@ public static class WarsawVenueSeeder
 		{
 			if (!existingVenueIds.Contains(row.Id))
 			{
-				dbContext.Venues.Add(new Venue
+				if (isAsync)
 				{
-					Id = row.Id,
-					Name = row.Name,
-					Address = row.Address,
-					Description = row.Description,
-					Location = new Point(row.Longitude, row.Latitude) { SRID = Wgs84Srid }
-				});
+					await dbContext.Database.ExecuteSqlInterpolatedAsync(
+						$"""
+						INSERT INTO "Venues" ("Id", "Name", "Location", "Address", "Description")
+						VALUES ({row.Id}, {row.Name}, ST_SetSRID(ST_MakePoint({row.Longitude}, {row.Latitude}), {Wgs84Srid}), {row.Address}, {row.Description})
+						ON CONFLICT ("Id") DO NOTHING;
+						""",
+						cancellationToken);
+				}
+				else
+				{
+					dbContext.Database.ExecuteSqlInterpolated(
+						$"""
+						INSERT INTO "Venues" ("Id", "Name", "Location", "Address", "Description")
+						VALUES ({row.Id}, {row.Name}, ST_SetSRID(ST_MakePoint({row.Longitude}, {row.Latitude}), {Wgs84Srid}), {row.Address}, {row.Description})
+						ON CONFLICT ("Id") DO NOTHING;
+						""");
+				}
 
 				existingVenueIds.Add(row.Id);
 			}
 
-			foreach (var sportId in row.SportIds)
+			foreach (int sportId in row.SportIds)
 			{
 				var key = new VenueSportKey(row.Id, sportId);
 				if (existingVenueSportPairs.Add(key))
@@ -145,32 +155,32 @@ public static class WarsawVenueSeeder
 		var headerFields = parser.ReadFields()
 			?? throw new InvalidOperationException($"CSV file '{csvFilePath}' does not contain a header row.");
 
-		var headerMap = BuildHeaderMap(csvFilePath, headerFields);
+		Dictionary<string, int> headerMap = BuildHeaderMap(csvFilePath, headerFields);
 		var rows = new List<VenueCsvRow>();
 		var seenVenueIds = new HashSet<int>();
-		var rowNumber = 1;
+		int rowNumber = 1;
 
 		while (!parser.EndOfData)
 		{
 			rowNumber++;
-			var fields = parser.ReadFields();
+			string[]? fields = parser.ReadFields();
 			if (fields is null || fields.All(string.IsNullOrWhiteSpace))
 			{
 				continue;
 			}
 
-			var id = ParsePositiveInt(GetRequiredValue(fields, headerMap["id"], "id", rowNumber), "id", rowNumber);
+			int id = ParsePositiveInt(GetRequiredValue(fields, headerMap["id"], "id", rowNumber), "id", rowNumber);
 			if (!seenVenueIds.Add(id))
 			{
 				throw new InvalidOperationException($"Duplicate venue id '{id}' found in CSV row {rowNumber}.");
 			}
 
-			var latitude = ParseDouble(
+			double latitude = ParseDouble(
 				GetRequiredValue(fields, headerMap["szerokosc_geograficzna"], "szerokosc_geograficzna", rowNumber),
 				"szerokosc_geograficzna",
 				rowNumber);
 
-			var longitude = ParseDouble(
+			double longitude = ParseDouble(
 				GetRequiredValue(fields, headerMap["dlugosc_geograficzna"], "dlugosc_geograficzna", rowNumber),
 				"dlugosc_geograficzna",
 				rowNumber);
@@ -211,7 +221,7 @@ public static class WarsawVenueSeeder
 			"wspierane_dyscypliny"
 		];
 
-		var missingHeaders = requiredHeaders
+		string[] missingHeaders = requiredHeaders
 			.Where(required => !headers.ContainsKey(required))
 			.ToArray();
 
@@ -231,7 +241,7 @@ public static class WarsawVenueSeeder
 			throw new InvalidOperationException($"Row {rowNumber} is missing column '{columnName}'.");
 		}
 
-		var value = fields[index].Trim();
+		string value = fields[index].Trim();
 		if (string.IsNullOrWhiteSpace(value))
 		{
 			throw new InvalidOperationException($"Row {rowNumber} contains an empty '{columnName}' value.");
@@ -266,9 +276,9 @@ public static class WarsawVenueSeeder
 	{
 		var sportIds = new HashSet<int>();
 
-		foreach (var token in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+		foreach (string token in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
 		{
-			var sportId = ParsePositiveInt(token, "wspierane_dyscypliny", rowNumber);
+			int sportId = ParsePositiveInt(token, "wspierane_dyscypliny", rowNumber);
 			sportIds.Add(sportId);
 		}
 
@@ -282,7 +292,7 @@ public static class WarsawVenueSeeder
 
 	private static string ResolveCsvPath(string? configuredCsvPath)
 	{
-		var pathToResolve = string.IsNullOrWhiteSpace(configuredCsvPath)
+		string pathToResolve = string.IsNullOrWhiteSpace(configuredCsvPath)
 			? DefaultCsvPath
 			: configuredCsvPath.Trim();
 
@@ -297,11 +307,11 @@ public static class WarsawVenueSeeder
 		}
 
 		var checkedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		foreach (var startDirectory in EnumerateSearchStartDirectories())
+		foreach (string startDirectory in EnumerateSearchStartDirectories())
 		{
 			for (var current = new DirectoryInfo(startDirectory); current is not null; current = current.Parent)
 			{
-				var candidate = Path.GetFullPath(Path.Combine(current.FullName, pathToResolve));
+				string candidate = Path.GetFullPath(Path.Combine(current.FullName, pathToResolve));
 				if (!checkedPaths.Add(candidate))
 				{
 					continue;
