@@ -46,7 +46,7 @@
   - Tradeoff: Rewrites verified seeding code and re-tests against a PostGIS DB; must confirm NTS `Point` writes cleanly through `UseAsyncSeeding`.
   - Confidence: MEDIUM — NTS mapping should work, but the author may have hit a materialization issue that motivated raw SQL.
   - Blind spot: Unknown whether an EF-based `Point` add was tried and abandoned.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — deviation recorded as addendum A1 in plan.md
 
 ### F2 — Phase 3 manual success criteria missing from the Progress mirror
 
@@ -56,7 +56,7 @@
 - **Location**: context/changes/data-layer-foundation/plan.md (Progress → Phase 3 → Manual)
 - **Detail**: The plan defines four Phase 3 manual verification items (row counts, spatial spot-check, idempotency, UTF-8), but the `#### Manual` block under Phase 3 in `## Progress` is empty — no `[ ]`/`[x]` lines. The equivalent DB-level checks were actually performed and recorded as Phase 4 manual items 4.3–4.8, so verification did happen; only the Phase 3 Progress mirror is incomplete.
 - **Fix**: Add the four Phase 3 manual checkboxes to Progress (or annotate them as superseded by items 4.3–4.8) so completion math and future audits are accurate.
-- **Decision**: PENDING
+- **Decision**: FIXED — added Phase 3 manual items 3.3–3.6 to Progress, annotated as verified via Phase 4 items 4.3–4.8
 
 ### F3 — Transitive `Microsoft.OpenApi` 2.0.0 high-severity advisory (NU1903)
 
@@ -66,4 +66,4 @@
 - **Location**: server/server.csproj (transitive via `Microsoft.AspNetCore.OpenApi` 10.0.8)
 - **Detail**: The build emits `NU1903: Package 'Microsoft.OpenApi' 2.0.0 has a known high severity vulnerability`. This is pre-existing — it arrives through the `Microsoft.AspNetCore.OpenApi` reference that predates this change; F-01 added only EF Core/Npgsql/NTS packages. Flagged for awareness, not as drift from this plan.
 - **Fix**: Out of scope for F-01; track separately — bump `Microsoft.AspNetCore.OpenApi` (or pin a patched `Microsoft.OpenApi`) once a fixed version is available.
-- **Decision**: PENDING
+- **Decision**: SKIPPED — pre-existing and out of scope for F-01; tracked separately

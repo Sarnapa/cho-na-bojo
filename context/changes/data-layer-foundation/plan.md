@@ -299,6 +299,19 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 - Host insertion point: `server/Program.cs` (`AddOpenApi()` service block)
 - Venue source data: `data/warsaw-venues.csv`
 
+## Addenda
+
+> Post-implementation deviations from the original plan, recorded during impl-review (2026-07-15).
+
+### A1 — Venue seeding: parameterized raw SQL instead of EF `Point` entity add (Phase 3)
+
+The Phase 3 contract described mapping each CSV row into a `Venue` entity (building `Location = new Point(longitude, latitude) { SRID = 4326 }`) and check-then-adding venues + join rows via EF. The implementation (`server/Data/Seeding/WarsawVenueSeeder.cs`) instead:
+
+- Inserts each venue via **parameterized raw SQL** (`ExecuteSqlInterpolated`/`ExecuteSqlInterpolatedAsync`) using `ST_SetSRID(ST_MakePoint(lng, lat), 4326)` with `ON CONFLICT DO NOTHING`, committed per row. `Venue.Location` is therefore not written through the NTS `Point` mapping.
+- Adds `VenueSport` join rows as EF-tracked entities flushed later in a single `SaveChanges`/`SaveChangesAsync`.
+
+Consequences: venue inserts auto-commit individually while join rows batch, so seeding is **non-atomic** — a mid-seed failure can leave venues without their `VenueSports`. Both raw statements are parameterized (no injection risk), and the idempotent guards (`ON CONFLICT`, existing-id/pair checks) reconcile partial state on re-run. Behavior verified end-to-end against Supabase (Phase 4 manual checks 4.3–4.8 passed).
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles. See `references/progress-format.md`.
@@ -336,6 +349,11 @@ First migration on an empty database — no existing data to migrate. `CREATE EX
 - [x] 3.2 CSV parses without error and validates 100 unique positive venue ids in a smoke run (all 100 rows read) — ec40efa
 
 #### Manual
+
+- [x] 3.3 After migrate, `Venues` has 100 rows with ids matching the CSV, non-null `Location`, and every `wspierane_dyscypliny` id produced a `VenueSports` row — verified via Phase 4 item 4.3
+- [x] 3.4 Spatial spot-check (`ST_AsText(Location)`) shows correct lng/lat order — verified via Phase 4 items 4.3–4.8
+- [x] 3.5 Re-running migrate adds zero duplicate venues or join rows (idempotent) — verified via Phase 4 items 4.3–4.8
+- [x] 3.6 Polish characters in `Name`/`Address`/`Description` persist correctly (UTF-8) — verified via Phase 4 items 4.3–4.8
 
 ### Phase 4: Initial Migration & Apply
 
