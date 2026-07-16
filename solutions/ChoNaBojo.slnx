@@ -41,6 +41,8 @@
   <Folder Name="/context/changes/auth-scaffold/">
     <File Path="../context/changes/auth-scaffold/change.md" />
     <File Path="../context/changes/auth-scaffold/frame.md" />
+    <File Path="../context/changes/auth-scaffold/research-jwt-implementation.md" />
+    <File Path="../context/changes/auth-scaffold/research.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
