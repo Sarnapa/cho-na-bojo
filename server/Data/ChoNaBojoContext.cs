@@ -5,7 +5,8 @@ namespace ChoNaBojo.Server.Data;
 
 /// <summary>
 /// EF Core context for the F-01 data-layer foundation: reference tables <see cref="Sports"/>,
-/// <see cref="Venues"/>, and the <see cref="VenueSports"/> join. PostGIS-backed; the app never
+/// <see cref="Venues"/>, and the <see cref="VenueSports"/> join. F-02 adds <see cref="Users"/>
+/// and <see cref="RefreshTokens"/> for self-hosted auth. PostGIS-backed; the app never
 /// auto-migrates (schema is applied via <c>dotnet ef database update</c>).
 /// </summary>
 public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbContext(options)
@@ -34,12 +35,29 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 		}
 	}
 
+	public DbSet<User> Users
+	{
+		get
+		{
+			return Set<User>();
+		}
+	}
+
+	public DbSet<RefreshToken> RefreshTokens
+	{
+		get
+		{
+			return Set<RefreshToken>();
+		}
+	}
+
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		base.OnModelCreating(modelBuilder);
 
 		// Emit CREATE EXTENSION postgis in the migration so geometry columns / spatial ops work.
 		modelBuilder.HasPostgresExtension("postgis");
+		modelBuilder.HasPostgresExtension("pgcrypto");
 
 		modelBuilder.Entity<Sport>(entity =>
 		{
@@ -92,6 +110,74 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 							.WithMany(s => s.VenueSports)
 							.HasForeignKey(vs => vs.SportId)
 							.OnDelete(DeleteBehavior.Cascade);
+		});
+
+		modelBuilder.Entity<User>(entity =>
+		{
+			entity.ToTable(tableBuilder =>
+			{
+				tableBuilder.HasCheckConstraint(
+					"CK_Users_ContactMethod",
+					"""
+					(
+						(NULLIF(BTRIM("ContactPhone"), '') IS NOT NULL)
+						OR (NULLIF(BTRIM("ContactEmail"), '') IS NOT NULL)
+						OR ("CommunicatorPlatform" IS NOT NULL AND NULLIF(BTRIM("CommunicatorHandle"), '') IS NOT NULL)
+					)
+					AND
+					(
+						("CommunicatorPlatform" IS NULL AND NULLIF(BTRIM("CommunicatorHandle"), '') IS NULL)
+						OR ("CommunicatorPlatform" IS NOT NULL AND NULLIF(BTRIM("CommunicatorHandle"), '') IS NOT NULL)
+					)
+					""");
+			});
+
+			entity.HasKey(user => user.Id);
+			entity.Property(user => user.Id)
+				.HasDefaultValueSql("gen_random_uuid()");
+
+			entity.Property(user => user.LoginEmail)
+				.IsRequired()
+				.HasMaxLength(320);
+			entity.Property(user => user.NormalizedLoginEmail)
+				.IsRequired()
+				.HasMaxLength(320);
+			entity.Property(user => user.PasswordHash)
+				.IsRequired()
+				.HasMaxLength(512);
+			entity.Property(user => user.ContactPhone)
+				.HasMaxLength(32);
+			entity.Property(user => user.ContactEmail)
+				.HasMaxLength(320);
+			entity.Property(user => user.CommunicatorHandle)
+				.HasMaxLength(100);
+			entity.Property(user => user.CreatedUtc)
+				.IsRequired();
+			entity.Property(user => user.UpdatedUtc)
+				.IsRequired();
+
+			entity.HasIndex(user => user.NormalizedLoginEmail)
+				.IsUnique();
+		});
+
+		modelBuilder.Entity<RefreshToken>(entity =>
+		{
+			entity.HasKey(token => token.Id);
+			entity.Property(token => token.TokenHash)
+				.IsRequired()
+				.HasMaxLength(64);
+			entity.Property(token => token.CreatedUtc)
+				.IsRequired();
+			entity.Property(token => token.ExpiresUtc)
+				.IsRequired();
+
+			entity.HasIndex(token => token.TokenHash);
+			entity.HasIndex(token => token.FamilyId);
+
+			entity.HasOne(token => token.User)
+				.WithMany(user => user.RefreshTokens)
+				.HasForeignKey(token => token.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
 		});
 	}
 }
