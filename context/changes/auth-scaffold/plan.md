@@ -25,7 +25,7 @@ The API has:
 - A `RefreshTokens` table (SHA-256 hash at rest, `FamilyId`, rotation/consumption/revocation columns) keyed to the same `Users.Id` type via a cascade FK.
 - `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` working end-to-end.
 - Access JWTs (15 min TTL) carrying only a stable UUID in `sub`/`NameIdentifier` — never email, roles, or contact info; rotating refresh tokens (30 day TTL) with **`FamilyId` reuse detection** (replay of a consumed token revokes the whole family).
-- `[Authorize]` enforced on domain route groups; `/health` remains public; `/weatherforecast` removed.
+- The **authorized domain route-group seam** is established with `.RequireAuthorization()` (empty today — real domain routes land in S-03+); `/health` remains public; `/weatherforecast` removed; `GET /auth/me` is the retained protected probe exercising authz and the current-user helper.
 - JWT signing key/issuer/audience read from user-secrets (dev) / Railway env (prod) — never committed.
 
 **Verification**: `dotnet build` clean; migration applies; register → login → call a protected route with the bearer token (200) and without it (401); refresh rotates the token pair; replaying a consumed refresh token revokes the family; logout revokes the family.
@@ -36,7 +36,7 @@ The API has:
 - `OnModelCreating` config style (HasKey / IsRequired / HasIndex.IsUnique / relationship cascade): `ChoNaBojoContext.cs:37-95`.
 - `User.Id` must be **DB-generated `Guid`/`uuid`** — do **not** copy the seeded `ValueGeneratedNever()` pattern (that is only for imported CSV identity rows).
 - On .NET 10 `WebApplication`, `AddAuthentication().AddJwtBearer()` + `AddAuthorization()` **auto-register** the middleware; explicit `UseAuthentication`/`UseAuthorization` is only needed when order matters (e.g. CORS first). The MAUI Android client is **not a browser**, so **CORS is not required** — no ordering constraint here.
-- JwtBearer options bind from configuration under `Authentication:Schemes:Bearer` — a natural fit for user-secrets.
+- JwtBearer options *can* auto-bind from configuration under `Authentication:Schemes:Bearer`, but this plan does **not** use that path. The **single source of truth** is the custom `JwtOptions` section (Phase 2 §2), and `AddJwtBearer` is configured **explicitly** from it (Phase 2 §7) so issuance and validation provably read the same signing key/issuer/audience. Do not also populate `Authentication:Schemes:Bearer` — one section only.
 - `dotnet user-jwts` is a **dev-only** token tester, not a production issuer.
 - Secrets pattern: `appsettings.Development.json` uses a commented `"//ConnectionStrings"` block; JWT config follows the same rule (user-secrets/Railway env only).
 
@@ -48,6 +48,7 @@ The API has:
 - **No password reset** (Parked) and **no OAuth** (out of MVP scope).
 - **No contact-reveal endpoints** — the reveal path lands in S-05. F-02 only ensures contact fields are structurally separated and excluded from default responses.
 - **No Firebase Auth** — settled in `frame.md` (residency + lock-in + one-maintainer SDK).
+- **No refresh-token pruning job** — consumed/expired/revoked `RefreshTokens` rows are never deleted in F-02 (fine at MVP volume). Defer a pruning job (`DELETE WHERE ExpiresUtc < now`) to the tech-stack's planned background-jobs work; noted here so it isn't silently forgotten. No F-02 action.
 
 ## Implementation Approach
 
@@ -62,7 +63,7 @@ Build bottom-up, mirroring the F-01 layering (data model → infrastructure/serv
 - **Identity stability is a rippling decision.** The `Users.Id` (server-generated UUID, serialized as string in the JWT `sub`/`NameIdentifier`) is the single anchor shared by the JWT, the `RefreshTokens.UserId` FK, and every future event/participant FK (S-03/S-05/S-07). Choosing email-as-id or a mismatched refresh-token user-id type would force churn later — the FK type must equal `Users.Id`'s type.
 - **JWT is authentication only.** Never place email, contact info, or per-event roles in the token. `[Authorize]` proves only "authenticated". This is defense-in-depth for the launch-gate privacy boundary.
 - **Contact separation is structural, not just endpoint-level.** `LoginEmail` (credential) is distinct from `ContactEmail` (shareable) even if values match; default auth responses and DTOs must exclude contact fields so the future reveal path (S-05) is the only code that emits them.
-- **Refresh-token reuse detection.** Store only the SHA-256 hash at rest; rotate on every exchange (mark old row consumed, issue new pair sharing the `FamilyId`); if a **consumed** token is presented again, treat it as theft and revoke the entire family.
+- **Refresh-token reuse detection.** Store only the SHA-256 hash at rest; rotate on every exchange (mark old row consumed, issue new pair sharing the `FamilyId`) inside a **single DB transaction**; if a **consumed** token is presented again, first apply a short **benign-retry grace window** (a just-consumed token whose live child still exists is a legitimate mobile retry — return that child's pair idempotently, no revocation); only a genuine out-of-window/child-already-consumed replay is treated as theft and revokes the entire family.
 - **Migrations are out-of-band.** Do not call `Database.Migrate()`. Apply with `dotnet ef database update` using the session-mode `AppDbMigrations` string; runtime keeps using the pooled `AppDb`.
 
 ---
@@ -89,7 +90,7 @@ Add the `User` and `RefreshToken` entities plus the `CommunicatorPlatform` enum,
 
 **Intent**: The account/identity record. Separates credential fields (login email + password hash) from shareable contact fields, with the communicator contact expressed as a platform + handle pair.
 
-**Contract**: class `User` in `ChoNaBojo.Server.Data.Entities` with: `Guid Id`; `string LoginEmail`/`string NormalizedLoginEmail` (required); `string PasswordHash` (required); nullable `string? ContactPhone`, `string? ContactEmail`, `CommunicatorPlatform? CommunicatorPlatform`, `string? CommunicatorHandle`; `DateTime CreatedUtc`, `DateTime UpdatedUtc`; `ICollection<RefreshToken> RefreshTokens = [];`. Follow entity conventions (`= null!;` for required refs, XML-docs, tab indent). The invariant "a communicator handle requires a platform and vice versa" and "≥1 contact method" are enforced in `OnModelCreating` (below) + DTO validation (Phase 3).
+**Contract**: class `User` in `ChoNaBojo.Server.Data.Entities` with: `Guid Id`; `string LoginEmail`/`string NormalizedLoginEmail` (required — `NormalizedLoginEmail` is always produced by the single `NormalizeLoginEmail` helper defined in Phase 3 §3: `Trim().ToUpperInvariant()`); `string PasswordHash` (required); nullable `string? ContactPhone`, `string? ContactEmail`, `CommunicatorPlatform? CommunicatorPlatform`, `string? CommunicatorHandle`; `DateTime CreatedUtc`, `DateTime UpdatedUtc`; `ICollection<RefreshToken> RefreshTokens = [];`. Follow entity conventions (`= null!;` for required refs, XML-docs, tab indent). The invariant "a communicator handle requires a platform and vice versa" and "≥1 contact method" are enforced in `OnModelCreating` (below) + DTO validation (Phase 3).
 
 #### 3. RefreshToken entity
 
@@ -182,8 +183,8 @@ Add the auth packages, bind JWT config from user-secrets, build the token/passwo
 
 **Contract**:
 - Issue: generate 64 random bytes (`RandomNumberGenerator.Fill`), return the raw opaque token to the caller, persist a `RefreshToken` row storing its SHA-256 hash, a new `FamilyId` (on login) or the inherited family (on rotation), `ExpiresUtc = now + RefreshTokenDays`.
-- Exchange/rotate: look up by hash; if not found/expired/revoked → reject. If already **consumed** → **reuse detected**: revoke the entire `FamilyId` and reject. Otherwise mark consumed, set `ReplacedByTokenId`, issue a new pair in the same family.
-- Revoke-family: used by logout and reuse detection.
+- Exchange/rotate: wrap the whole lookup→consume→insert in a **single DB transaction** (serializable/`SELECT ... FOR UPDATE` on the row) so a concurrent double-submit cannot consume twice or issue two families. Look up by hash; if not found/expired/revoked → reject. If already **consumed**, apply the **benign-retry grace window** before treating it as theft: if the row was consumed within a short grace window (e.g. ~10–30s — final value is a product call) **and** its `ReplacedByTokenId` child row is still live (not consumed/revoked/expired), treat this as a legitimate client retry and return that child's already-issued pair (idempotent replay) — do **not** revoke the family. Only if the consumed token is outside the grace window, or its child has already been consumed/revoked, treat it as **reuse detected**: revoke the entire `FamilyId` and reject (401). Otherwise (token not yet consumed) mark consumed, set `ReplacedByTokenId`, issue a new pair in the same family.
+- Revoke-family: used by logout and genuine reuse detection.
 
 #### 6. Current-user-id helper
 
@@ -199,7 +200,7 @@ Add the auth packages, bind JWT config from user-secrets, build the token/passwo
 
 **Intent**: Register authentication + authorization and the auth services before `Build()`.
 
-**Contract**: `builder.Services.AddAuthentication().AddJwtBearer(...)` bound to `JwtOptions` (validate issuer/audience/lifetime/signing key), `builder.Services.AddAuthorization()`, and DI registrations for the password/token/refresh services + `JwtOptions`. No explicit `UseAuthentication`/`UseAuthorization` needed (auto-registered; no CORS ordering concern for the mobile client).
+**Contract**: `builder.Services.AddAuthentication().AddJwtBearer(...)` bound explicitly to `JwtOptions` (the single config source — do not rely on the `Authentication:Schemes:Bearer` auto-bind path) validating issuer/audience/lifetime/signing key against the same values used for issuance, `builder.Services.AddAuthorization()`, and DI registrations for the password/token/refresh services + `JwtOptions`. No explicit `UseAuthentication`/`UseAuthorization` needed (auto-registered; no CORS ordering concern for the mobile client).
 
 ### Success Criteria:
 
@@ -241,7 +242,7 @@ Expose `POST /auth/register|login|refresh|logout` with DTOs + validation, apply 
 **Contract**:
 - `POST /auth/register`: validate ≥1 complete contact + password policy; reject duplicate normalized login email (409/400); hash password; create `User`; return an `AuthResponse` (issue access + refresh pair, new family).
 - `POST /auth/login`: verify credentials (rehash-on-`SuccessRehashNeeded`); on success issue a new access+refresh pair (new family); generic 401 on failure (no user-enumeration signal).
-- `POST /auth/refresh`: exchange via the refresh-token service (rotation + reuse detection); 401 on invalid/expired/reused.
+- `POST /auth/refresh`: exchange via the refresh-token service (transactional rotation + grace-window reuse detection); a benign in-window retry idempotently returns the already-issued pair; 401 on invalid/expired/genuinely-reused (out-of-window replay revokes the family).
 - `POST /auth/logout`: revoke the presented token's family; 204.
 - All four are **anonymous** (they issue/validate their own tokens).
 
@@ -251,7 +252,7 @@ Expose `POST /auth/register|login|refresh|logout` with DTOs + validation, apply 
 
 **Intent**: Enforce FR-011 ≥1-contact and communicator platform/handle co-presence at the application layer (400 with a clear message), complementing the DB CHECK.
 
-**Contract**: reject when none of {phone, contactEmail, (communicatorPlatform + communicatorHandle)} is present, or when exactly one of communicatorPlatform/communicatorHandle is present. Basic email/password shape validation.
+**Contract**: reject when none of {phone, contactEmail, (communicatorPlatform + communicatorHandle)} is present, or when exactly one of communicatorPlatform/communicatorHandle is present. **Password policy**: min length **8**, max length **128** (guards against pathological inputs to the hasher); no forced complexity classes for the MVP. **Email shape**: basic non-empty + single-`@` shape check on `loginEmail`. **Email normalization**: a single canonical helper — `NormalizeLoginEmail(string) => value.Trim().ToUpperInvariant()` (define it once, e.g. a static method on `User` or an `AuthNormalization` helper) — is the **only** normalizer, called identically at register (to write `NormalizedLoginEmail` and check duplicates), at login (to look the user up), and to populate the value the unique index covers. Register/login must never inline their own trimming/casing.
 
 #### 4. Authorization baseline + cleanup
 
@@ -259,7 +260,7 @@ Expose `POST /auth/register|login|refresh|logout` with DTOs + validation, apply 
 
 **Intent**: Enforce the PRD "unauthenticated: no access" guardrail on domain routes while keeping health-check public; remove template scaffolding.
 
-**Contract**: apply `.RequireAuthorization()` to domain route groups (and to future domain endpoints by grouping). `/health` stays anonymous. Remove `/weatherforecast` and the `WeatherForecast` record. Since only `/health` + `/auth/*` exist today, add a **temporary protected probe** endpoint (e.g. `GET /auth/me` returning the current user id via the helper, `.RequireAuthorization()`) to prove the `[Authorize]` baseline works and to exercise the current-user helper.
+**Contract**: establish the **authorized domain route-group seam** (a `.RequireAuthorization()` group that is **empty today** — the real domain endpoints arrive in S-03+) so future protected routes inherit authz by grouping. `/health` stays anonymous. Remove `/weatherforecast` and the `WeatherForecast` record. Since only `/health` + `/auth/*` exist today, add `GET /auth/me` (returns the current user id via the helper, `.RequireAuthorization()`) as the probe that proves the `[Authorize]` baseline works and exercises the current-user helper. **`/auth/me` is retained** beyond F-02 — it returns only the caller's own id, so it is harmless and useful to the S-01 client for verifying its bearer wiring; it is not a temporary throwaway.
 
 ### Success Criteria:
 

@@ -1,7 +1,7 @@
 ---
 change_id: auth-scaffold
 title: Auth scaffold
-status: preparing
+status: plan_reviewed
 created: 2026-07-15
 updated: 2026-07-16
 archived_at: null
