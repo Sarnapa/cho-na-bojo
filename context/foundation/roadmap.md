@@ -30,7 +30,7 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 | ID | Change ID | Outcome (user can …) | Prerequisites | PRD refs | Status |
 |---|---|---|---|---|---|
 | F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Sports` lookup seeded with the predefined list, `Venues` table seeded with Warsaw data, and the `VenueSports` join populated | — | FR-003 (predefined sport list), Non-Goals §1 (Warsaw venue seed), NFR (privacy, perf), tech-stack `database: PostgreSQL` | done |
-| F-02 | auth-scaffold | (foundation) Email+password register/login on the API, password hashing, JWT issue+validate, authorization middleware on protected routes | F-01 | FR-001, FR-002, NFR (privacy boundary), Access Control | preparing |
+| F-02 | auth-scaffold | (foundation) Email+password register/login on the API, password hashing, JWT issue+validate, authorization middleware on protected routes | F-01 | FR-001, FR-002, NFR (privacy boundary), Access Control | prepared |
 | S-01 | account-and-session | register an account with email, password, and at least one contact; log in and stay logged in across app restarts | F-02 | FR-001, FR-002, FR-011 (contact collection), US-01, US-02 | proposed |
 | S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | proposed |
 | S-03 | event-creation | create an event at a selected venue with date, estimated end time, participant limit (≥ 2, ≤ 300), and optional auto-accept | S-02 | FR-005, US-02 | proposed |
@@ -88,7 +88,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** "Invest deeply" area per Step 5 — the privacy boundary ("contact info never visible to unapproved users") is a launch gate; a slip here kills the product. Contract is minimal (issuer + validator + register/login), no fancy password reset (Parked) and no OAuth (out of MVP scope), so it doesn't bloat — but the per-event role check has to be designed solidly once, because S-05 and S-07 both rely on it.
-- **Status:** preparing
+- **Status:** prepared
 
 ## Slices
 
