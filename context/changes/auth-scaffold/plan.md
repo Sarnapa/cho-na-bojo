@@ -344,8 +344,8 @@ Expose `POST /auth/register|login|refresh|logout` with DTOs + validation, apply 
 
 #### Automated
 
-- [ ] 2.1 Solution builds with the new packages and services: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 2.2 App starts without DI/config errors: `dotnet run --project server` reaches listening state
+- [x] 2.1 Solution builds with the new packages and services: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 2.2 App starts without DI/config errors: `dotnet run --project server` reaches listening state
 
 #### Manual
 

@@ -1,5 +1,10 @@
+using System.Text;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using ChoNaBojo.Server.Auth;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Seeding;
 
@@ -34,6 +39,45 @@ builder.Services.AddDbContext<ChoNaBojoContext>(opt =>
     .UseSeeding((context, _) => WarsawVenueSeeder.Seed(context, warsawVenuesCsvPath))
     .UseAsyncSeeding((context, _, cancellationToken) =>
         WarsawVenueSeeder.SeedAsync(context, warsawVenuesCsvPath, cancellationToken)));
+
+builder.Services
+	.AddOptions<JwtOptions>()
+	.Bind(builder.Configuration.GetRequiredSection(JwtOptions.SectionName))
+	.ValidateDataAnnotations()
+	.Validate(
+		options => Encoding.UTF8.GetByteCount(options.SigningKey) >= 32,
+		$"{JwtOptions.SectionName}:SigningKey must be at least 256 bits (32 bytes).")
+	.ValidateOnStart();
+
+builder.Services
+	.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+	.AddJwtBearer();
+
+builder.Services
+	.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+	.Configure<IOptions<JwtOptions>>((jwtBearerOptions, jwtOptionsAccessor) =>
+	{
+		var jwtOptions = jwtOptionsAccessor.Value;
+		var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
+
+		jwtBearerOptions.TokenValidationParameters = new TokenValidationParameters
+		{
+			ValidateIssuer = true,
+			ValidIssuer = jwtOptions.Issuer,
+			ValidateAudience = true,
+			ValidAudience = jwtOptions.Audience,
+			ValidateIssuerSigningKey = true,
+			IssuerSigningKey = signingKey,
+			ValidateLifetime = true,
+			ClockSkew = TimeSpan.FromSeconds(30)
+		};
+	});
+
+builder.Services.AddAuthorization();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IPasswordService, PasswordService>();
+builder.Services.AddSingleton<ITokenService, TokenService>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
 var app = builder.Build();
 
