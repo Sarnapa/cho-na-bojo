@@ -344,12 +344,12 @@ Expose `POST /auth/register|login|refresh|logout` with DTOs + validation, apply 
 
 #### Automated
 
-- [x] 2.1 Solution builds with the new packages and services: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 2.2 App starts without DI/config errors: `dotnet run --project server` reaches listening state
+- [x] 2.1 Solution builds with the new packages and services: `dotnet build solutions/ChoNaBojo.slnx` — 5a51c3f
+- [x] 2.2 App starts without DI/config errors: `dotnet run --project server` reaches listening state — 5a51c3f
 
 #### Manual
 
-- [ ] 2.3 App boots with user-secrets set; startup fails fast when the JWT signing key is missing
+- [x] 2.3 App boots with user-secrets set; startup fails fast when the JWT signing key is missing — 5a51c3f
 
 ### Phase 3: Endpoints & authorization baseline
 
