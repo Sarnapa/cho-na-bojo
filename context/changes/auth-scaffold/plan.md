@@ -331,14 +331,14 @@ Expose `POST /auth/register|login|refresh|logout` with DTOs + validation, apply 
 
 #### Automated
 
-- [x] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 1.2 Migration generates without model errors: `dotnet ef migrations add AddAuthTables --project server`
-- [x] 1.3 Migration applies cleanly against the dev DB: `dotnet ef database update --project server`
+- [x] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — 1307776
+- [x] 1.2 Migration generates without model errors: `dotnet ef migrations add AddAuthTables --project server` — 1307776
+- [x] 1.3 Migration applies cleanly against the dev DB: `dotnet ef database update --project server` — 1307776
 
 #### Manual
 
-- [ ] 1.4 `Users` and `RefreshTokens` tables exist with expected columns, unique login-email index, and ≥1-contact CHECK constraint
-- [ ] 1.5 Inserting a user with no contact method is rejected by the DB
+- [x] 1.4 `Users` and `RefreshTokens` tables exist with expected columns, unique login-email index, and ≥1-contact CHECK constraint — 1307776
+- [x] 1.5 Inserting a user with no contact method is rejected by the DB — 1307776
 
 ### Phase 2: Auth infrastructure (packages, config, services, wiring)
 
