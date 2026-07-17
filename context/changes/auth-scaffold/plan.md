@@ -355,14 +355,14 @@ Expose `POST /auth/register|login|refresh|logout` with DTOs + validation, apply 
 
 #### Automated
 
-- [ ] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 3.2 App runs: `dotnet run --project server` serves on http://localhost:5100
+- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 3.2 App runs: `dotnet run --project server` serves on http://localhost:5100
 
 #### Manual
 
-- [ ] 3.3 Register with ≥1 contact returns a token pair; register with no contact returns 400
-- [ ] 3.4 Login with correct credentials returns a token pair; wrong password returns 401
-- [ ] 3.5 Protected probe returns 401 without a bearer token and 200 (correct user id) with a valid access token
-- [ ] 3.6 Refresh rotates the pair; replaying a consumed refresh token returns 401 and revokes the family
-- [ ] 3.7 Logout revokes the family; subsequent refresh fails
-- [ ] 3.8 Duplicate registration (same login email) is rejected
+- [x] 3.3 Register with ≥1 contact returns a token pair; register with no contact returns 400
+- [x] 3.4 Login with correct credentials returns a token pair; wrong password returns 401
+- [x] 3.5 Protected probe returns 401 without a bearer token and 200 (correct user id) with a valid access token
+- [x] 3.6 Refresh rotates the pair; replaying a consumed refresh token returns 401 and revokes the family
+- [x] 3.7 Logout revokes the family; subsequent refresh fails
+- [x] 3.8 Duplicate registration (same login email) is rejected

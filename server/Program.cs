@@ -4,14 +4,16 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using ChoNaBojo.Server.Auth;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
+string appDbConnectionString = ResolveRuntimeAppDbConnectionString(builder.Configuration.GetConnectionString("AppDb"));
 
 // Bind to Railway's PORT
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+string port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 if (!builder.Environment.IsDevelopment())
 {
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
@@ -28,13 +30,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-var warsawVenuesCsvPath = builder.Configuration["DataSeeding:WarsawVenuesCsvPath"];
+string? warsawVenuesCsvPath = builder.Configuration["DataSeeding:WarsawVenuesCsvPath"];
 
 // Register the data-layer DbContext (Supabase Postgres via Npgsql + PostGIS/NetTopologySuite).
 // Runtime uses the transaction-mode pooler string (AppDb, port 6543); the app never auto-migrates.
 builder.Services.AddDbContext<ChoNaBojoContext>(opt =>
     opt.UseNpgsql(
-        builder.Configuration.GetConnectionString("AppDb"),
+        appDbConnectionString,
         npgsql => npgsql.UseNetTopologySuite())
     .UseSeeding((context, _) => WarsawVenueSeeder.Seed(context, warsawVenuesCsvPath))
     .UseAsyncSeeding((context, _, cancellationToken) =>
@@ -95,28 +97,28 @@ app.UseHttpsRedirection();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
     .WithName("HealthCheck");
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+app.MapAuthEndpoints();
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+_ = app.MapGroup("/api")
+	.RequireAuthorization();
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+static string ResolveRuntimeAppDbConnectionString(string? connectionString)
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+	if (string.IsNullOrWhiteSpace(connectionString))
+	{
+		throw new InvalidOperationException("Connection string 'AppDb' is required.");
+	}
+
+	var builder = new NpgsqlConnectionStringBuilder(connectionString);
+
+	// Supabase transaction pooler (port 6543) is already pooling server-side.
+	// Disabling client pooling prevents stale pooled sockets causing write timeouts.
+	if (builder.Port == 6543 && builder.Pooling)
+	{
+		builder.Pooling = false;
+	}
+
+	return builder.ConnectionString;
 }
