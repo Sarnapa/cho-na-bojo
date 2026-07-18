@@ -7,9 +7,12 @@ namespace ChoNaBojo.Server.Auth;
 
 public static class AuthEndpoints
 {
+	public const string RateLimiterPolicyName = "auth";
+
 	public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
 	{
-		var authGroup = endpoints.MapGroup("/auth");
+		var authGroup = endpoints.MapGroup("/auth")
+			.RequireRateLimiting(RateLimiterPolicyName);
 
 		authGroup.MapPost("/register", RegisterAsync)
 			.AllowAnonymous()

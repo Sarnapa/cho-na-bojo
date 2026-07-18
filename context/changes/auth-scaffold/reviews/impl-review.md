@@ -73,12 +73,7 @@
 - **Dimension**: Safety & Quality
 - **Location**: server/Auth/AuthEndpoints.cs:13-27, server/Program.cs
 - **Detail**: `/auth/register|login|refresh` are anonymous with no throttling or backoff, making them brute-force / credential-stuffing targets. Not called out in the plan's scope, but it is a live security surface for a launched auth system.
-- **Fix**: Add ASP.NET Core rate limiting (per IP/email) on the auth group, or record it as an explicit tracked follow-up if intentionally deferred for the MVP.
-  - Strength: Cheap built-in middleware materially raises the cost of online guessing.
-  - Tradeoff: Needs tuned limits to avoid blocking legitimate mobile retries.
-  - Confidence: MED — appropriate for the boundary, but may be a deliberate post-MVP deferral given the 3-week scope.
-  - Blind spot: Product's risk appetite for MVP brute-force exposure isn't stated.
-- **Decision**: PENDING
+- **Decision**: FIXED — added an ASP.NET Core fixed-window rate limiter (10 req/min per client IP) as the `"auth"` policy in Program.cs, wired `UseRateLimiter()`, and applied `.RequireRateLimiting("auth")` to the `/auth` group; rejections return 429.
 
 ### F6 — Authorized route-group seam is discarded, so nothing can inherit it
 
