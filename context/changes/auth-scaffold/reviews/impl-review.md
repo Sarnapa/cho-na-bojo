@@ -91,8 +91,7 @@
 - **Dimension**: Plan Adherence
 - **Location**: server/server.csproj
 - **Detail**: Phase 2 §1 lists three packages; `Microsoft.AspNetCore.Authentication.JwtBearer` and `Microsoft.IdentityModel.JsonWebTokens` are present but `Microsoft.AspNetCore.Identity` is not. It builds because `PasswordHasher<T>` resolves transitively via `Microsoft.Extensions.Identity.Core`. Functionally fine; a plan/implementation mismatch only.
-- **Fix**: Either add the package explicitly for an intentional direct dependency, or update the plan to note the transitive resolution.
-- **Decision**: PENDING
+- **Decision**: FIXED differently — updated plan Phase 2 §1 with an impl note documenting that `Microsoft.AspNetCore.Identity` is intentionally not a direct reference; `PasswordHasher<T>` resolves transitively via `Microsoft.Extensions.Identity.Core`.
 
 ### F8 — CommunicatorPlatform accepts undefined enum integers
 

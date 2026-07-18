@@ -151,6 +151,8 @@ Add the auth packages, bind JWT config from user-secrets, build the token/passwo
 
 **Contract**: `dotnet add server package` for `Microsoft.AspNetCore.Authentication.JwtBearer`, `Microsoft.IdentityModel.JsonWebTokens`, and `Microsoft.AspNetCore.Identity` (versions aligned to net10.0). Keep `Nullable`/`ImplicitUsings` enabled.
 
+> Impl note (2026-07-18): `Microsoft.AspNetCore.Identity` was **not** added as an explicit reference — `PasswordHasher<T>` resolves transitively via `Microsoft.Extensions.Identity.Core` (pulled in by the framework), so the build and password hashing work without the direct package. Only `Microsoft.AspNetCore.Authentication.JwtBearer` and `Microsoft.IdentityModel.JsonWebTokens` are explicit in `server.csproj`.
+
 #### 2. JWT options + config binding
 
 **Files**: `server/Auth/JwtOptions.cs`, user-secrets
