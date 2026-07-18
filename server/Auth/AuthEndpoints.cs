@@ -143,6 +143,11 @@ public static class AuthEndpoints
 
 		if (!exchangeResult.Succeeded || exchangeResult.Pair is null)
 		{
+			if (exchangeResult.Failure == RefreshTokenExchangeFailure.RetryInProgress)
+			{
+				return Results.Conflict(new { message = "Refresh already in progress; retry with your current token pair." });
+			}
+
 			return Results.Unauthorized();
 		}
 

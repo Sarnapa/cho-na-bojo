@@ -27,7 +27,7 @@
 - **Dimension**: Safety & Quality
 - **Location**: server/Auth/RefreshTokenService.cs:83,106-121,150
 - **Detail**: The plan's benign-retry design says a just-consumed token whose live child still exists should idempotently return the child's pair with **no revocation**. Because only the SHA-256 hash is stored, the implementation caches the raw child `TokenPair` in `IMemoryCache` (an unplanned mechanism — EXTRA) and gates the benign-retry branch on a cache hit (`_memoryCache.TryGetValue`). On a server restart or cache eviction, a legitimate in-window retry misses the cache, falls through to `RevokeFamilyAsync`, and revokes the user's **entire token family** — forcing a full re-login. This inverts the intended "benign" behavior into the most destructive one. Separately, holding a consumed token within the 20s window returns valid live tokens to any presenter — this is the plan's deliberate tradeoff ("final value is a product call") but the raw-token-in-memory store widens its blast radius.
-- **Fix A ⭐ Recommended**: On a cache miss within the grace window with a live child, do not revoke — return a dedicated "retry with your stored pair" signal (e.g. 409/425) and leave the family intact.
+- **Fix A ⭐ Recommended**: On a cache miss within the grace window with a live child, do not revoke — return a "retry with your stored pair" signal (e.g. 409/425) and leave the family intact.
   - Strength: Removes the family-revocation failure mode entirely and avoids persisting raw refresh tokens; the client already holds its issued pair.
   - Tradeoff: Adds a small client contract (handle the retry status by reusing its stored pair).
   - Confidence: MED — depends on the S-01 client honoring the retry contract, which isn't built yet.
@@ -37,7 +37,7 @@
   - Tradeoff: Stores raw refresh-token material at rest (or a distributed cache dependency), reintroducing a secret-at-rest surface the SHA-256 design deliberately removed.
   - Confidence: MED — correct but at odds with the "hash only, never raw" principle the rest of the service follows.
   - Blind spot: No durable cache is provisioned yet; adds infra scope.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A (variant) — removed `IMemoryCache` entirely; a live child within the grace window now returns `RetryInProgress` → HTTP 409 (client retries with its stored pair) and the family is never revoked. Also removed `AddMemoryCache()` from Program.cs.
 
 ### F2 — Logout / family revocation runs without the transactional discipline used by rotation
 

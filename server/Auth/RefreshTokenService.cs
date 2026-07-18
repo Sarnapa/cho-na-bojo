@@ -2,7 +2,6 @@ using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Entities;
@@ -14,7 +13,8 @@ public sealed record TokenPair(string AccessToken, string RefreshToken, DateTime
 public enum RefreshTokenExchangeFailure
 {
 	Invalid = 0,
-	ReuseDetected = 1
+	ReuseDetected = 1,
+	RetryInProgress = 2
 }
 
 public sealed record RefreshTokenExchangeResult(TokenPair? Pair, RefreshTokenExchangeFailure? Failure)
@@ -51,8 +51,7 @@ public interface IRefreshTokenService
 public class RefreshTokenService(
 	ChoNaBojoContext dbContext,
 	ITokenService tokenService,
-	IOptions<JwtOptions> jwtOptionsAccessor,
-	IMemoryCache memoryCache): IRefreshTokenService
+	IOptions<JwtOptions> jwtOptionsAccessor): IRefreshTokenService
 {
 	private const int RefreshTokenByteLength = 64;
 	private static readonly TimeSpan RetryGraceWindow = TimeSpan.FromSeconds(20);
@@ -60,7 +59,6 @@ public class RefreshTokenService(
 	private readonly ChoNaBojoContext _dbContext = dbContext;
 	private readonly ITokenService _tokenService = tokenService;
 	private readonly JwtOptions _jwtOptions = jwtOptionsAccessor.Value;
-	private readonly IMemoryCache _memoryCache = memoryCache;
 
 	public async Task<TokenPair> IssueForLoginAsync(User user, string? createdByIp, CancellationToken cancellationToken)
 	{
@@ -79,10 +77,7 @@ public class RefreshTokenService(
 		_dbContext.RefreshTokens.Add(refreshToken);
 		await _dbContext.SaveChangesAsync(cancellationToken);
 
-		var issuedPair = CreateTokenPair(user, refreshTokenValue, nowUtc);
-		_memoryCache.Set(GetRetryCacheKey(refreshToken.Id), issuedPair, refreshToken.ExpiresUtc);
-
-		return issuedPair;
+		return CreateTokenPair(user, refreshTokenValue, nowUtc);
 	}
 
 	public async Task<RefreshTokenExchangeResult> RotateAsync(string refreshToken, string? createdByIp, CancellationToken cancellationToken)
@@ -112,12 +107,12 @@ public class RefreshTokenService(
 				if (replacementToken is not null
 					&& replacementToken.ExpiresUtc > nowUtc
 					&& !replacementToken.ConsumedUtc.HasValue
-					&& !replacementToken.RevokedUtc.HasValue
-					&& _memoryCache.TryGetValue(GetRetryCacheKey(replacementToken.Id), out TokenPair? cachedPair)
-					&& cachedPair is not null)
+					&& !replacementToken.RevokedUtc.HasValue)
 				{
+					// Live child within the grace window: benign retry. Never revoke the family;
+					// signal the client to retry with the token pair it already holds.
 					await transaction.CommitAsync(cancellationToken);
-					return RefreshTokenExchangeResult.Success(cachedPair);
+					return RefreshTokenExchangeResult.Failed(RefreshTokenExchangeFailure.RetryInProgress);
 				}
 			}
 
@@ -147,7 +142,6 @@ public class RefreshTokenService(
 
 		var user = await _dbContext.Users.SingleAsync(entity => entity.Id == currentToken.UserId, cancellationToken);
 		var issuedPair = CreateTokenPair(user, nextRefreshTokenValue, nowUtc);
-		_memoryCache.Set(GetRetryCacheKey(nextRefreshToken.Id), issuedPair, nextRefreshToken.ExpiresUtc);
 
 		await transaction.CommitAsync(cancellationToken);
 		return RefreshTokenExchangeResult.Success(issuedPair);
@@ -222,10 +216,5 @@ public class RefreshTokenService(
 	{
 		byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));
 		return Convert.ToHexString(hashBytes);
-	}
-
-	private static string GetRetryCacheKey(Guid refreshTokenId)
-	{
-		return $"refresh-pair:{refreshTokenId}";
 	}
 }

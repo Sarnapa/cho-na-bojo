@@ -76,7 +76,6 @@ builder.Services
 	});
 
 builder.Services.AddAuthorization();
-builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IPasswordService, PasswordService>();
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
