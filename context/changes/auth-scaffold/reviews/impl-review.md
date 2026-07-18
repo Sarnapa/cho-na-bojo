@@ -118,5 +118,4 @@
 - **Dimension**: Pattern Consistency
 - **Location**: server/Data/Entities/User.cs:8-38, server/Auth/AuthEndpoints.cs:51-52
 - **Detail**: (a) `User.Id`, timestamps, and `RefreshTokens` lack the concise XML-doc summaries the entity convention uses elsewhere. (b) Register normalizes the login email via `NormalizeOptionalText(...)` then `NormalizeLoginEmail(...)`, while login calls `NormalizeLoginEmail` directly; the plan wanted one canonical normalizer path. Output is identical (trim-then-upper), so this is cosmetic, but the double-call diverges from the "single normalizer, called identically" intent.
-- **Fix**: Add the missing XML-doc summaries and call `NormalizeLoginEmail` directly on the raw login email in register to match login.
-- **Decision**: PENDING
+- **Decision**: FIXED — added XML-doc summaries to `User.Id`, `CreatedUtc`, `UpdatedUtc`, and `RefreshTokens`; register now computes `normalizedLoginEmail` via `NormalizeLoginEmail(request.LoginEmail)` directly on the raw input, matching login's single-normalizer path.

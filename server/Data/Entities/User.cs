@@ -5,6 +5,7 @@ namespace ChoNaBojo.Server.Data.Entities;
 /// </summary>
 public class User
 {
+	/// <summary>Primary key; database-generated UUID.</summary>
 	public Guid Id
 	{
 		get; set;
@@ -31,9 +32,12 @@ public class User
 	/// <summary>Optional communicator handle; requires <see cref="CommunicatorPlatform"/>.</summary>
 	public string? CommunicatorHandle { get; set; }
 
+	/// <summary>UTC timestamp when the account was created.</summary>
 	public DateTime CreatedUtc { get; set; }
 
+	/// <summary>UTC timestamp of the last account update.</summary>
 	public DateTime UpdatedUtc { get; set; }
 
+	/// <summary>Refresh tokens issued to this user across login sessions.</summary>
 	public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 }

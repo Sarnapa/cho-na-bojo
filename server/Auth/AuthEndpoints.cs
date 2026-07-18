@@ -53,7 +53,7 @@ public static class AuthEndpoints
 		}
 
 		string loginEmail = AuthNormalization.NormalizeOptionalText(request.LoginEmail)!;
-		string normalizedLoginEmail = AuthNormalization.NormalizeLoginEmail(loginEmail);
+		string normalizedLoginEmail = AuthNormalization.NormalizeLoginEmail(request.LoginEmail);
 
 		bool loginEmailExists = await dbContext.Users.AnyAsync(
 			entity => entity.NormalizedLoginEmail == normalizedLoginEmail,
