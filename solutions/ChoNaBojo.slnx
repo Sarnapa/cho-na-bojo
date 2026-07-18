@@ -64,6 +64,7 @@
     <File Path="../context/foundation/shape-notes.md" />
     <File Path="../context/foundation/tasks-github.md" />
     <File Path="../context/foundation/tech-stack.md" />
+    <File Path="ui-guidelines.md" />
   </Folder>
   <Folder Name="/data/">
     <File Path="../data/warsaw-venues.csv" />
