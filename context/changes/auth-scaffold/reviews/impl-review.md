@@ -64,12 +64,7 @@
 - **Dimension**: Safety & Quality
 - **Location**: server/Auth/AuthEndpoints.cs:100-107
 - **Detail**: For a non-existent email, login returns `401` immediately without running the password hasher; for an existing email it runs `PasswordHasher.VerifyHashedPassword`. The measurable timing difference is a user-enumeration oracle. The plan explicitly required "generic 401 on failure (no user-enumeration signal)".
-- **Fix**: Perform a dummy hash verification against a constant fake hash when the user is missing so both paths take comparable time before returning the same generic 401.
-  - Strength: Removes the timing oracle and satisfies the plan's stated no-enumeration requirement.
-  - Tradeoff: One extra hash computation on missing-user logins.
-  - Confidence: HIGH — well-established anti-enumeration pattern.
-  - Blind spot: Register still returns an explicit 409 (see note); full enumeration hardening spans both endpoints.
-- **Decision**: PENDING
+- **Decision**: FIXED — added `IPasswordService.PerformDummyVerification`, which verifies against a constant precomputed hash; login now calls it on the missing-user path before returning the same generic 401, equalizing timing.
 
 ### F5 — Anonymous auth endpoints have no rate limiting or lockout
 

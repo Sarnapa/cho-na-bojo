@@ -112,6 +112,7 @@ public static class AuthEndpoints
 
 		if (user is null)
 		{
+			passwordService.PerformDummyVerification(request.Password);
 			return Results.Unauthorized();
 		}
 
