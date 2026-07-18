@@ -82,8 +82,7 @@
 - **Dimension**: Plan Adherence
 - **Location**: server/Program.cs:102-103
 - **Detail**: The plan wanted an authorized domain route-group seam "so future protected routes inherit authz by grouping." The implementation writes `_ = app.MapGroup("/api").RequireAuthorization();` — the group is assigned to a discard, so there is no reusable handle; future endpoints mapped on `app` won't inherit it and a developer must recreate the group. Harmless today (no domain routes exist), but the seam as written can't fulfill its stated purpose.
-- **Fix**: Keep the group in a named variable (or expose it via a small helper) so S-03+ endpoints map onto it, and document it as the protected seam.
-- **Decision**: PENDING
+- **Decision**: FIXED — the protected `/api` group is now assigned to a named `apiGroup` variable with a comment documenting it as the protected seam future feature endpoints map onto (no longer discarded).
 
 ### F7 — Planned Microsoft.AspNetCore.Identity package not added
 

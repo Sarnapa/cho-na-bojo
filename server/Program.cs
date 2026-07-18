@@ -114,7 +114,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
 
 app.MapAuthEndpoints();
 
-_ = app.MapGroup("/api")
+// Protected domain seam: future feature endpoints (S-03+) map onto this group to inherit authorization.
+var apiGroup = app.MapGroup("/api")
 	.RequireAuthorization();
 
 app.Run();
