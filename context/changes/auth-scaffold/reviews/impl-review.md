@@ -46,12 +46,7 @@
 - **Dimension**: Safety & Quality
 - **Location**: server/Auth/RefreshTokenService.cs:163-180
 - **Detail**: `RotateAsync` correctly wraps lookup→consume→insert in a `Serializable` transaction with `FOR UPDATE` row locks. The public `RevokeFamilyAsync(string, …)` (logout + reuse path) instead does an `AsNoTracking` lookup then a separate `ExecuteUpdateAsync` with no transaction or lock. A rotation racing with a logout can create a new replacement token *after* the revoke snapshot, leaving a live token in a family the user believes is revoked.
-- **Fix**: Run the family revoke inside the same `Serializable` transaction + row-lock discipline as `RotateAsync` (lock the family/token before the `ExecuteUpdateAsync`).
-  - Strength: Closes the race using a pattern already proven in this same file.
-  - Tradeoff: Slightly more locking on logout — negligible at MVP volume.
-  - Confidence: HIGH — mirrors the existing `RotateAsync` transaction structure.
-  - Blind spot: None significant.
-- **Decision**: PENDING
+- **Decision**: FIXED — public `RevokeFamilyAsync(string,…)` now runs inside a `Serializable` transaction and locks the token row via `LockRefreshTokenByHashAsync` (`FOR UPDATE`) before `ExecuteUpdateAsync`, matching `RotateAsync`.
 
 ### F3 — Register duplicate-email race falls through to an unhandled DB exception
 

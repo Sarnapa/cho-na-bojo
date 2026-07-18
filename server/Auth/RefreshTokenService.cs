@@ -155,16 +155,17 @@ public class RefreshTokenService(
 		}
 
 		string tokenHash = ComputeRefreshTokenHash(refreshToken);
-		var token = await _dbContext.RefreshTokens
-			.AsNoTracking()
-			.SingleOrDefaultAsync(entity => entity.TokenHash == tokenHash, cancellationToken);
+		await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
 
+		var token = await LockRefreshTokenByHashAsync(tokenHash, cancellationToken);
 		if (token is null)
 		{
+			await transaction.CommitAsync(cancellationToken);
 			return;
 		}
 
 		await RevokeFamilyAsync(token.FamilyId, DateTime.UtcNow, cancellationToken);
+		await transaction.CommitAsync(cancellationToken);
 	}
 
 	private TokenPair CreateTokenPair(User user, string refreshToken, DateTime issuedAtUtc)
