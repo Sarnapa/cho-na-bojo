@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Entities;
 
@@ -77,7 +78,14 @@ public static class AuthEndpoints
 		user.PasswordHash = passwordService.Hash(user, request.Password);
 
 		dbContext.Users.Add(user);
-		await dbContext.SaveChangesAsync(cancellationToken);
+		try
+		{
+			await dbContext.SaveChangesAsync(cancellationToken);
+		}
+		catch (DbUpdateException exception) when (IsUniqueViolation(exception))
+		{
+			return Results.Conflict(new { message = "An account with this login email already exists." });
+		}
 
 		TokenPair pair = await refreshTokenService.IssueForLoginAsync(user, GetRequestIp(httpContext), cancellationToken);
 		return Results.Ok(ToAuthResponse(pair));
@@ -262,5 +270,10 @@ public static class AuthEndpoints
 	private static string? GetRequestIp(HttpContext httpContext)
 	{
 		return httpContext.Connection.RemoteIpAddress?.ToString();
+	}
+
+	private static bool IsUniqueViolation(DbUpdateException exception)
+	{
+		return exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 	}
 }

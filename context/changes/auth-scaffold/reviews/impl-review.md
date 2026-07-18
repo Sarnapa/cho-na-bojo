@@ -55,12 +55,7 @@
 - **Dimension**: Safety & Quality
 - **Location**: server/Auth/AuthEndpoints.cs:54-79
 - **Detail**: Register does an `AnyAsync` pre-check then `SaveChangesAsync`. Two concurrent registrations for the same normalized email both pass the pre-check; the unique index correctly rejects the second insert, but the resulting `DbUpdateException` is not caught — the client gets a 500 instead of the intended `409` conflict.
-- **Fix**: Wrap the insert and catch the unique-violation `DbUpdateException`, returning the same generic conflict response as the pre-check path.
-  - Strength: Makes the unique index the authoritative guard and yields a consistent client response under concurrency.
-  - Tradeoff: Minor — one try/catch around `SaveChangesAsync`.
-  - Confidence: HIGH — standard EF Core unique-violation handling.
-  - Blind spot: None significant.
-- **Decision**: PENDING
+- **Decision**: FIXED — `SaveChangesAsync` in Register is wrapped in try/catch; a `DbUpdateException` whose inner `PostgresException.SqlState` is the unique-violation code (`23505`) now returns the same generic 409 as the pre-check path.
 
 ### F4 — Login reveals user existence via early return before password verification
 
