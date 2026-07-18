@@ -177,7 +177,8 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 			entity.Property(token => token.ExpiresUtc)
 				.IsRequired();
 
-			entity.HasIndex(token => token.TokenHash);
+			entity.HasIndex(token => token.TokenHash)
+				.IsUnique();
 			entity.HasIndex(token => token.FamilyId);
 
 			entity.HasOne(token => token.User)

@@ -109,8 +109,7 @@
 - **Dimension**: Safety & Quality
 - **Location**: server/Data/ChoNaBojoContext.cs:174, server/Migrations/20260716215146_AddAuthTables.cs:71-74
 - **Detail**: `IX_RefreshTokens_TokenHash` is a non-unique index but lookups use `SingleOrDefault`/`FOR UPDATE`. Collisions on a 256-bit hash are impractical, but a unique index would enforce the invariant the code assumes.
-- **Fix**: Mark the `TokenHash` index unique (`HasIndex(r => r.TokenHash).IsUnique()`) in a follow-up migration.
-- **Decision**: PENDING
+- **Decision**: FIXED — `TokenHash` index marked `IsUnique()`; migration `MakeRefreshTokenHashUnique` generated and applied to dev DB (drops and recreates `IX_RefreshTokens_TokenHash` as unique).
 
 ### F10 — Minor doc/normalization polish
 
