@@ -100,8 +100,7 @@
 - **Dimension**: Safety & Quality
 - **Location**: server/Auth/AuthEndpoints.cs:185-190, server/Data/Entities/CommunicatorPlatform.cs:6-10
 - **Detail**: Validation only checks `CommunicatorPlatform.HasValue`; any integer (e.g. 99) binds and would be persisted since there is no enum CHECK constraint. The stored value would not map to a defined platform.
-- **Fix**: Add an `Enum.IsDefined(request.CommunicatorPlatform.Value)` validation check (and optionally a DB CHECK constraint on the column).
-- **Decision**: PENDING
+- **Decision**: FIXED + ACCEPTED-AS-RULE: "Persisted enums must be guarded at both the application and database layers" — added `Enum.IsDefined` validation in register and a `CK_Users_CommunicatorPlatform` DB CHECK constraint (`IN (1,2,3)`) via migration `20260718105726_AddCommunicatorPlatformCheck` (generated and applied to dev DB); lesson recorded in context/foundation/lessons.md.
 
 ### F9 — RefreshTokens.TokenHash index is non-unique despite single-row lookups
 

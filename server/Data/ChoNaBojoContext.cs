@@ -130,6 +130,12 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 						OR ("CommunicatorPlatform" IS NOT NULL AND NULLIF(BTRIM("CommunicatorHandle"), '') IS NOT NULL)
 					)
 					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_Users_CommunicatorPlatform",
+					"""
+					"CommunicatorPlatform" IS NULL OR "CommunicatorPlatform" IN (1, 2, 3)
+					""");
 			});
 
 			entity.HasKey(user => user.Id);

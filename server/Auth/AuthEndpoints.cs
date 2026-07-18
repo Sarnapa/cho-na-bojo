@@ -210,6 +210,14 @@ public static class AuthEndpoints
 				"Communicator platform and communicator handle must be provided together.");
 		}
 
+		if (hasCommunicatorPlatform && !Enum.IsDefined(request.CommunicatorPlatform!.Value))
+		{
+			AddValidationError(
+				errors,
+				"communicatorPlatform",
+				"Communicator platform is not a supported value.");
+		}
+
 		bool hasAnyContactMethod = contactPhone is not null
 			|| contactEmail is not null
 			|| (hasCommunicatorPlatform && hasCommunicatorHandle);
