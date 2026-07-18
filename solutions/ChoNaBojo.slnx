@@ -31,6 +31,18 @@
     <File Path="../context/archive/2026-07-12-data-layer-foundation/reviews/impl-review.md" />
     <File Path="../context/archive/2026-07-12-data-layer-foundation/reviews/plan-review.md" />
   </Folder>
+  <Folder Name="/context/archive/2026-07-15-auth-scaffold/">
+    <File Path="../context/archive/2026-07-15-auth-scaffold/change.md" />
+    <File Path="../context/archive/2026-07-15-auth-scaffold/frame.md" />
+    <File Path="../context/archive/2026-07-15-auth-scaffold/plan-brief.md" />
+    <File Path="../context/archive/2026-07-15-auth-scaffold/plan.md" />
+    <File Path="../context/archive/2026-07-15-auth-scaffold/research-jwt-implementation.md" />
+    <File Path="../context/archive/2026-07-15-auth-scaffold/research.md" />
+  </Folder>
+  <Folder Name="/context/archive/2026-07-15-auth-scaffold/reviews/">
+    <File Path="../context/archive/2026-07-15-auth-scaffold/reviews/impl-review.md" />
+    <File Path="../context/archive/2026-07-15-auth-scaffold/reviews/plan-review.md" />
+  </Folder>
   <Folder Name="/context/archive/bootstrap-verification/">
     <File Path="../context/archive/bootstrap-verification/verification.md" />
   </Folder>
@@ -39,18 +51,6 @@
   </Folder>
   <Folder Name="/context/changes/">
     <File Path="../context/changes/README.md" />
-  </Folder>
-  <Folder Name="/context/changes/auth-scaffold/">
-    <File Path="../context/changes/auth-scaffold/change.md" />
-    <File Path="../context/changes/auth-scaffold/frame.md" />
-    <File Path="../context/changes/auth-scaffold/plan-brief.md" />
-    <File Path="../context/changes/auth-scaffold/plan.md" />
-    <File Path="../context/changes/auth-scaffold/research-jwt-implementation.md" />
-    <File Path="../context/changes/auth-scaffold/research.md" />
-  </Folder>
-  <Folder Name="/context/changes/auth-scaffold/reviews/">
-    <File Path="../context/changes/auth-scaffold/reviews/impl-review.md" />
-    <File Path="../context/changes/auth-scaffold/reviews/plan-review.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
