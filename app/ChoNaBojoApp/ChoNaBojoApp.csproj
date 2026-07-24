@@ -13,6 +13,9 @@
 
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
+		<!-- Align Maui packages with UraniumUI 3.x requirement (>= 10.0.71) -->
+		<MauiVersion>10.0.71</MauiVersion>
+
 		<!-- Display name -->
 		<ApplicationTitle>Cho Na Bojo</ApplicationTitle>
 
@@ -32,10 +35,10 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#2E7D32" />
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2E7D32" BaseSize="128,128" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
@@ -52,6 +55,8 @@
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+		<PackageReference Include="UraniumUI.Icons.MaterialSymbols" Version="3.0.0" />
+		<PackageReference Include="UraniumUI.Material" Version="3.0.0" />
 	</ItemGroup>
 
 	<!-- Android release signing -->
