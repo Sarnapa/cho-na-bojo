@@ -4,9 +4,9 @@ WORKDIR /src
 
 # Copy ONLY the .csproj files first to leverage Docker layer caching
 COPY server/server.csproj server/
-COPY shared/ChoNaBojo.Contracts.csproj shared/
-COPY shared/ChoNaBojo.Utils.csproj shared/
-COPY shared/ChoNaBojo.Validation.csproj shared/
+COPY shared/ChoNaBojo.Contracts/ChoNaBojo.Contracts.csproj shared/ChoNaBojo.Contracts/
+COPY shared/ChoNaBojo.Utils/ChoNaBojo.Utils.csproj shared/ChoNaBojo.Utils/
+COPY shared/ChoNaBojo.Validation/ChoNaBojo.Validation.csproj shared/ChoNaBojo.Validation/
 
 # Restore dependencies for the main Web API project
 RUN dotnet restore server/server.csproj
