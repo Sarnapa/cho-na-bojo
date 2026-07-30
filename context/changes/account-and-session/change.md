@@ -1,9 +1,9 @@
 ---
 change_id: account-and-session
 title: Account and session
-status: new
+status: planned
 created: 2026-07-18
-updated: 2026-07-18
+updated: 2026-07-31
 archived_at: null
 ---
 

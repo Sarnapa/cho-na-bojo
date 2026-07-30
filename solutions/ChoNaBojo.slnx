@@ -55,6 +55,8 @@
   </Folder>
   <Folder Name="/context/changes/account-and-session/">
     <File Path="../context/changes/account-and-session/change.md" />
+    <File Path="../context/changes/account-and-session/plan-brief.md" />
+    <File Path="../context/changes/account-and-session/plan.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
