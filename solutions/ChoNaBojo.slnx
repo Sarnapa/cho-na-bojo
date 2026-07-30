@@ -12,6 +12,7 @@
   </Folder>
   <Folder Name="/config/">
     <File Path="../.config/dotnet-tools.json" />
+    <File Path="../Dockerfile" />
   </Folder>
   <Folder Name="/context/">
     <File Path="../Context/idea-notes.md" />

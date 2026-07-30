@@ -1,5 +1,6 @@
 [build]
-builder = "RAILPACK"
+builder = "DOCKER"
+dockerfilePath = "Dockerfile"
 
 [build.variables]
 DOTNET_GENERATE_ASPNET_CERTIFICATE = "false"
