@@ -1,7 +1,8 @@
-using ChoNaBojo.Server.Data.Entities;
+using ChoNaBojo.Contracts.Enums;
 
-namespace ChoNaBojo.Server.Auth;
+namespace ChoNaBojo.Contracts.DTOs;
 
+#region Requests DTOs
 public sealed record RegisterRequest(
 	string LoginEmail,
 	string Password,
@@ -13,7 +14,10 @@ public sealed record RegisterRequest(
 public sealed record LoginRequest(string LoginEmail, string Password);
 
 public sealed record RefreshRequest(string RefreshToken);
+#endregion
 
+#region Responses DTOs
 public sealed record AuthResponse(string AccessToken, string RefreshToken, DateTime AccessTokenExpiresUtc);
 
 public sealed record CurrentUserResponse(Guid UserId);
+#endregion

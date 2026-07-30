@@ -11,6 +11,7 @@ namespace ChoNaBojo.Server.Data;
 /// </summary>
 public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbContext(options)
 {
+	#region Public properties
 	public DbSet<Sport> Sports
 	{
 		get
@@ -50,7 +51,9 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 			return Set<RefreshToken>();
 		}
 	}
+	#endregion
 
+	#region Overrides
 	protected override void OnModelCreating(ModelBuilder modelBuilder)
 	{
 		base.OnModelCreating(modelBuilder);
@@ -187,4 +190,5 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 				.OnDelete(DeleteBehavior.Cascade);
 		});
 	}
+	#endregion
 }

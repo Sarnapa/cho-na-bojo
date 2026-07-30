@@ -1,7 +1,12 @@
-namespace ChoNaBojo.Server.Auth;
+namespace ChoNaBojo.Utils.Text;
 
-public static class AuthNormalization
+/// <summary>
+/// Pure, stateless text helpers shared across the API and the mobile client.
+/// No dependency on ASP.NET Core, EF Core, or MAUI.
+/// </summary>
+public static class TextNormalization
 {
+	#region Public methods
 	public static string NormalizeLoginEmail(string value)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(value);
@@ -23,4 +28,5 @@ public static class AuthNormalization
 		int atIndex = value.IndexOf('@');
 		return atIndex > 0 && atIndex == value.LastIndexOf('@') && atIndex < value.Length - 1;
 	}
+	#endregion
 }

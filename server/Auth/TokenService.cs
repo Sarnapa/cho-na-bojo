@@ -8,20 +8,26 @@ using JwtRegisteredClaimNames = Microsoft.IdentityModel.JsonWebTokens.JwtRegiste
 
 namespace ChoNaBojo.Server.Auth;
 
+#region ITokenService interface
 public interface ITokenService
 {
 	string CreateAccessToken(User user);
 	DateTime GetAccessTokenExpiryUtc(DateTime issuedAtUtc);
 }
+#endregion
 
+#region TokenService implementation
 /// <summary>
 /// Issues short-lived access JWTs that carry only the stable user id identity.
 /// </summary>
 public class TokenService(IOptions<JwtOptions> jwtOptionsAccessor): ITokenService
 {
+	#region Private fields
 	private readonly JsonWebTokenHandler _tokenHandler = new();
 	private readonly JwtOptions _jwtOptions = jwtOptionsAccessor.Value;
+	#endregion
 
+	#region Public methods
 	public string CreateAccessToken(User user)
 	{
 		var issuedAtUtc = DateTime.UtcNow;
@@ -51,4 +57,6 @@ public class TokenService(IOptions<JwtOptions> jwtOptionsAccessor): ITokenServic
 	{
 		return issuedAtUtc.AddMinutes(_jwtOptions.AccessTokenMinutes);
 	}
+	#endregion
 }
+#endregion

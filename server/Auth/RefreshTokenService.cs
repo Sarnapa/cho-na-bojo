@@ -8,6 +8,7 @@ using ChoNaBojo.Server.Data.Entities;
 
 namespace ChoNaBojo.Server.Auth;
 
+#region Public types
 public sealed record TokenPair(string AccessToken, string RefreshToken, DateTime AccessTokenExpiresUtc);
 
 public enum RefreshTokenExchangeFailure
@@ -37,14 +38,18 @@ public sealed record RefreshTokenExchangeResult(TokenPair? Pair, RefreshTokenExc
 		return new(null, failure);
 	}
 }
+#endregion
 
+#region IRefreshTokenService interface
 public interface IRefreshTokenService
 {
 	Task<TokenPair> IssueForLoginAsync(User user, string? createdByIp, CancellationToken cancellationToken);
 	Task<RefreshTokenExchangeResult> RotateAsync(string refreshToken, string? createdByIp, CancellationToken cancellationToken);
 	Task RevokeFamilyAsync(string refreshToken, CancellationToken cancellationToken);
 }
+#endregion
 
+#region RefreshTokenService implementation
 /// <summary>
 /// Issues, rotates, and revokes hashed refresh tokens with family-based reuse detection.
 /// </summary>
@@ -53,13 +58,18 @@ public class RefreshTokenService(
 	ITokenService tokenService,
 	IOptions<JwtOptions> jwtOptionsAccessor): IRefreshTokenService
 {
+	#region Private constants
 	private const int RefreshTokenByteLength = 64;
 	private static readonly TimeSpan RetryGraceWindow = TimeSpan.FromSeconds(20);
+	#endregion
 
+	#region Private fields
 	private readonly ChoNaBojoContext _dbContext = dbContext;
 	private readonly ITokenService _tokenService = tokenService;
 	private readonly JwtOptions _jwtOptions = jwtOptionsAccessor.Value;
+	#endregion
 
+	#region Public methods
 	public async Task<TokenPair> IssueForLoginAsync(User user, string? createdByIp, CancellationToken cancellationToken)
 	{
 		var nowUtc = DateTime.UtcNow;
@@ -167,7 +177,9 @@ public class RefreshTokenService(
 		await RevokeFamilyAsync(token.FamilyId, DateTime.UtcNow, cancellationToken);
 		await transaction.CommitAsync(cancellationToken);
 	}
+	#endregion
 
+	#region Private methods
 	private TokenPair CreateTokenPair(User user, string refreshToken, DateTime issuedAtUtc)
 	{
 		return new TokenPair(
@@ -218,4 +230,6 @@ public class RefreshTokenService(
 		byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(refreshToken));
 		return Convert.ToHexString(hashBytes);
 	}
+	#endregion
 }
+#endregion

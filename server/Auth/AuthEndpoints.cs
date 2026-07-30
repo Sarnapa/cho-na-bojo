@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Entities;
+using ChoNaBojo.Validation;
+using ChoNaBojo.Contracts.DTOs;
+using ChoNaBojo.Utils.Text;
 
 namespace ChoNaBojo.Server.Auth;
 
@@ -46,14 +49,14 @@ public static class AuthEndpoints
 		HttpContext httpContext,
 		CancellationToken cancellationToken)
 	{
-		var validationErrors = ValidateRegisterRequest(request);
-		if (validationErrors is not null)
+		var validation = AuthValidation.ValidateRegisterRequest(request);
+		if (!validation.IsValid)
 		{
-			return Results.ValidationProblem(validationErrors);
+			return ToValidationProblem(validation);
 		}
 
-		string loginEmail = AuthNormalization.NormalizeOptionalText(request.LoginEmail)!;
-		string normalizedLoginEmail = AuthNormalization.NormalizeLoginEmail(request.LoginEmail);
+		string loginEmail = TextNormalization.NormalizeOptionalText(request.LoginEmail)!;
+		string normalizedLoginEmail = TextNormalization.NormalizeLoginEmail(request.LoginEmail);
 
 		bool loginEmailExists = await dbContext.Users.AnyAsync(
 			entity => entity.NormalizedLoginEmail == normalizedLoginEmail,
@@ -70,10 +73,10 @@ public static class AuthEndpoints
 			LoginEmail = loginEmail,
 			NormalizedLoginEmail = normalizedLoginEmail,
 			PasswordHash = string.Empty,
-			ContactPhone = AuthNormalization.NormalizeOptionalText(request.ContactPhone),
-			ContactEmail = AuthNormalization.NormalizeOptionalText(request.ContactEmail),
+			ContactPhone = TextNormalization.NormalizeOptionalText(request.ContactPhone),
+			ContactEmail = TextNormalization.NormalizeOptionalText(request.ContactEmail),
 			CommunicatorPlatform = request.CommunicatorPlatform,
-			CommunicatorHandle = AuthNormalization.NormalizeOptionalText(request.CommunicatorHandle),
+			CommunicatorHandle = TextNormalization.NormalizeOptionalText(request.CommunicatorHandle),
 			CreatedUtc = nowUtc,
 			UpdatedUtc = nowUtc
 		};
@@ -102,13 +105,13 @@ public static class AuthEndpoints
 		HttpContext httpContext,
 		CancellationToken cancellationToken)
 	{
-		var validationErrors = ValidateLoginRequest(request);
-		if (validationErrors is not null)
+		var validation = AuthValidation.ValidateLoginRequest(request);
+		if (!validation.IsValid)
 		{
-			return Results.ValidationProblem(validationErrors);
+			return ToValidationProblem(validation);
 		}
 
-		string normalizedLoginEmail = AuthNormalization.NormalizeLoginEmail(request.LoginEmail);
+		string normalizedLoginEmail = TextNormalization.NormalizeLoginEmail(request.LoginEmail);
 		var user = await dbContext.Users.SingleOrDefaultAsync(
 			entity => entity.NormalizedLoginEmail == normalizedLoginEmail,
 			cancellationToken);
@@ -142,10 +145,10 @@ public static class AuthEndpoints
 		HttpContext httpContext,
 		CancellationToken cancellationToken)
 	{
-		var validationErrors = ValidateRefreshRequest(request);
-		if (validationErrors is not null)
+		var validation = AuthValidation.ValidateRefreshRequest(request);
+		if (!validation.IsValid)
 		{
-			return Results.ValidationProblem(validationErrors);
+			return ToValidationProblem(validation);
 		}
 
 		RefreshTokenExchangeResult exchangeResult = await refreshTokenService.RotateAsync(
@@ -171,107 +174,20 @@ public static class AuthEndpoints
 		IRefreshTokenService refreshTokenService,
 		CancellationToken cancellationToken)
 	{
-		var validationErrors = ValidateRefreshRequest(request);
-		if (validationErrors is not null)
+		var validation = AuthValidation.ValidateRefreshRequest(request);
+		if (!validation.IsValid)
 		{
-			return Results.ValidationProblem(validationErrors);
+			return ToValidationProblem(validation);
 		}
 
 		await refreshTokenService.RevokeFamilyAsync(request.RefreshToken, cancellationToken);
 		return Results.NoContent();
 	}
 
-	private static Dictionary<string, string[]>? ValidateRegisterRequest(RegisterRequest request)
+	private static IResult ToValidationProblem(ValidationResult validation)
 	{
-		var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
-		string? loginEmail = AuthNormalization.NormalizeOptionalText(request.LoginEmail);
-
-		if (loginEmail is null || !AuthNormalization.IsBasicEmailShape(loginEmail))
-		{
-			AddValidationError(errors, "loginEmail", "Login email must have a basic single-@ email shape.");
-		}
-
-		if (string.IsNullOrEmpty(request.Password) || request.Password.Length is < 8 or > 128)
-		{
-			AddValidationError(errors, "password", "Password must be between 8 and 128 characters.");
-		}
-
-		string? contactPhone = AuthNormalization.NormalizeOptionalText(request.ContactPhone);
-		string? contactEmail = AuthNormalization.NormalizeOptionalText(request.ContactEmail);
-		string? communicatorHandle = AuthNormalization.NormalizeOptionalText(request.CommunicatorHandle);
-		bool hasCommunicatorPlatform = request.CommunicatorPlatform.HasValue;
-		bool hasCommunicatorHandle = communicatorHandle is not null;
-
-		if (hasCommunicatorPlatform != hasCommunicatorHandle)
-		{
-			AddValidationError(
-				errors,
-				"communicator",
-				"Communicator platform and communicator handle must be provided together.");
-		}
-
-		if (hasCommunicatorPlatform && !Enum.IsDefined(request.CommunicatorPlatform!.Value))
-		{
-			AddValidationError(
-				errors,
-				"communicatorPlatform",
-				"Communicator platform is not a supported value.");
-		}
-
-		bool hasAnyContactMethod = contactPhone is not null
-			|| contactEmail is not null
-			|| (hasCommunicatorPlatform && hasCommunicatorHandle);
-		if (!hasAnyContactMethod)
-		{
-			AddValidationError(
-				errors,
-				"contact",
-				"At least one contact method is required: phone, contact email, or communicator platform plus handle.");
-		}
-
-		return errors.Count == 0 ? null : errors;
-	}
-
-	private static Dictionary<string, string[]>? ValidateLoginRequest(LoginRequest request)
-	{
-		var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
-		string? loginEmail = AuthNormalization.NormalizeOptionalText(request.LoginEmail);
-
-		if (loginEmail is null || !AuthNormalization.IsBasicEmailShape(loginEmail))
-		{
-			AddValidationError(errors, "loginEmail", "Login email must have a basic single-@ email shape.");
-		}
-
-		if (string.IsNullOrEmpty(request.Password))
-		{
-			AddValidationError(errors, "password", "Password is required.");
-		}
-
-		return errors.Count == 0 ? null : errors;
-	}
-
-	private static Dictionary<string, string[]>? ValidateRefreshRequest(RefreshRequest request)
-	{
-		if (string.IsNullOrWhiteSpace(request.RefreshToken))
-		{
-			return new Dictionary<string, string[]>(StringComparer.Ordinal)
-			{
-				["refreshToken"] = ["Refresh token is required."]
-			};
-		}
-
-		return null;
-	}
-
-	private static void AddValidationError(IDictionary<string, string[]> errors, string key, string message)
-	{
-		if (errors.TryGetValue(key, out string[]? existing))
-		{
-			errors[key] = [.. existing, message];
-			return;
-		}
-
-		errors[key] = [message];
+		return Results.ValidationProblem(
+			validation.Errors.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
 	}
 
 	private static AuthResponse ToAuthResponse(TokenPair pair)

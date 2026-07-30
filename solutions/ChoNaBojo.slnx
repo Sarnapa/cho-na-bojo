@@ -72,6 +72,11 @@
   <Folder Name="/server/">
     <Project Path="../server/server.csproj" />
   </Folder>
+  <Folder Name="/shared/">
+    <Project Path="../shared/ChoNaBojo.Contracts/ChoNaBojo.Contracts.csproj" />
+    <Project Path="../shared/ChoNaBojo.Utils/ChoNaBojo.Utils.csproj" />
+    <Project Path="../shared/ChoNaBojo.Validation/ChoNaBojo.Validation.csproj" />
+  </Folder>
   <Folder Name="/workflows/" />
   <Folder Name="/workflows/.github/">
     <File Path="../.github/workflows/android-deploy.yml" />

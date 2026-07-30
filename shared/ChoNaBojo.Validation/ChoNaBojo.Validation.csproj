@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ChoNaBojo.Validation</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChoNaBojo.Contracts\ChoNaBojo.Contracts.csproj" />
+    <ProjectReference Include="..\ChoNaBojo.Utils\ChoNaBojo.Utils.csproj" />
+  </ItemGroup>
+
+</Project>

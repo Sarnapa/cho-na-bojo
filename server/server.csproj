@@ -21,4 +21,10 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\shared\ChoNaBojo.Contracts\ChoNaBojo.Contracts.csproj" />
+    <ProjectReference Include="..\shared\ChoNaBojo.Validation\ChoNaBojo.Validation.csproj" />
+    <ProjectReference Include="..\shared\ChoNaBojo.Utils\ChoNaBojo.Utils.csproj" />
+  </ItemGroup>
+
 </Project>

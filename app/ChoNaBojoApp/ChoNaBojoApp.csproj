@@ -59,6 +59,12 @@
 		<PackageReference Include="UraniumUI.Material" Version="3.0.0" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <ProjectReference Include="..\..\shared\ChoNaBojo.Contracts\ChoNaBojo.Contracts.csproj" />
+	  <ProjectReference Include="..\..\shared\ChoNaBojo.Validation\ChoNaBojo.Validation.csproj" />
+	  <ProjectReference Include="..\..\shared\ChoNaBojo.Utils\ChoNaBojo.Utils.csproj" />
+	</ItemGroup>
+
 	<!-- Android release signing -->
 	<PropertyGroup Condition="$(TargetFramework.Contains('-android')) and '$(Configuration)' == 'Release'">
 		<AndroidKeyStore>true</AndroidKeyStore>

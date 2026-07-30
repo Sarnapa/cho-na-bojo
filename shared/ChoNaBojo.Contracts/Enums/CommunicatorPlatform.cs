@@ -1,4 +1,4 @@
-namespace ChoNaBojo.Server.Data.Entities;
+namespace ChoNaBojo.Contracts.Enums;
 
 /// <summary>
 /// Supported messaging apps for shareable communicator contact.

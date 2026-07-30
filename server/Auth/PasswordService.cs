@@ -3,31 +3,39 @@ using ChoNaBojo.Server.Data.Entities;
 
 namespace ChoNaBojo.Server.Auth;
 
+#region PasswordVerificationOutcome enum
 public enum PasswordVerificationOutcome
 {
 	Failed = 0,
 	Success = 1,
 	SuccessRehashNeeded = 2
 }
+#endregion
 
+#region IPasswordService interface
 public interface IPasswordService
 {
 	string Hash(User user, string password);
 	PasswordVerificationOutcome Verify(User user, string password);
 	void PerformDummyVerification(string password);
 }
+#endregion
 
+#region PasswordService implementation
 /// <summary>
 /// Wraps <see cref="PasswordHasher{TUser}"/> to centralize hashing and verification behavior.
 /// </summary>
 public class PasswordService: IPasswordService
 {
+	#region Private fields
 	private readonly PasswordHasher<User> _passwordHasher = new();
 
 	private static readonly User DummyUser = new();
 	private static readonly string DummyPasswordHash = new PasswordHasher<User>()
 		.HashPassword(DummyUser, "timing-attack-mitigation-placeholder");
+	#endregion
 
+	#region Public methods
 	public string Hash(User user, string password)
 	{
 		return _passwordHasher.HashPassword(user, password);
@@ -53,4 +61,6 @@ public class PasswordService: IPasswordService
 			_ => PasswordVerificationOutcome.Failed
 		};
 	}
+	#endregion
 }
+#endregion

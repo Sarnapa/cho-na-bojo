@@ -8,9 +8,12 @@ namespace ChoNaBojo.Server.Data.Seeding;
 
 public static class WarsawVenueSeeder
 {
+	#region Private constants
 	private const string DefaultCsvPath = "data/warsaw-venues.csv";
 	private const int Wgs84Srid = 4326;
-
+	#endregion
+	
+	#region Public methods
 	public static void Seed(DbContext context, string? configuredCsvPath = null)
 	{
 		if (context is not ChoNaBojoContext dbContext)
@@ -35,7 +38,9 @@ public static class WarsawVenueSeeder
 
 		return SeedCoreAsync(dbContext, configuredCsvPath, isAsync: true, cancellationToken);
 	}
+	#endregion
 
+	#region Private methods
 	private static async Task SeedCoreAsync(
 		ChoNaBojoContext dbContext,
 		string? configuredCsvPath,
@@ -334,7 +339,9 @@ public static class WarsawVenueSeeder
 		yield return Directory.GetCurrentDirectory();
 		yield return AppContext.BaseDirectory;
 	}
+	#endregion
 
+	#region Private types
 	private sealed record VenueCsvRow(
 		int Id,
 		string Name,
@@ -345,4 +352,5 @@ public static class WarsawVenueSeeder
 		IReadOnlyCollection<int> SportIds);
 
 	private readonly record struct VenueSportKey(int VenueId, int SportId);
+	#endregion
 }

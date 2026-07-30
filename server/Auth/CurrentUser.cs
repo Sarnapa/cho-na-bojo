@@ -5,6 +5,7 @@ namespace ChoNaBojo.Server.Auth;
 
 public static class CurrentUser
 {
+	#region Public methods
 	/// <summary>
 	/// Canonical way to extract the authenticated caller's stable user id from claims.
 	/// </summary>
@@ -30,4 +31,5 @@ public static class CurrentUser
 	{
 		return httpContext.User.GetUserId();
 	}
+	#endregion
 }

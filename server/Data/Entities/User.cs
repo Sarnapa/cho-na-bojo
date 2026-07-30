@@ -1,3 +1,5 @@
+using ChoNaBojo.Contracts.Enums;
+
 namespace ChoNaBojo.Server.Data.Entities;
 
 /// <summary>
