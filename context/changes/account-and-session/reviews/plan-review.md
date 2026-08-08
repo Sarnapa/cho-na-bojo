@@ -4,7 +4,7 @@
 - **Plan**: `context/changes/account-and-session/plan.md`
 - **Mode**: Deep
 - **Date**: 2026-08-08
-- **Verdict**: REVISE
+- **Verdict**: REVISE -> SOUND after triage (all 9 findings fixed 2026-08-08)
 - **Findings**: 4 critical, 3 warnings, 2 observations
 
 ## Verdicts
@@ -62,7 +62,7 @@ brief↔plan consistent apart from one drift (see F8).
     goal; pushes the risk downstream.
   - Confidence: MEDIUM — simpler, but reopens a settled decision.
   - Blind spot: Offline-at-launch behavior would need redefining.
-- **Decision**: PENDING
+- **Decision**: FIXED (Fix A) — /auth/me added to IApiService + HomeViewModel on-appearing call; Progress steps 2.8 / 4.8 added
 
 ### F2 — Handler↔ApiService DI cycle will recurse on the first HTTP call
 
@@ -89,7 +89,7 @@ brief↔plan consistent apart from one drift (see F8).
     unless separately suppressed.
   - Confidence: MEDIUM — fragile; the bypass requirement stays unenforced.
   - Blind spot: Re-entrancy under concurrent 401s not verified.
-- **Decision**: PENDING
+- **Decision**: FIXED (Fix A) — separate un-handled "ChoNaBojoAuth" client behind IAuthTokenClient; handler no longer depends on IApiService
 
 ### F3 — `material:MaterialButton` does not exist in UraniumUI 3.0
 
@@ -107,7 +107,7 @@ brief↔plan consistent apart from one drift (see F8).
 - **Fix**: Verify the real button API in Phase 1 before writing styles; target MAUI `Button`
   (pill via `CornerRadius=24`, `HeightRequest=48`, `PrimaryColor`/`OnPrimaryColor` tokens) with keyed
   primary/secondary styles, and correct `ui-guidelines.md` §B to match.
-- **Decision**: PENDING
+- **Decision**: FIXED — plan targets MAUI Button with PrimaryButtonStyle/SecondaryButtonStyle; ui-guidelines.md corrected (sec 6.B rewritten; remaining MaterialButton references in sec 6.C and the bottom-sheet/error-state sections replaced)
 
 ### F4 — 409 `RetryInProgress` handling can revoke the user's refresh family
 
@@ -137,7 +137,7 @@ brief↔plan consistent apart from one drift (see F8).
     the 10/min rate-limit permits.
   - Confidence: LOW — the retry has no path to success under single-flight.
   - Blind spot: Timing against the 20 s window is unverified on a real device.
-- **Decision**: PENDING
+- **Decision**: FIXED (Fix A) — 409 never re-calls /auth/refresh; re-read token store, retry only if the pair changed, else sign out locally
 
 ### F5 — Transient refresh failures (429/5xx/offline) will look like session expiry
 
@@ -153,7 +153,7 @@ brief↔plan consistent apart from one drift (see F8).
 - **Fix**: Specify the classification explicitly — 401/invalid → sign out; 409 → per F4; 429/5xx/transport → keep the
   session, surface a retry snackbar, no navigation. Add a manual verification step for "airplane mode during a
   protected call does not log the user out".
-- **Decision**: PENDING
+- **Decision**: FIXED — explicit refresh-failure classification (401 sign out / 409 per F4 / 429-5xx-transport keep session + retry snackbar); Progress step 4.7 added
 
 ### F6 — Startup ordering (sync `CreateWindow` vs async session init vs root swap) is undefined
 
@@ -171,7 +171,7 @@ brief↔plan consistent apart from one drift (see F8).
 - **Fix**: Specify it concretely — `CreateWindow` returns `new Window(new LoadingPage())`; the loading page's
   `Loaded` handler awaits `InitializeAsync()` in try/catch on the main thread and then calls `SetAppRoot()` or
   `SetAuthRoot()`; any failure routes to Login.
-- **Decision**: PENDING
+- **Decision**: FIXED — CreateWindow returns Window(LoadingPage); LoadingPage.Loaded awaits InitializeAsync in try/catch then swaps root; any failure routes to Login
 
 ### F7 — Phase blocks use checkboxes, violating the Progress parsing contract
 
@@ -186,7 +186,7 @@ brief↔plan consistent apart from one drift (see F8).
   instead of Progress, and the duplicate checkboxes invite the implementer to flip the wrong copy. The `## Progress`
   section itself is correct (26 steps, 1.1–4.6, all phases matched).
 - **Fix**: Convert the Success Criteria bullets in all four phase blocks from `- [ ]` to plain `- `.
-- **Decision**: PENDING
+- **Decision**: FIXED — all phase-block Success Criteria converted to plain bullets; checkboxes live only in ## Progress
 
 ### F8 — `AccessTokenExpiresUtc` is stored but never read
 
@@ -199,7 +199,7 @@ brief↔plan consistent apart from one drift (see F8).
   `auth_expires` key dead weight.
 - **Fix**: Either add a proactive pre-flight check (refresh when expiry is within ~60 s) or drop the
   expiry-enforcement claim from the brief and stop persisting the field.
-- **Decision**: PENDING
+- **Decision**: FIXED — pre-flight expiry check (refresh when within 60s) added to the handler contract; brief decision row updated
 
 ### F9 — `MainPage` cleanup misses its DI registration
 
@@ -211,4 +211,6 @@ brief↔plan consistent apart from one drift (see F8).
   cleanup, but `app/ChoNaBojoApp/MauiProgram.cs:36` also has `AddTransient<MainPage>()`. Deleting the file without
   touching `MauiProgram.cs` breaks the build.
 - **Fix**: Name both `AppShell.xaml` and `MauiProgram.cs` in the Phase 2 §3 contract.
-- **Decision**: PENDING
+- **Decision**: FIXED — Phase 2 sec 3 now names MauiProgram.cs; Migration Notes call out the AddTransient<MainPage>() removal
+
+

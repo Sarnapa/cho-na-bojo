@@ -20,7 +20,7 @@ A logged-out user only ever sees Login (privacy boundary). Register auto-logs th
 | --- | --- | --- | --- |
 | Screen structure | CommunityToolkit.Mvvm (source-gen VMs) | Least boilerplate, testable, MAUI standard that scales to S-02+. | Plan |
 | Navigation gating | Swap window root (Auth flow ↔ App Shell) | Clean separation; no app pages linger in the back-stack — best privacy story. | Plan |
-| Token attach + expiry | DelegatingHandler on the named client, single-flight refresh on 401 | Transparent to every service; one place enforces the 15-min expiry. | Plan |
+| Token attach + expiry | DelegatingHandler on the named client, pre-flight expiry check + single-flight refresh on 401 | Transparent to every service; one place enforces the 15-min expiry (proactive) and recovers from a 401 (reactive). | Plan |
 | Cold-start routing | Optimistic restore (enter app if a refresh token exists) | Fastest startup, no blocking network at launch, works offline until a call fails. | Plan |
 | Contact collection | All three fields optional + live "≥1 required" rule | Matches shared `AuthValidation` exactly; user freely shares one or several methods. | Plan |
 | After register | Auto-login (store the tokens the server already returns) | Free (server returns a pair on register); no credential re-entry. | Plan |

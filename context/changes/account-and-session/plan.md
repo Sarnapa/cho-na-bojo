@@ -51,8 +51,10 @@ MVVM via CommunityToolkit.Mvvm (`ObservableObject` / `[ObservableProperty]` / `[
 
 ## Critical Implementation Details
 
-- **Refresh handler must not recurse or leak bearers.** The `DelegatingHandler` on `"ChoNaBojoApi"` attaches the bearer only when a session exists **and** the request is not an anonymous auth call (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`). The refresh call itself must bypass the handler (issue it through a separate un-handled `HttpClient` or an explicit "no-auth" request marker) so a 401 during refresh cannot trigger another refresh.
-- **Single-flight refresh + reuse-detection interaction.** Guard refresh with a `SemaphoreSlim(1,1)`. On a 401: acquire the lock, then re-check whether the stored access token already changed (another request refreshed while we waited) — if so, retry with the new token without calling `/auth/refresh`. Only the first waiter calls `/auth/refresh`. If refresh returns `409 RetryInProgress`, retry the refresh once with the current pair; if it returns `401`, treat as session-expired (do **not** loop). This prevents concurrent 401s from each rotating the token and tripping the server's family-reuse revocation.
+- **Refresh handler must not recurse or leak bearers.** The `DelegatingHandler` on `"ChoNaBojoApi"` attaches the bearer only when a session exists **and** the request is not an anonymous auth call (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`). The refresh and server-logout calls are issued through a **second, un-handled named client** (`"ChoNaBojoAuth"`, same `BaseAddress`, no `AddHttpMessageHandler`) exposed as `IAuthTokenClient`, so a 401 during refresh cannot trigger another refresh — and so the handler never depends on `IApiService` (which resolves the handled client and would otherwise recurse at construction).
+- **Single-flight refresh + reuse-detection interaction.** Guard refresh with a `SemaphoreSlim(1,1)`. On a 401: acquire the lock, then re-check whether the stored access token already changed (another request refreshed while we waited) — if so, retry with the new token without calling `/auth/refresh`. Only the first waiter calls `/auth/refresh`. If refresh returns `409 RetryInProgress`, **do not re-call `/auth/refresh`** — the server has already consumed that token and never returns the replacement's raw value (`server/Auth/RefreshTokenService.cs:111-131`), so a retry returns 409 for the 20 s grace window and then trips `RevokeFamilyAsync` → `ReuseDetected`, signing the user out on every device. Instead, re-read the token store: if the stored pair changed (another process refreshed), retry the original request with it; if unchanged, treat the session as unrecoverable and sign out locally. If refresh returns `401`, treat as session-expired (do **not** loop). This prevents concurrent 401s from each rotating the token and tripping the server's family-reuse revocation.
+- **Refresh-failure classification (never sign out on a transient failure).** The handler must bucket the refresh outcome explicitly: `401`/invalid-token → session expired, sign out; `409 RetryInProgress` → per the rule above; `429`, `5xx`, or transport/timeout → **keep the session**, propagate the original call's failure to the caller as a network error (retry snackbar), and do not navigate. The `/auth` group is rate limited to 10 req/min per IP with `QueueLimit = 0` (`server/Program.cs:83-91`) and the emulator shares one partition, so 429s are expected during manual testing — treating them as expiry would destroy valid sessions.
+
 - **`SecureStorage` at startup on Android 10+.** Read stored tokens on the main thread during bootstrap (`MainThread.IsMainThread` must be true / marshal via `MainThread.InvokeOnMainThreadAsync`); a background-thread first access can throw on some Android 10+ devices. Treat any `SecureStorage` read failure as "no session" (route to Login) rather than crashing.
 - **ValidationProblem key → field mapping.** The client deserializes the server `400` body into a lightweight problem-details record (`{ errors: Dictionary<string,string[]> }`) and maps the shared keys (`loginEmail`→email field, `password`→password field, `contact`/`communicator`/`communicatorPlatform`→the contact group) onto the ViewModel's per-field error properties, so server and client errors render identically.
 - **Root swap must clear the back-stack.** Swapping the window root between the Auth `NavigationPage` and the App Shell (login/register success, logout, expiry) must replace the root outright so a logged-out user can never navigate back into app content (privacy boundary).
@@ -87,15 +89,15 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 **Intent**: Own the current session as the single source of truth for "am I signed in", expose the current access/refresh tokens to the handler, and raise an event when the session ends unexpectedly.
 
-**Contract**: `ISessionService` with `AuthSession? Current { get; }`, `bool IsAuthenticated`, `Task InitializeAsync()` (loads from `ITokenStore`), `Task SetAsync(AuthSession)` (persist + set current), `Task SignOutAsync(bool revokeServer)` (optional `/auth/logout` + clear + null current), and an `event EventHandler SessionExpired`. Registered as a singleton.
+**Contract**: `ISessionService` with `AuthSession? Current { get; }`, `bool IsAuthenticated`, `Task InitializeAsync()` (loads from `ITokenStore`), `Task SetAsync(AuthSession)` (persist + set current), `Task SignOutAsync(bool revokeServer)` (optional `/auth/logout` via `IAuthTokenClient` + clear + null current), and an `event EventHandler SessionExpired`. Registered as a singleton. Depends on `ITokenStore` + `IAuthTokenClient` only — never on `IApiService`.
 
 #### 4. Typed auth API client
 
-**File**: `app/ChoNaBojoApp/Services/IApiService.cs`, `Services/ApiService.cs`
+**File**: `app/ChoNaBojoApp/Services/IApiService.cs`, `Services/ApiService.cs`, `Services/IAuthTokenClient.cs`, `Services/AuthTokenClient.cs`
 
-**Intent**: Add register/login/refresh/logout/current-user calls returning typed results that carry either success or mapped field/message errors — no raw `HttpResponseMessage` leaks to ViewModels.
+**Intent**: Add register/login/logout/current-user calls returning typed results that carry either success or mapped field/message errors — no raw `HttpResponseMessage` leaks to ViewModels. Keep refresh/server-logout on a separate, handler-free client so the handler has no dependency on `IApiService`.
 
-**Contract**: New methods `Task<AuthResult> RegisterAsync(RegisterRequest, CancellationToken)`, `Task<AuthResult> LoginAsync(LoginRequest, CancellationToken)`, `Task LogoutAsync(CancellationToken)`, plus an internal refresh used by the handler. Introduce a client result type `AuthResult` distinguishing `Success(AuthResponse)`, `ValidationFailed(IReadOnlyDictionary<string,string[]>)`, `Unauthorized`, `Conflict(string message)`, and `Network/Unknown`. A small `ValidationProblemResponse(Dictionary<string,string[]> Errors)` record is deserialized from the server `400` body. Reuses the shared `AuthDTOs` for the wire payloads.
+**Contract**: New methods `Task<AuthResult> RegisterAsync(RegisterRequest, CancellationToken)`, `Task<AuthResult> LoginAsync(LoginRequest, CancellationToken)`, `Task<CurrentUserResult> GetCurrentUserAsync(CancellationToken)` (calls the protected `GET /auth/me`; returns `Success(CurrentUserResponse)`, `Unauthorized`, or `Network/Unknown`). `IAuthTokenClient` (separate file, uses the un-handled `"ChoNaBojoAuth"` client) exposes `Task<RefreshOutcome> RefreshAsync(string refreshToken, CancellationToken)` and `Task LogoutAsync(string refreshToken, CancellationToken)`; `RefreshOutcome` distinguishes `Success(AuthResponse)`, `RetryInProgress` (409), `Invalid` (401), and `Transient` (429/5xx/transport). Introduce a client result type `AuthResult` distinguishing `Success(AuthResponse)`, `ValidationFailed(IReadOnlyDictionary<string,string[]>)`, `Unauthorized`, `Conflict(string message)`, and `Network/Unknown`. A small `ValidationProblemResponse(Dictionary<string,string[]> Errors)` record is deserialized from the server `400` body. Reuses the shared `AuthDTOs` for the wire payloads.
 
 #### 5. Bearer + single-flight refresh DelegatingHandler
 
@@ -103,7 +105,7 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 **Intent**: Transparently attach the bearer to protected calls and refresh once on 401, retrying the original request; raise session-expired when refresh fails.
 
-**Contract**: A `DelegatingHandler` registered on the `"ChoNaBojoApi"` named client via `AddHttpMessageHandler`. Skips bearer attach + refresh for the anonymous auth endpoints. Refresh guarded by `SemaphoreSlim(1,1)` with the change-detection + `409 RetryInProgress`/`401` handling described in Critical Implementation Details. On unrecoverable refresh failure it calls `ISessionService.SignOutAsync(revokeServer:false)` semantics and triggers `SessionExpired`. The refresh HTTP call bypasses this handler.
+**Contract**: A `DelegatingHandler` registered on the `"ChoNaBojoApi"` named client via `AddHttpMessageHandler`, depending **only** on `ITokenStore`/`ISessionService` + `IAuthTokenClient` (never `IApiService` — that would recurse through `CreateClient("ChoNaBojoApi")`). Skips bearer attach + refresh for the anonymous auth endpoints. **Pre-flight expiry check**: before sending a protected request, if `AuthSession.AccessTokenExpiresUtc` is within 60 s (or already past), refresh first through the same single-flight path rather than waiting for a 401 — this is the single place the 15-min expiry is enforced and the reason the `auth_expires` key is persisted. Refresh guarded by `SemaphoreSlim(1,1)` with the change-detection + `409 RetryInProgress`/`401`/transient handling described in Critical Implementation Details. On unrecoverable refresh failure it calls `ISessionService.SignOutAsync(revokeServer:false)` semantics and triggers `SessionExpired`. The refresh HTTP call goes through the un-handled `"ChoNaBojoAuth"` client, so it bypasses this handler by construction.
 
 #### 6. Root-swap navigation service
 
@@ -119,7 +121,9 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 **Intent**: Add token-driven styles for the Material controls the auth screens use, so ui-guidelines rules (pill buttons `CornerRadius=24`, ≥48 touch targets, `PrimaryColor`/`OnPrimaryColor`, `SurfaceColor`, 8pt spacing, no hardcoded values) are enforced centrally and reused by later slices.
 
-**Contract**: Keyed styles: a `material:TextField` style (min height 48, `PrimaryColor` accent, `ErrorColor` validation, `DividerColor` border); a primary `material:MaterialButton` style (`PrimaryColor` bg, `OnPrimaryColor` text, `CornerRadius=24`, min height 48); a `TextButton`-classed secondary style. All values reference existing `{StaticResource ...}` tokens — no literals. (Section E chips / cards are out of scope here.)
+**Contract**: Keyed styles: a `material:TextField` style (min height 48, `PrimaryColor` accent, `ErrorColor` validation, `DividerColor` border); a `PrimaryButtonStyle` and `SecondaryButtonStyle` targeting the **MAUI `Button`** (`PrimaryColor` bg / `OnPrimaryColor` text and transparent bg / `PrimaryColor` text respectively, `CornerRadius=24`, `HeightRequest=48`). UraniumUI 3.0 ships **no** `MaterialButton` and **no** `TextButton` style class — verified against the restored `UraniumUI.Material.dll` — so the guideline's naming is wrong and is corrected as part of this step. All values reference existing `{StaticResource ...}` tokens — no literals. (Section E chips / cards are out of scope here.)
+
+**Also update**: `context/foundation/ui-guidelines.md` §6.B (and the `MaterialButton` mentions in §6.C) to name MAUI `Button` + these keyed styles, so later slices don't inherit the same wrong control name.
 
 #### 8. DI registration
 
@@ -127,20 +131,20 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 **Intent**: Register the new services, handler, ViewModels, and pages.
 
-**Contract**: `ITokenStore`/`TokenStore`, `ISessionService`/`SessionService`, `INavigationRootService`/`NavigationRootService` as singletons; `AuthenticatingHttpMessageHandler` added to the named client; ViewModels + pages (added in later phases) registered transient. Existing `IApiService` singleton retained.
+**Contract**: `ITokenStore`/`TokenStore`, `ISessionService`/`SessionService`, `INavigationRootService`/`NavigationRootService` as singletons; a second named client `"ChoNaBojoAuth"` (same `BaseAddress` as `"ChoNaBojoApi"`, sharing one base-URL constant, **no** message handler) backing `IAuthTokenClient`/`AuthTokenClient`; `AuthenticatingHttpMessageHandler` added to the `"ChoNaBojoApi"` client only; ViewModels + pages (added in later phases) registered transient. Existing `IApiService` singleton retained.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- [ ] Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
-- [ ] No hardcoded color/spacing literals introduced in `Styles.xaml` (grep for `#`, non-8pt numeric spacing in the added styles)
+- Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- No hardcoded color/spacing literals introduced in `Styles.xaml` (grep for `#`, non-8pt numeric spacing in the added styles)
 
 #### Manual Verification:
 
-- [ ] App still launches on the Android emulator without regression (existing behavior intact)
-- [ ] `SecureStorage` round-trip works: a temporary debug write/read returns the same value (or verified via the Phase 2 flow)
+- App still launches on the Android emulator without regression (existing behavior intact)
+- `SecureStorage` round-trip works: a temporary debug write/read returns the same value (or verified via the Phase 2 flow)
 
 **Implementation Note**: After this phase and all automated verification passes, pause for manual confirmation before proceeding.
 
@@ -168,38 +172,39 @@ Deliver the sign-in path end-to-end: the unauthenticated Auth flow with a Login 
 
 **Intent**: Render the login form using UraniumUI Material controls and the new styles.
 
-**Contract**: `material:TextField` for email (Email keyboard) and password (`IsPassword`, show/hide toggle), a primary `MaterialButton` (Login), a `TextButton` link to Register. Root `VerticalStackLayout`/`Grid` with `Margin=16`, 8pt spacing, `HeadlineStyle` title. Inline field errors bound to the VM; loading state via `ActivityIndicator` tinted `PrimaryColor` (ui-guidelines §10). `SemanticProperties.Description` on interactive controls.
+**Contract**: `material:TextField` for email (Email keyboard) and password (`IsPassword` + `TextFieldPasswordShowHideAttachment` show/hide toggle), a `PrimaryButtonStyle` `Button` (Login), a `SecondaryButtonStyle` `Button` link to Register. Root `VerticalStackLayout`/`Grid` with `Margin=16`, 8pt spacing, `HeadlineStyle` title. Inline field errors bound to the VM; loading state via `ActivityIndicator` tinted `PrimaryColor` (ui-guidelines §10). `SemanticProperties.Description` on interactive controls.
 
 #### 3. Minimal Home placeholder
 
-**File**: `app/ChoNaBojoApp/Views/HomePage.xaml` (+ `.xaml.cs`), `app/ChoNaBojoApp/ViewModels/HomeViewModel.cs`, `AppShell.xaml`
+**File**: `app/ChoNaBojoApp/Views/HomePage.xaml` (+ `.xaml.cs`), `app/ChoNaBojoApp/ViewModels/HomeViewModel.cs`, `AppShell.xaml`, `MauiProgram.cs`
 
 **Intent**: Replace the counter `MainPage` as the authenticated landing with a small, on-brand placeholder that S-02 will later replace with the map, and host the (Phase 4) logout affordance.
 
-**Contract**: `HomePage` shows a `HeadlineStyle` welcome and a spot for logout, built from tokens only. `AppShell.xaml`'s single `ShellContent` points to `HomePage` (counter `MainPage` no longer referenced; may be removed). `HomeViewModel` registered transient.
+**Contract**: `HomePage` shows a `HeadlineStyle` welcome and a spot for logout, built from tokens only. `AppShell.xaml`'s single `ShellContent` points to `HomePage` (counter `MainPage` no longer referenced). If `MainPage.xaml`/`.cs` is deleted, its `AddTransient<MainPage>()` registration in `MauiProgram.cs:36` must be removed in the same step or the build breaks. `HomeViewModel` registered transient. On appearing, `HomeViewModel` calls `IApiService.GetCurrentUserAsync` — the slice's one protected call, which exercises bearer attach, transparent 401 refresh, and expiry sign-out. It does **not** block the UI: `Success` is silent (Home renders regardless), `Unauthorized` is handled by the handler's expiry path, and a network failure surfaces a non-blocking snackbar without navigating.
 
 #### 4. Auth flow container + startup routing
 
-**File**: `app/ChoNaBojoApp/App.xaml.cs`, `MauiProgram.cs`
+**File**: `app/ChoNaBojoApp/App.xaml.cs`, `app/ChoNaBojoApp/Views/LoadingPage.xaml` (+ `.xaml.cs`), `MauiProgram.cs`
 
 **Intent**: On launch, initialize the session and route to the correct root (optimistic restore); define the Auth flow root as a `NavigationPage` hosting `LoginPage`.
 
-**Contract**: `App` resolves `ISessionService` + `INavigationRootService`; on startup calls `SessionService.InitializeAsync()` (main-thread `SecureStorage` read) — if a refresh token exists → `SetAppRoot()`, else `SetAuthRoot()`. `CreateWindow` returns a window whose page is set by the navigation service (a brief loading page is acceptable while initializing). Register `LoginPage`/`LoginViewModel` and `HomePage`/`HomeViewModel` in DI.
+**Contract**: `CreateWindow` stays synchronous and returns `new Window(new LoadingPage())` — a token-styled page with a `PrimaryColor` `ActivityIndicator`. `LoadingPage`'s `Loaded` handler (main thread, `async`, wrapped in try/catch so no unobserved async-void exception can crash the app) awaits `ISessionService.InitializeAsync()` (main-thread `SecureStorage` read), then calls `INavigationRootService.SetAppRoot()` if a refresh token exists, else `SetAuthRoot()`; **any** exception or `SecureStorage` failure routes to `SetAuthRoot()`. Because the swap happens after `CreateWindow` has returned, `Application.Current.Windows[0]` is guaranteed to exist. Register `LoadingPage`, `LoginPage`/`LoginViewModel`, and `HomePage`/`HomeViewModel` in DI.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- [ ] Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
 
 #### Manual Verification:
 
-- [ ] Cold launch with no stored session shows the Login screen (no app content visible)
-- [ ] Logging in with a valid manually-created account lands on Home
-- [ ] Invalid credentials show an "Invalid email or password" snackbar; empty/invalid fields show inline errors
-- [ ] Kill and relaunch the app after login → user stays on Home (optimistic restore; token refreshed transparently on first protected call)
-- [ ] Screens visually conform to ui-guidelines (pill buttons, 48 touch targets, tokens, 8pt spacing) — spot-checked
+- Cold launch with no stored session shows the Login screen (no app content visible)
+- Logging in with a valid manually-created account lands on Home
+- Invalid credentials show an "Invalid email or password" snackbar; empty/invalid fields show inline errors
+- Kill and relaunch the app after login → user stays on Home (optimistic restore; token refreshed transparently on first protected call)
+- Home's `GET /auth/me` call succeeds with an attached bearer (verified via server log / no error snackbar)
+- Screens visually conform to ui-guidelines (pill buttons, 48 touch targets, tokens, 8pt spacing) — spot-checked
 
 **Implementation Note**: Pause for manual confirmation before proceeding.
 
@@ -227,7 +232,7 @@ Add the sign-up path: a Register screen collecting email, password, and ≥1 con
 
 **Intent**: Render the register form with all three contact methods optional and a clear "at least one required" affordance.
 
-**Contract**: `material:TextField` for email + password (show/hide); a contact section with `material:TextField` for phone (Telephone keyboard) and contact-email (Email keyboard), plus a messenger row = a Uranium picker for `CommunicatorPlatform` (Messenger/Instagram/WhatsApp) + a handle `TextField`. Helper text "Provide at least one contact method"; group error bound to the VM. Primary `MaterialButton` (Create account), `TextButton` link to Login. Tokens/8pt spacing/48 targets throughout; `SemanticProperties` set.
+**Contract**: `material:TextField` for email + password (show/hide); a contact section with `material:TextField` for phone (Telephone keyboard) and contact-email (Email keyboard), plus a messenger row = a Uranium picker for `CommunicatorPlatform` (Messenger/Instagram/WhatsApp) + a handle `TextField`. Helper text "Provide at least one contact method"; group error bound to the VM. `PrimaryButtonStyle` `Button` (Create account), `SecondaryButtonStyle` `Button` link to Login. Tokens/8pt spacing/48 targets throughout; `SemanticProperties` set.
 
 #### 3. Register routing wiring
 
@@ -241,17 +246,17 @@ Add the sign-up path: a Register screen collecting email, password, and ≥1 con
 
 #### Automated Verification:
 
-- [ ] Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
 
 #### Manual Verification:
 
-- [ ] Registering with email + password + exactly one contact succeeds and auto-lands on Home
-- [ ] Submitting with no contact method shows the "at least one contact" group error (matches server)
-- [ ] Selecting a messenger platform without a handle (or vice-versa) shows the paired `communicator` error
-- [ ] Registering an already-used email shows the duplicate-email error on the email field (server 409)
-- [ ] After register+auto-login, relaunching the app keeps the user signed in
-- [ ] Register screen conforms to ui-guidelines — spot-checked
+- Registering with email + password + exactly one contact succeeds and auto-lands on Home
+- Submitting with no contact method shows the "at least one contact" group error (matches server)
+- Selecting a messenger platform without a handle (or vice-versa) shows the paired `communicator` error
+- Registering an already-used email shows the duplicate-email error on the email field (server 409)
+- After register+auto-login, relaunching the app keeps the user signed in
+- Register screen conforms to ui-guidelines — spot-checked
 
 **Implementation Note**: Pause for manual confirmation before proceeding.
 
@@ -285,15 +290,17 @@ Complete the session lifecycle: an explicit logout from Home and an automatic si
 
 #### Automated Verification:
 
-- [ ] Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
 
 #### Manual Verification:
 
-- [ ] Logout shows the MD3 confirm dialog; confirming returns to Login and the back button cannot re-enter Home
-- [ ] After logout, relaunching the app shows Login (session cleared; server refresh family revoked)
-- [ ] Forcing an invalid refresh (e.g., logout on another session / wait out the refresh, or a debug-invalidated refresh token) triggers auto-sign-out to Login with the "session expired" snackbar on the next protected call
-- [ ] Concurrent failing calls result in a single sign-out (no duplicate navigations)
+- Logout shows the MD3 confirm dialog; confirming returns to Login and the back button cannot re-enter Home
+- After logout, relaunching the app shows Login (session cleared; server refresh family revoked)
+- Forcing an invalid refresh (e.g., logout on another session / wait out the refresh, or a debug-invalidated refresh token) triggers auto-sign-out to Login with the "session expired" snackbar on the next protected call
+- Concurrent failing calls result in a single sign-out (no duplicate navigations)
+- Airplane mode (or a 429 from the auth rate limit) during a protected call shows a retry snackbar and does **not** log the user out
+- With the access token expired but the refresh valid, entering Home refreshes transparently and `GET /auth/me` succeeds without user-visible interruption
 
 **Implementation Note**: Pause for manual confirmation; this is the final phase.
 
@@ -317,6 +324,7 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 ### Edge cases to exercise manually:
 
 - Offline at launch with a stored session (optimistic restore shows app; first call surfaces a network snackbar, not a crash).
+- Auth rate limit (10 req/min per IP) tripped by a burst of manual login/register attempts → 429 surfaces as a retry snackbar, never as a sign-out.
 - Concurrent protected calls right after the 15-min access token expires (single refresh, both succeed).
 - `SecureStorage` read failure at startup → routed to Login, no crash.
 
@@ -328,7 +336,7 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 ## Migration Notes
 
 - No data migration. Client-side only. `SecureStorage` keys are new; a returning user with no stored keys is simply routed to Login.
-- The counter `MainPage` is superseded by `HomePage`; removing it is optional cleanup.
+- The counter `MainPage` is superseded by `HomePage`; removing it is optional cleanup — if removed, drop its `AddTransient<MainPage>()` line in `MauiProgram.cs` too.
 
 ## References
 
@@ -369,6 +377,7 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 - [ ] 2.5 Invalid credentials → snackbar; invalid fields → inline errors
 - [ ] 2.6 Relaunch after login keeps the user on Home (optimistic restore)
 - [ ] 2.7 Screens conform to ui-guidelines (spot-checked)
+- [ ] 2.8 Home's `GET /auth/me` call succeeds with an attached bearer
 
 ### Phase 3: Register + contact collection + auto-login
 
@@ -399,3 +408,5 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 - [ ] 4.4 After logout, relaunch shows Login (session cleared + family revoked)
 - [ ] 4.5 Invalid refresh → auto-sign-out to Login + "session expired" snackbar
 - [ ] 4.6 Concurrent failing calls result in a single sign-out
+- [ ] 4.7 Airplane mode / 429 during a protected call → retry snackbar, session preserved
+- [ ] 4.8 Expired access token + valid refresh → transparent refresh, `GET /auth/me` succeeds uninterrupted

@@ -56,15 +56,16 @@ This project heavily relies on the **Uranium UI** framework for Material Design.
 - Set the `HeightRequest` to at least `48` if not handled natively by the control.
 
 ### B. Action Buttons
-- Primary Actions (Login, Create, Join): Use `<material:MaterialButton>` with `BackgroundColor="{StaticResource PrimaryColor}"`, `TextColor="{StaticResource OnPrimaryColor}"`, and `CornerRadius="24"` (MD3 pill shape).
-- Secondary / Text Button (Cancel, Go Back): Use `<material:MaterialButton>` with `StyleClass="TextButton"`.
+UraniumUI 3.0 ships **no** `MaterialButton` control and no `TextButton` style class — use the native MAUI `Button` with the keyed styles defined in `Resources/Styles/Styles.xaml`.
+- Primary Actions (Login, Create, Join): Use `<Button Style="{StaticResource PrimaryButtonStyle}">` — `BackgroundColor="{StaticResource PrimaryColor}"`, `TextColor="{StaticResource OnPrimaryColor}"`, `CornerRadius="24"` (MD3 pill shape), `HeightRequest="48"`.
+- Secondary / Text Button (Cancel, Go Back): Use `<Button Style="{StaticResource SecondaryButtonStyle}">` — transparent background, `TextColor="{StaticResource PrimaryColor}"`.
 
 ### C. Event Cards (Match/Event Card)
 The core entity is an event. Each event is displayed within a Card container.
 - MAUI Component: `Border` or Uranium's `StatefulContentView` (if ripple effect is needed on tap).
 - Style: Background `{StaticResource SurfaceColor}`, `CornerRadius="16"`, `Shadow="{StaticResource CardShadow}"`. Inner padding must always be `16`.
 - **States** (a card must communicate joinability at a glance — see PRD FR-006/FR-007):
-  - **Joinable:** full color, `CardShadow`, participant counter in `SecondaryTextColor`, enabled "Join" `MaterialButton`.
+  - **Joinable:** full color, `CardShadow`, participant counter in `SecondaryTextColor`, enabled "Join" `Button` (`PrimaryButtonStyle`).
   - **Full** (participants = limit): the participant counter turns `ErrorColor`, and the "Join" button is replaced by a disabled "Full" label. The card is otherwise normal.
   - **Past** (current time is after the event's estimated end time): card is dimmed (`Opacity="0.6"`), has no Join action, and shows a small "Ended" chip. Past events are excluded from joinable lists but may appear in the user's own-events list.
 
@@ -87,7 +88,7 @@ A defined inline component for the "8/10" indicator.
 ## 7. Map & Venue Discovery
 The map is the app's core discovery surface (PRD FR-003/FR-004).
 - **Map:** `Microsoft.Maui.Controls.Maps.Map`, centered on the user's current location. Venue markers use the **sport icon on a `PrimaryColor` pin**. Tapping a marker opens the venue bottom sheet.
-- **Venue bottom sheet:** `SurfaceColor` background, top `CornerRadius="16"`, `Shadow="{StaticResource CardShadow}"`, `16` padding. Lists joinable event cards followed by a sticky "Create event" `MaterialButton` with `32` top spacing.
+- **Venue bottom sheet:** `SurfaceColor` background, top `CornerRadius="16"`, `Shadow="{StaticResource CardShadow}"`, `16` padding. Lists joinable event cards followed by a sticky "Create event" `Button` (`PrimaryButtonStyle`) with `32` top spacing.
 - **Location-denied fallback (FR-004):** when location permission is denied, show a `material:TextField` address input at the top of the screen; on submit, recenter the map to that address. Display a non-blocking info banner (Section 9) explaining why the map isn't centered on the user.
 - **Sport filter:** the horizontal chip row (Section 6E) is pinned above the map.
 
@@ -109,7 +110,7 @@ Push notifications are core to the workflow (PRD FR-008/010/012/013/014); the UI
 Every data-backed screen handles three recurring states.
 - **Loading:** a centered `ActivityIndicator` tinted `PrimaryColor`. For lists, a lightweight placeholder is acceptable — no heavy skeletons for the MVP.
 - **Empty:** a centered icon/illustration + a `TitleStyle` message + an optional primary action. Example: a venue with no events shows "No events here yet" + a "Create event" button.
-- **Error / offline:** an `ErrorColor` icon + a `BodyStyle` message + a "Retry" `MaterialButton`. Used for map-load failure (see the 2-second map NFR) and network errors.
+- **Error / offline:** an `ErrorColor` icon + a `BodyStyle` message + a "Retry" `Button` (`PrimaryButtonStyle`). Used for map-load failure (see the 2-second map NFR) and network errors.
 
 ## 11. Accessibility
 - **Contrast:** all text meets WCAG AA (4.5:1 for body, 3:1 for large text). White on `PrimaryColor #2E7D32` measures ~5.1:1 and therefore passes AA at all text sizes — white-on-green button labels are compliant.
