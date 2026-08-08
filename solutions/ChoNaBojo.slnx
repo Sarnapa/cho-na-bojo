@@ -58,6 +58,9 @@
     <File Path="../context/changes/account-and-session/plan-brief.md" />
     <File Path="../context/changes/account-and-session/plan.md" />
   </Folder>
+  <Folder Name="/context/changes/account-and-session/reviews/">
+    <File Path="../context/changes/account-and-session/reviews/plan-review.md" />
+  </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
     <File Path="../context/foundation/lessons.md" />
