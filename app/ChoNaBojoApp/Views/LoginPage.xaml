@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.LoginPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    Title="Login">
+
+    <!--
+        Placeholder root for the Auth NavigationPage wired up in Phase 1 so
+        INavigationRootService.SetAuthRoot() has a page to swap to. The full design-system
+        login form (material:TextField, PrimaryButtonStyle, LoginViewModel binding) is built
+        in Phase 2 of the account-and-session plan.
+    -->
+    <VerticalStackLayout Margin="16" VerticalOptions="Center">
+        <Label Style="{StaticResource HeadlineStyle}" Text="Login" HorizontalOptions="Center" />
+    </VerticalStackLayout>
+
+</ContentPage>

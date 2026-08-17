@@ -354,9 +354,9 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 
 #### Automated
 
-- [ ] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 1.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
-- [ ] 1.3 No hardcoded color/spacing literals introduced in `Styles.xaml`
+- [x] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 1.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- [x] 1.3 No hardcoded color/spacing literals introduced in `Styles.xaml`
 
 #### Manual
 

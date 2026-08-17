@@ -1,9 +1,9 @@
 ---
 change_id: account-and-session
 title: Account and session
-status: plan_reviewed
+status: implementing
 created: 2026-07-18
-updated: 2026-08-08
+updated: 2026-08-09
 archived_at: null
 ---
 
