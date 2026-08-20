@@ -360,7 +360,7 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 
 #### Manual
 
-- [ ] 1.4 App still launches on the Android emulator without regression
+- [x] 1.4 App still launches on the Android emulator without regression
 - [ ] 1.5 `SecureStorage` round-trip works
 
 ### Phase 2: Login + Auth flow + Home + startup gating
