@@ -77,7 +77,7 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 #### 2. Client session model + token store
 
-**File**: `app/ChoNaBojoApp/Services/ITokenStore.cs`, `Services/TokenStore.cs`, `Services/AuthSession.cs`
+**File**: `app/ChoNaBojoApp/Services/Auth/ITokenStore.cs`, `Services/Auth/TokenStore.cs`, `Services/Auth/AuthSession.cs`
 
 **Intent**: Persist and retrieve the token pair from `SecureStorage`; model the in-memory session.
 
@@ -85,7 +85,7 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 #### 3. Session/auth-state service
 
-**File**: `app/ChoNaBojoApp/Services/ISessionService.cs`, `Services/SessionService.cs`
+**File**: `app/ChoNaBojoApp/Services/Auth/ISessionService.cs`, `Services/Auth/SessionService.cs`
 
 **Intent**: Own the current session as the single source of truth for "am I signed in", expose the current access/refresh tokens to the handler, and raise an event when the session ends unexpectedly.
 
@@ -93,7 +93,7 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 #### 4. Typed auth API client
 
-**File**: `app/ChoNaBojoApp/Services/IApiService.cs`, `Services/ApiService.cs`, `Services/IAuthTokenClient.cs`, `Services/AuthTokenClient.cs`
+**File**: `app/ChoNaBojoApp/Services/IApiService.cs`, `Services/ApiService.cs`, `Services/Auth/IAuthTokenClient.cs`, `Services/Auth/AuthTokenClient.cs`
 
 **Intent**: Add register/login/logout/current-user calls returning typed results that carry either success or mapped field/message errors — no raw `HttpResponseMessage` leaks to ViewModels. Keep refresh/server-logout on a separate, handler-free client so the handler has no dependency on `IApiService`.
 
@@ -101,7 +101,7 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 #### 5. Bearer + single-flight refresh DelegatingHandler
 
-**File**: `app/ChoNaBojoApp/Services/AuthenticatingHttpMessageHandler.cs`, wired in `MauiProgram.cs`
+**File**: `app/ChoNaBojoApp/Services/Auth/AuthenticatingHttpMessageHandler.cs`, wired in `MauiProgram.cs`
 
 **Intent**: Transparently attach the bearer to protected calls and refresh once on 401, retrying the original request; raise session-expired when refresh fails.
 
@@ -109,7 +109,7 @@ Establish all non-visual plumbing and the reusable Material control styles. No s
 
 #### 6. Root-swap navigation service
 
-**File**: `app/ChoNaBojoApp/Services/INavigationRootService.cs`, `Services/NavigationRootService.cs`
+**File**: `app/ChoNaBojoApp/Services/Navigation/INavigationRootService.cs`, `Services/Navigation/NavigationRootService.cs`
 
 **Intent**: Centralize swapping the window root between the Auth flow and the App Shell so login/register/logout/expiry share one mechanism and the back-stack is always replaced.
 
