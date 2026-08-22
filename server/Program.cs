@@ -17,15 +17,15 @@ string appDbConnectionString = ResolveRuntimeAppDbConnectionString(builder.Confi
 string port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 if (!builder.Environment.IsDevelopment())
 {
-    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+  builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
 // Configure forwarded headers for Railway's TLS-terminating proxy
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
+  options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+  options.KnownIPNetworks.Clear();
+  options.KnownProxies.Clear();
 });
 
 // Add services to the container.
@@ -36,12 +36,12 @@ string? warsawVenuesCsvPath = builder.Configuration["DataSeeding:WarsawVenuesCsv
 // Register the data-layer DbContext (Supabase Postgres via Npgsql + PostGIS/NetTopologySuite).
 // Runtime uses the transaction-mode pooler string (AppDb, port 6543); the app never auto-migrates.
 builder.Services.AddDbContext<ChoNaBojoContext>(opt =>
-    opt.UseNpgsql(
-        appDbConnectionString,
-        npgsql => npgsql.UseNetTopologySuite())
-    .UseSeeding((context, _) => WarsawVenueSeeder.Seed(context, warsawVenuesCsvPath))
-    .UseAsyncSeeding((context, _, cancellationToken) =>
-        WarsawVenueSeeder.SeedAsync(context, warsawVenuesCsvPath, cancellationToken)));
+	opt.UseNpgsql(
+		appDbConnectionString,
+		npgsql => npgsql.UseNetTopologySuite())
+	.UseSeeding((context, _) => WarsawVenueSeeder.Seed(context, warsawVenuesCsvPath))
+	.UseAsyncSeeding((context, _, cancellationToken) =>
+		WarsawVenueSeeder.SeedAsync(context, warsawVenuesCsvPath, cancellationToken)));
 
 builder.Services
 	.AddOptions<JwtOptions>()
@@ -102,15 +102,20 @@ app.UseForwardedHeaders();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+	app.MapOpenApi();
 }
-
-app.UseHttpsRedirection();
+else
+{
+  // Only enforced outside Development: the dev certificate is not trusted by
+  // emulators/devices and its SAN does not cover host aliases such as 10.0.2.2,
+  // so redirecting local debug traffic to HTTPS breaks the TLS handshake.
+  app.UseHttpsRedirection();
+}
 
 app.UseRateLimiter();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
-    .WithName("HealthCheck");
+	.WithName("HealthCheck");
 
 app.MapAuthEndpoints();
 

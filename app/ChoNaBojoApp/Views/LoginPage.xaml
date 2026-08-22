@@ -3,16 +3,75 @@
     x:Class="ChoNaBojo.App.Views.LoginPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    Title="Login">
+    xmlns:material="clr-namespace:UraniumUI.Material.Controls;assembly=UraniumUI.Material"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:LoginViewModel"
+    Title="Login"
+    BackgroundColor="{StaticResource BackgroundColor}">
 
-    <!--
-        Placeholder root for the Auth NavigationPage wired up in Phase 1 so
-        INavigationRootService.SetAuthRoot() has a page to swap to. The full design-system
-        login form (material:TextField, PrimaryButtonStyle, LoginViewModel binding) is built
-        in Phase 2 of the account-and-session plan.
-    -->
-    <VerticalStackLayout Margin="16" VerticalOptions="Center">
-        <Label Style="{StaticResource HeadlineStyle}" Text="Login" HorizontalOptions="Center" />
-    </VerticalStackLayout>
+    <ScrollView>
+        <VerticalStackLayout Margin="16" Spacing="8" VerticalOptions="Center">
+
+            <Label
+                Style="{StaticResource HeadlineStyle}"
+                Text="Welcome back"
+                HorizontalOptions="Center"
+                Margin="0,0,0,16" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Email"
+                Text="{Binding LoginEmail}"
+                Keyboard="Email"
+                IsEnabled="{Binding IsNotBusy}"
+                SemanticProperties.Description="Email" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding LoginEmailError}"
+                IsVisible="{Binding HasLoginEmailError}" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Password"
+                Text="{Binding Password}"
+                IsPassword="True"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Password">
+                <material:TextField.Attachments>
+                    <material:TextFieldPasswordShowHideAttachment />
+                </material:TextField.Attachments>
+            </material:TextField>
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding PasswordError}"
+                IsVisible="{Binding HasPasswordError}" />
+
+            <Button
+                Style="{StaticResource PrimaryButtonStyle}"
+                Text="Log in"
+                Command="{Binding LoginCommand}"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,24,0,0"
+                SemanticProperties.Description="Log in" />
+
+            <ActivityIndicator
+                IsRunning="{Binding IsBusy}"
+                IsVisible="{Binding IsBusy}"
+                Margin="0,8,0,0" />
+
+            <Button
+                Style="{StaticResource SecondaryButtonStyle}"
+                Text="Create an account"
+                Command="{Binding GoToRegisterCommand}"
+                Margin="0,16,0,0"
+                SemanticProperties.Description="Create an account" />
+
+        </VerticalStackLayout>
+    </ScrollView>
 
 </ContentPage>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.HomePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:HomeViewModel"
+    Title="Home"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <!--
+        Minimal authenticated landing placeholder — S-02 replaces this with the map. Also
+        exercises the slice's one protected call (GET /auth/me) on appearing; see HomeViewModel.
+    -->
+    <VerticalStackLayout Margin="16" VerticalOptions="Center" Spacing="8">
+        <Label Style="{StaticResource HeadlineStyle}" Text="You're in!" HorizontalOptions="Center" />
+        <Label Style="{StaticResource BodyStyle}" Text="The map and events are coming soon." HorizontalOptions="Center" />
+    </VerticalStackLayout>
+
+</ContentPage>

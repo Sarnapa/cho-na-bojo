@@ -4,6 +4,9 @@ using UraniumUI;
 using ChoNaBojo.App.Services;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Navigation;
+using ChoNaBojo.App.ViewModels;
+using ChoNaBojo.App.Views;
+using ChoNaBojo.App.Services.Feedback;
 
 namespace ChoNaBojo.App
 {
@@ -45,10 +48,15 @@ namespace ChoNaBojo.App
 			builder.Services.AddSingleton<IAuthTokenClient, AuthTokenClient>();
 			builder.Services.AddSingleton<INavigationRootService, NavigationRootService>();
 			builder.Services.AddSingleton<IApiService, ApiService>();
+			builder.Services.AddSingleton<IFeedbackService, FeedbackService>();
 
-			builder.Services.AddTransient<MainPage>();
 			builder.Services.AddTransient<AppShell>();
-			builder.Services.AddTransient<Views.LoginPage>();
+			builder.Services.AddTransient<LoadingPage>();
+			builder.Services.AddTransient<LoginPage>();
+			builder.Services.AddTransient<HomePage>();
+
+			builder.Services.AddTransient<LoginViewModel>();
+			builder.Services.AddTransient<HomeViewModel>();
 
 #if DEBUG
 			builder.Logging.AddDebug();

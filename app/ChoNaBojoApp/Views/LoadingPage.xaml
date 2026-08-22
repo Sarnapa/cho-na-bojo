@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.LoadingPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <!--
+        The window's initial root (see App.CreateWindow). Restores the session (optimistic
+        restore) and swaps to the Auth root or the App Shell once known — see code-behind.
+    -->
+    <Grid>
+        <ActivityIndicator IsRunning="True" HorizontalOptions="Center" VerticalOptions="Center" />
+    </Grid>
+
+</ContentPage>

@@ -3,7 +3,7 @@ change_id: account-and-session
 title: Account and session
 status: implementing
 created: 2026-07-18
-updated: 2026-08-09
+updated: 2026-08-20
 archived_at: null
 ---
 

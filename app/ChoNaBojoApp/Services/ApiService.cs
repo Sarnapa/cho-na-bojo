@@ -110,11 +110,11 @@ public class ApiService : IApiService
 					return AuthResult.Unknown();
 			}
 		}
-		catch (HttpRequestException)
+		catch (HttpRequestException ex)
 		{
 			return AuthResult.Network();
 		}
-		catch (TaskCanceledException)
+		catch (TaskCanceledException ex)
 		{
 			return AuthResult.Network();
 		}
