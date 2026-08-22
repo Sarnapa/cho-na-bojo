@@ -383,17 +383,17 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 
 #### Automated
 
-- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 3.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — 5f59f2e
+- [x] 3.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android` — 5f59f2e
 
 #### Manual
 
-- [x] 3.3 Register with ≥1 contact succeeds and auto-lands on Home
-- [x] 3.4 No contact method → group error (matches server)
-- [x] 3.5 Messenger platform/handle mismatch → paired `communicator` error
-- [x] 3.6 Duplicate email → email-field error (server 409)
-- [x] 3.7 Relaunch after register+auto-login keeps the user signed in
-- [x] 3.8 Register screen conforms to ui-guidelines (spot-checked)
+- [x] 3.3 Register with ≥1 contact succeeds and auto-lands on Home — 5f59f2e
+- [x] 3.4 No contact method → group error (matches server) — 5f59f2e
+- [x] 3.5 Messenger platform/handle mismatch → paired `communicator` error — 5f59f2e
+- [x] 3.6 Duplicate email → email-field error (server 409) — 5f59f2e
+- [x] 3.7 Relaunch after register+auto-login keeps the user signed in — 5f59f2e
+- [x] 3.8 Register screen conforms to ui-guidelines (spot-checked) — 5f59f2e
 
 ### Phase 4: Logout + session-expiry lifecycle
 
