@@ -361,23 +361,23 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 #### Manual
 
 - [x] 1.4 App still launches on the Android emulator without regression — 8b1569f
-- [x] 1.5 `SecureStorage` round-trip works
+- [x] 1.5 `SecureStorage` round-trip works — d7aeba5
 
 ### Phase 2: Login + Auth flow + Home + startup gating
 
 #### Automated
 
-- [x] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 2.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- [x] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — d7aeba5
+- [x] 2.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android` — d7aeba5
 
 #### Manual
 
-- [x] 2.3 Cold launch with no stored session shows Login (no app content visible)
-- [x] 2.4 Valid login lands on Home
-- [x] 2.5 Invalid credentials → snackbar; invalid fields → inline errors
-- [x] 2.6 Relaunch after login keeps the user on Home (optimistic restore)
-- [x] 2.7 Screens conform to ui-guidelines (spot-checked)
-- [x] 2.8 Home's `GET /auth/me` call succeeds with an attached bearer
+- [x] 2.3 Cold launch with no stored session shows Login (no app content visible) — d7aeba5
+- [x] 2.4 Valid login lands on Home — d7aeba5
+- [x] 2.5 Invalid credentials → snackbar; invalid fields → inline errors — d7aeba5
+- [x] 2.6 Relaunch after login keeps the user on Home (optimistic restore) — d7aeba5
+- [x] 2.7 Screens conform to ui-guidelines (spot-checked) — d7aeba5
+- [x] 2.8 Home's `GET /auth/me` call succeeds with an attached bearer — d7aeba5
 
 ### Phase 3: Register + contact collection + auto-login
 
