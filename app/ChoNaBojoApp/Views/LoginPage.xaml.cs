@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using ChoNaBojo.App.Services.Navigation;
 using ChoNaBojo.App.ViewModels;
 
@@ -7,15 +8,17 @@ public partial class LoginPage : ContentPage
 {
 	#region Private fields
 	private readonly INavigationRootService _navigationRootService;
+	private readonly IServiceProvider _serviceProvider;
 	private readonly LoginViewModel _viewModel;
 	#endregion
 
 	#region Constructors
-	public LoginPage(LoginViewModel viewModel, INavigationRootService navigationRootService)
+	public LoginPage(LoginViewModel viewModel, INavigationRootService navigationRootService, IServiceProvider serviceProvider)
 	{
 		InitializeComponent();
 		BindingContext = viewModel;
 		_navigationRootService = navigationRootService;
+		_serviceProvider = serviceProvider;
 		_viewModel = viewModel;
 	}
 	#endregion
@@ -25,11 +28,13 @@ public partial class LoginPage : ContentPage
 	{
 		base.OnAppearing();
 		_viewModel.LoginSucceeded += OnLoginSucceeded;
+		_viewModel.GoToRegisterRequested += OnGoToRegisterRequested;
 	}
 
 	protected override void OnDisappearing()
 	{
 		_viewModel.LoginSucceeded -= OnLoginSucceeded;
+		_viewModel.GoToRegisterRequested -= OnGoToRegisterRequested;
 		base.OnDisappearing();
 	}
 	#endregion
@@ -49,6 +54,11 @@ public partial class LoginPage : ContentPage
 		}
 
 		_navigationRootService.SetAppRoot();
+	}
+
+	private async void OnGoToRegisterRequested(object? sender, EventArgs e)
+	{
+		await Navigation.PushAsync(_serviceProvider.GetRequiredService<RegisterPage>());
 	}
 	#endregion
 }

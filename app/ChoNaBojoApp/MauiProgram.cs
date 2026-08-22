@@ -3,10 +3,10 @@ using Microsoft.Extensions.Logging;
 using UraniumUI;
 using ChoNaBojo.App.Services;
 using ChoNaBojo.App.Services.Auth;
+using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Navigation;
 using ChoNaBojo.App.ViewModels;
 using ChoNaBojo.App.Views;
-using ChoNaBojo.App.Services.Feedback;
 
 namespace ChoNaBojo.App
 {
@@ -53,9 +53,11 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<AppShell>();
 			builder.Services.AddTransient<LoadingPage>();
 			builder.Services.AddTransient<LoginPage>();
+			builder.Services.AddTransient<RegisterPage>();
 			builder.Services.AddTransient<HomePage>();
 
 			builder.Services.AddTransient<LoginViewModel>();
+			builder.Services.AddTransient<RegisterViewModel>();
 			builder.Services.AddTransient<HomeViewModel>();
 
 #if DEBUG

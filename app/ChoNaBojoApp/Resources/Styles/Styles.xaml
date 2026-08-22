@@ -156,6 +156,18 @@
         <Setter Property="MinimumHeightRequest" Value="48" />
     </Style>
 
+    <!-- Same tokens as TextFieldStyle — reused wherever a screen needs a single-select field
+         (e.g. the Register communicator-platform picker). -->
+    <Style x:Key="SelectFieldStyle" TargetType="material:SelectField">
+        <Setter Property="AccentColor" Value="{StaticResource PrimaryColor}" />
+        <Setter Property="BorderColor" Value="{StaticResource DividerColor}" />
+        <Setter Property="TitleColor" Value="{StaticResource SecondaryTextColor}" />
+        <Setter Property="TextColor" Value="{StaticResource OnSurfaceColor}" />
+        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="MinimumHeightRequest" Value="48" />
+    </Style>
+
     <!--
         Un-keyed style classes: UraniumUI's InputField control template assigns these style
         classes to its internal validation Label/Path automatically, so every material:TextField

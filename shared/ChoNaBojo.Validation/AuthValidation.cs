@@ -43,7 +43,7 @@ public static class AuthValidation
 			AddValidationError(
 				errors,
 				"communicator",
-				"Communicator platform and communicator handle must be provided together.");
+				"Communicator platform and communicator login must be provided together.");
 		}
 
 		if (hasCommunicatorPlatform && !Enum.IsDefined(request.CommunicatorPlatform!.Value))
@@ -62,7 +62,7 @@ public static class AuthValidation
 			AddValidationError(
 				errors,
 				"contact",
-				"At least one contact method is required: phone, contact email, or communicator platform plus handle.");
+				"At least one contact method is required: phone, contact email, or communicator platform plus login.");
 		}
 
 		return errors.Count == 0 ? ValidationResult.Valid : new ValidationResult(errors);

@@ -45,6 +45,9 @@ public partial class LoginViewModel : ViewModelBase
 	/// the root-page swap so LoginPage is never torn down while its handlers are still in use.
 	/// </summary>
 	public event EventHandler? LoginSucceeded;
+
+	/// <summary>Raised when the user asks to register; the view pushes RegisterPage.</summary>
+	public event EventHandler? GoToRegisterRequested;
 	#endregion
 
 	#region Public properties
@@ -144,8 +147,7 @@ public partial class LoginViewModel : ViewModelBase
 	[RelayCommand]
 	private void GoToRegister()
 	{
-		// Wired to a RegisterPage push once it exists — see Phase 3 ("Register routing
-		// wiring") of the account-and-session plan.
+		GoToRegisterRequested?.Invoke(this, EventArgs.Empty);
 	}
 	#endregion
 

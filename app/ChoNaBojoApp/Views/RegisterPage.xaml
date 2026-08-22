@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.RegisterPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:material="clr-namespace:UraniumUI.Material.Controls;assembly=UraniumUI.Material"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:RegisterViewModel"
+    Title="Create account"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <ScrollView>
+        <VerticalStackLayout Margin="16" Spacing="8">
+
+            <Label
+                Style="{StaticResource HeadlineStyle}"
+                Text="Create your account"
+                HorizontalOptions="Center"
+                Margin="0,0,0,16" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Email"
+                Text="{Binding LoginEmail}"
+                Keyboard="Email"
+                IsEnabled="{Binding IsNotBusy}"
+                SemanticProperties.Description="Email" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding LoginEmailError}"
+                IsVisible="{Binding HasLoginEmailError}" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Password"
+                Text="{Binding Password}"
+                IsPassword="True"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Password">
+                <material:TextField.Attachments>
+                    <material:TextFieldPasswordShowHideAttachment />
+                </material:TextField.Attachments>
+            </material:TextField>
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding PasswordError}"
+                IsVisible="{Binding HasPasswordError}" />
+
+            <Label
+                Style="{StaticResource TitleStyle}"
+                Text="Contact"
+                Margin="0,24,0,0" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                Text="Provide at least one contact method" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Phone"
+                Text="{Binding ContactPhone}"
+                Keyboard="Telephone"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Phone" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Contact email"
+                Text="{Binding ContactEmail}"
+                Keyboard="Email"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Contact email" />
+
+            <material:SelectField
+                Style="{StaticResource SelectFieldStyle}"
+                Title="Communicator platform"
+                ItemsSource="{Binding CommunicatorPlatforms}"
+                SelectedItem="{Binding SelectedCommunicatorPlatform}"
+                AllowClear="True"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Communicator platform" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Communicator login"
+                Text="{Binding CommunicatorLogin}"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Communicator login" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding CommunicatorError}"
+                IsVisible="{Binding HasCommunicatorError}" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding ContactError}"
+                IsVisible="{Binding HasContactError}"
+                Margin="0,8,0,0" />
+
+            <Button
+                Style="{StaticResource PrimaryButtonStyle}"
+                Text="Create account"
+                Command="{Binding RegisterCommand}"
+                IsEnabled="{Binding IsNotBusy}"
+                Margin="0,24,0,0"
+                SemanticProperties.Description="Create account" />
+
+            <ActivityIndicator
+                IsRunning="{Binding IsBusy}"
+                IsVisible="{Binding IsBusy}"
+                Margin="0,8,0,0" />
+
+            <Button
+                Style="{StaticResource SecondaryButtonStyle}"
+                Text="Back to login"
+                Command="{Binding GoToLoginCommand}"
+                Margin="0,16,0,0"
+                SemanticProperties.Description="Back to login" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
