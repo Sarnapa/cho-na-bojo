@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<toolkit:Popup
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:system="clr-namespace:System;assembly=mscorlib"
+    xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+    x:TypeArguments="system:Boolean"
+    x:Class="ChoNaBojo.App.Views.Popups.ConfirmDialog"
+    BackgroundColor="Transparent">
+
+    <!--
+        Reusable MD3 destructive-confirm dialog (ui-guidelines §9): SurfaceColor card with an
+        ErrorColor confirm button. Configured entirely via the constructor (title/message/button
+        text) so it can be shared by any future destructive action, not just logout. Returns
+        true (confirmed) / false (cancelled) through Popup<bool>.CloseAsync.
+    -->
+    <Border
+        BackgroundColor="{StaticResource SurfaceColor}"
+        Padding="16"
+        Shadow="{StaticResource CardShadow}"
+        WidthRequest="280">
+        <Border.StrokeShape>
+            <RoundRectangle CornerRadius="16" />
+        </Border.StrokeShape>
+
+        <VerticalStackLayout Spacing="16">
+            <Label x:Name="TitleLabel" Style="{StaticResource TitleStyle}" />
+            <Label x:Name="MessageLabel" Style="{StaticResource BodyStyle}" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button
+                    x:Name="CancelButton"
+                    Grid.Column="0"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    Clicked="OnCancelClicked"
+                    SemanticProperties.Description="Cancel" />
+                <Button
+                    x:Name="ConfirmButton"
+                    Grid.Column="1"
+                    Style="{StaticResource DestructiveButtonStyle}"
+                    Clicked="OnConfirmClicked"
+                    SemanticProperties.Description="Confirm" />
+            </Grid>
+        </VerticalStackLayout>
+    </Border>
+
+</toolkit:Popup>

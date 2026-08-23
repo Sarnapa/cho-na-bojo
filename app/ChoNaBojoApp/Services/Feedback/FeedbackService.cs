@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using CommunityToolkit.Maui;
 using CommunityToolkit.Maui.Alerts;
 using CommunityToolkit.Maui.Core;
+using CommunityToolkit.Maui.Extensions;
+using ChoNaBojo.App.Views.Popups;
 
 namespace ChoNaBojo.App.Services.Feedback;
 
@@ -27,6 +30,20 @@ public class FeedbackService : IFeedbackService
 			Debug.WriteLine($"[{nameof(FeedbackService)}] Snackbar failed, falling back to alert: {ex}");
 			await ShowFallbackAlertAsync(message);
 		}
+	}
+
+	public async Task<bool> ShowConfirmAsync(string title, string message, string confirmText, string cancelText, CancellationToken cancellationToken = default)
+	{
+		Page? page = Application.Current?.Windows.Count > 0 ? Application.Current.Windows[0].Page : null;
+		if (page is null)
+		{
+			// No page to host the popup on — fail closed (never treat "can't ask" as "confirmed").
+			return false;
+		}
+
+		var popup = new ConfirmDialog(title, message, confirmText, cancelText);
+		IPopupResult<bool> result = await page.ShowPopupAsync<bool>(popup, PopupOptions.Empty, cancellationToken);
+		return !result.WasDismissedByTappingOutsideOfPopup && result.Result;
 	}
 	#endregion
 

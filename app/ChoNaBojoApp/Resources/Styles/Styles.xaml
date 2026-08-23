@@ -144,6 +144,34 @@
         </Setter>
     </Style>
 
+    <!-- Destructive confirm (§9): the ErrorColor confirm button in a destructive MD3 dialog
+         (e.g. the logout confirm). Never used for a page-level primary action. -->
+    <Style x:Key="DestructiveButtonStyle" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource ErrorColor}" />
+        <Setter Property="TextColor" Value="{StaticResource OnPrimaryColor}" />
+        <Setter Property="FontFamily" Value="OpenSansSemibold" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="CornerRadius" Value="24" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumWidthRequest" Value="48" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{StaticResource Gray950}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray200}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="PointerOver" />
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
     <!-- =====================  Input fields (§6.A)  ===================== -->
     <!-- Keyed style applied explicitly on every material:TextField instance. -->
     <Style x:Key="TextFieldStyle" TargetType="material:TextField">

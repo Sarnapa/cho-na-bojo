@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Maui;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using UraniumUI;
 using ChoNaBojo.App.Services;
@@ -49,6 +50,7 @@ namespace ChoNaBojo.App
 			builder.Services.AddSingleton<INavigationRootService, NavigationRootService>();
 			builder.Services.AddSingleton<IApiService, ApiService>();
 			builder.Services.AddSingleton<IFeedbackService, FeedbackService>();
+			builder.Services.AddSingleton<SessionExpiryCoordinator>();
 
 			builder.Services.AddTransient<AppShell>();
 			builder.Services.AddTransient<LoadingPage>();
@@ -64,7 +66,13 @@ namespace ChoNaBojo.App
 			builder.Logging.AddDebug();
 #endif
 
-			return builder.Build();
+			MauiApp app = builder.Build();
+
+			// Eagerly resolve so the SessionExpired subscription is live before any page appears
+			// — it is otherwise never resolved by DI (nothing else depends on it).
+			app.Services.GetRequiredService<SessionExpiryCoordinator>();
+
+			return app;
 		}
 
 		// Shared by both named clients so the dev/prod split is defined once.
