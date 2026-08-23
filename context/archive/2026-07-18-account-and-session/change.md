@@ -1,10 +1,10 @@
 ---
 change_id: account-and-session
 title: Account and session
-status: impl_reviewed
+status: archived
 created: 2026-07-18
 updated: 2026-08-24
-archived_at: null
+archived_at: 2026-08-23T23:43:53Z
 ---
 
 ## Notes
