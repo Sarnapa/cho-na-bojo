@@ -1,7 +1,7 @@
 ---
 change_id: account-and-session
 title: Account and session
-status: implemented
+status: impl_reviewed
 created: 2026-07-18
 updated: 2026-08-23
 archived_at: null
