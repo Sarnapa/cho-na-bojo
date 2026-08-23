@@ -13,8 +13,15 @@ public interface ISessionService
 	/// <summary>Loads any persisted session from <see cref="ITokenStore"/> on startup.</summary>
 	Task InitializeAsync();
 
-	/// <summary>Persists and adopts a newly issued session (login/register/refresh).</summary>
+	/// <summary>Persists and adopts a newly issued session from an explicit sign-in (login/register).</summary>
 	Task SetAsync(AuthSession session);
+
+	/// <summary>
+	/// Persists and adopts a session issued by a transparent refresh. Returns <c>false</c> and
+	/// discards it when a sign-out completed while the refresh was in flight — such a refresh is
+	/// stale by definition and must never resurrect the session.
+	/// </summary>
+	Task<bool> TryRenewAsync(AuthSession session);
 
 	/// <summary>
 	/// Clears the local session. When <paramref name="revokeServer"/> is <c>true</c> (explicit

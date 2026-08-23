@@ -30,7 +30,7 @@ A logged-out user launches the app and sees a Login screen (never any app conten
 
 ## What We're NOT Doing
 
-- **No server/API changes** — F-02 owns the auth endpoints; this slice only consumes them.
+- **No server/API changes** — F-02 owns the auth endpoints; this slice only consumes them. *(Narrowed post-implementation to "no changes to auth endpoint contracts or business rules" — see Addendum A.)*
 - **No map or venue UI** (S-02), **no event creation/listing** (S-03/S-04) — the post-login landing is a deliberate minimal placeholder.
 - **No password reset, email verification, OAuth, or "remember me" toggle** — session persistence is always on (token in `SecureStorage`), matching the roadmap.
 - **No automated test project** — verification is manual (documented), mirroring F-02. (No test infra exists; adding it is out of scope for this slice.)
@@ -337,6 +337,28 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 
 - No data migration. Client-side only. `SecureStorage` keys are new; a returning user with no stored keys is simply routed to Login.
 - The counter `MainPage` is superseded by `HomePage`; removing it is optional cleanup — if removed, drop its `AddTransient<MainPage>()` line in `MauiProgram.cs` too.
+
+## Addendum A — Post-implementation deviations (2026-08-24)
+
+Recorded during `/10x-impl-review` triage so this plan stays the source of truth. Contracts and business rules of the auth endpoints were **not** touched.
+
+**A.1 — `server/Program.cs`: `UseHttpsRedirection()` moved into a non-Development branch.**
+The ASP.NET dev certificate's SAN does not cover `10.0.2.2` (the Android emulator's host loopback alias), so an HTTPS redirect breaks the emulator's TLS handshake and makes every client call fail. Development now serves plain HTTP; every non-Development environment still redirects. This was required to make the client work at all against a local server, and it narrows the "No server/API changes" guardrail above to "no changes to auth endpoint contracts or business rules".
+
+**A.2 — `shared/ChoNaBojo.Validation/AuthValidation.cs`: error copy "handle" → "login".**
+Two validation messages were reworded to match the Register screen's "Communicator login" label. Error keys and validation rules are unchanged, so the wire contract and behaviour are identical.
+
+**A.3 — `TokenStore` key layout: one `auth_session` JSON value instead of the `auth_access`/`auth_refresh`/`auth_expires` triple.**
+Three independent `SecureStorage` writes were not atomic: a failed or interrupted save could leave a new access token beside a stale refresh token, and `LoadAsync` would restore that inconsistent session. The session is now serialized to JSON under a single key, so a save is atomic by construction; `SaveAsync` also clears the store on write failure.
+
+**A.4 — Root swap is performed by the page, not the ViewModel.**
+The plan has the ViewModel call `INavigationRootService.SetAppRoot()` on success. The implementation instead raises `LoginSucceeded`/`LoggedOut` and the page (`LoginPage.xaml.cs`) performs the swap. Reason: swapping the root from inside the command tears the page down while the command is still flushing `CanExecuteChanged`. The navigation service and its contract are unchanged — only the caller moved.
+
+**A.5 — `CommunicatorHandle` renamed `CommunicatorLogin` in the client.**
+The `RegisterViewModel` property and all UI copy use "Communicator login". The wire DTO field is unchanged, so the server contract is untouched (this is the client-side half of A.2).
+
+**A.6 — No form-level error property on `LoginViewModel`.**
+The plan's `LoginViewModel` contract lists a form-level error property; it was not implemented. Field-level errors bind to the per-field error properties, and form-level failures (network, unknown, unauthorized) go to the snackbar instead, matching the feedback pattern used across the slice.
 
 ## References
 

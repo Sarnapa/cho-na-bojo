@@ -17,15 +17,15 @@ string appDbConnectionString = ResolveRuntimeAppDbConnectionString(builder.Confi
 string port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 if (!builder.Environment.IsDevelopment())
 {
-  builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+	builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 }
 
 // Configure forwarded headers for Railway's TLS-terminating proxy
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-  options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-  options.KnownIPNetworks.Clear();
-  options.KnownProxies.Clear();
+	options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+	options.KnownIPNetworks.Clear();
+	options.KnownProxies.Clear();
 });
 
 // Add services to the container.
@@ -106,10 +106,10 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-  // Only enforced outside Development: the dev certificate is not trusted by
-  // emulators/devices and its SAN does not cover host aliases such as 10.0.2.2,
-  // so redirecting local debug traffic to HTTPS breaks the TLS handshake.
-  app.UseHttpsRedirection();
+	// Only enforced outside Development: the dev certificate is not trusted by
+	// emulators/devices and its SAN does not cover host aliases such as 10.0.2.2,
+	// so redirecting local debug traffic to HTTPS breaks the TLS handshake.
+	app.UseHttpsRedirection();
 }
 
 app.UseRateLimiter();

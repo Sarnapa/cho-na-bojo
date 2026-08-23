@@ -1,4 +1,4 @@
-using System.Globalization;
+using System.Text.Json;
 
 namespace ChoNaBojo.App.Services.Auth;
 
@@ -7,56 +7,65 @@ namespace ChoNaBojo.App.Services.Auth;
 /// are ever logged. See ui-guidelines/plan Critical Implementation Details for the Android
 /// 10+ main-thread requirement on the first <see cref="SecureStorage"/> access — callers are
 /// responsible for invoking this on the main thread during startup.
+/// The whole session is stored under a single key so a write is atomic: a partial save can
+/// never leave a new access token beside a stale refresh token.
 /// </summary>
-public class TokenStore : ITokenStore
+public class TokenStore: ITokenStore
 {
 	#region Private fields
-	private const string AccessTokenKey = "auth_access";
-	private const string RefreshTokenKey = "auth_refresh";
-	private const string ExpiresKey = "auth_expires";
+	private const string SessionKey = "auth_session";
+	private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 	#endregion
-	
+
 	#region Public methods
 	public async Task<AuthSession?> LoadAsync()
 	{
 		try
 		{
-			string? accessToken = await SecureStorage.Default.GetAsync(AccessTokenKey);
-			string? refreshToken = await SecureStorage.Default.GetAsync(RefreshTokenKey);
-			string? expiresRaw = await SecureStorage.Default.GetAsync(ExpiresKey);
+			string? raw = await SecureStorage.Default.GetAsync(SessionKey);
 
-			if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken) || string.IsNullOrEmpty(expiresRaw))
+			if (string.IsNullOrEmpty(raw))
 			{
 				return null;
 			}
 
-			if (!DateTime.TryParse(expiresRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime expiresUtc))
+			AuthSession? session = JsonSerializer.Deserialize<AuthSession>(raw, JsonOptions);
+
+			if (session is null
+				|| string.IsNullOrEmpty(session.AccessToken)
+				|| string.IsNullOrEmpty(session.RefreshToken))
 			{
 				return null;
 			}
 
-			return new AuthSession(accessToken, refreshToken, expiresUtc);
+			return session;
 		}
 		catch
 		{
-			// Any SecureStorage read failure (platform keystore issue, first-access quirk, etc.)
-			// is treated as "no session" — routes the caller to Login rather than crashing.
+			// Any SecureStorage read or deserialization failure (platform keystore issue,
+			// first-access quirk, layout change) is treated as "no session" — routes the caller
+			// to Login rather than crashing.
 			return null;
 		}
 	}
 
 	public async Task SaveAsync(AuthSession session)
 	{
-		await SecureStorage.Default.SetAsync(AccessTokenKey, session.AccessToken);
-		await SecureStorage.Default.SetAsync(RefreshTokenKey, session.RefreshToken);
-		await SecureStorage.Default.SetAsync(ExpiresKey, session.AccessTokenExpiresUtc.ToString("o", CultureInfo.InvariantCulture));
+		try
+		{
+			await SecureStorage.Default.SetAsync(SessionKey, JsonSerializer.Serialize(session, JsonOptions));
+		}
+		catch
+		{
+			// A failed write must not leave a stale session behind that a later launch would
+			// restore; fall back to "no session".
+			await ClearAsync();
+		}
 	}
 
 	public Task ClearAsync()
 	{
-		SecureStorage.Default.Remove(AccessTokenKey);
-		SecureStorage.Default.Remove(RefreshTokenKey);
-		SecureStorage.Default.Remove(ExpiresKey);
+		SecureStorage.Default.Remove(SessionKey);
 		return Task.CompletedTask;
 	}
 	#endregion

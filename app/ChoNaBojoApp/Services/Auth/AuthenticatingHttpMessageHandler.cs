@@ -25,7 +25,11 @@ public class AuthenticatingHttpMessageHandler : DelegatingHandler
 
 	private readonly ISessionService _sessionService;
 	private readonly IAuthTokenClient _authTokenClient;
-	private readonly SemaphoreSlim _refreshLock = new(1, 1);
+
+	// Static on purpose: the handler is transient and IHttpClientFactory rotates handler chains,
+	// but the resource this guards — the single stored refresh token — is process-global, so the
+	// single-flight guarantee must be process-global too.
+	private static readonly SemaphoreSlim _refreshLock = new(1, 1);
 	#endregion
 
 	#region Constructors
@@ -44,11 +48,23 @@ public class AuthenticatingHttpMessageHandler : DelegatingHandler
 			return await base.SendAsync(request, cancellationToken);
 		}
 
+		// Buffer the body up-front: HttpClient disposes the request content once the response is
+		// received, so a retry clone built afterwards could not re-read it.
+		byte[]? bufferedContent = null;
+		List<KeyValuePair<string, IEnumerable<string>>>? bufferedContentHeaders = null;
+		if (request.Content is not null)
+		{
+			bufferedContent = await request.Content.ReadAsByteArrayAsync(cancellationToken);
+			bufferedContentHeaders = request.Content.Headers.ToList();
+		}
+
 		AuthSession? session = _sessionService.Current;
 		if (session is not null && session.AccessTokenExpiresUtc <= DateTime.UtcNow.AddSeconds(60))
 		{
 			// Pre-flight expiry check: the 15-min access token TTL is enforced here, not just
-			// reactively on 401 — this is the reason `auth_expires` is persisted.
+			// reactively on 401 — this is the reason `auth_expires` is persisted. A transient
+			// failure here is deliberately ignored: the current token may still be valid for a
+			// few more seconds, and if it is not the reactive path below reports the failure.
 			await RefreshAsync(cancellationToken);
 			session = _sessionService.Current;
 		}
@@ -65,21 +81,43 @@ public class AuthenticatingHttpMessageHandler : DelegatingHandler
 			return response;
 		}
 
-		AuthSession? refreshed = await RefreshAsync(cancellationToken);
-		if (refreshed is null)
+		RefreshResult refreshResult = await RefreshAsync(cancellationToken);
+		if (refreshResult.Session is null)
 		{
+			if (refreshResult.IsTransient)
+			{
+				// 429/5xx/transport: the session is intentionally preserved, but the caller must
+				// see a network failure (retry snackbar) rather than a silent 401.
+				response.Dispose();
+				throw new HttpRequestException(
+					"Access token refresh failed transiently (429/5xx/transport). Session preserved; caller should offer a retry.");
+			}
+
 			return response;
 		}
 
 		response.Dispose();
-		HttpRequestMessage retryRequest = await CloneRequestAsync(request);
-		retryRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", refreshed.AccessToken);
+		HttpRequestMessage retryRequest = CloneRequest(request, bufferedContent, bufferedContentHeaders);
+		retryRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", refreshResult.Session.AccessToken);
 		return await base.SendAsync(retryRequest, cancellationToken);
 	}
 	#endregion
 
+	#region Private types
+	private readonly record struct RefreshResult(AuthSession? Session, bool IsTransient)
+	{
+		public static readonly RefreshResult Failed = new(null, false);
+		public static readonly RefreshResult TransientFailure = new(null, true);
+
+		public static RefreshResult Renewed(AuthSession session)
+		{
+			return new RefreshResult(session, false);
+		}
+	}
+	#endregion
+
 	#region Private methods
-	private async Task<AuthSession?> RefreshAsync(CancellationToken cancellationToken)
+	private async Task<RefreshResult> RefreshAsync(CancellationToken cancellationToken)
 	{
 		AuthSession? beforeWait = _sessionService.Current;
 
@@ -91,12 +129,12 @@ public class AuthenticatingHttpMessageHandler : DelegatingHandler
 			// Another waiter may have already refreshed while we queued for the lock.
 			if (current is not null && beforeWait is not null && current.AccessToken != beforeWait.AccessToken)
 			{
-				return current;
+				return RefreshResult.Renewed(current);
 			}
 
 			if (current is null)
 			{
-				return null;
+				return RefreshResult.Failed;
 			}
 
 			RefreshOutcome outcome = await _authTokenClient.RefreshAsync(current.RefreshToken, cancellationToken);
@@ -108,8 +146,13 @@ public class AuthenticatingHttpMessageHandler : DelegatingHandler
 						outcome.Response!.AccessToken,
 						outcome.Response.RefreshToken,
 						outcome.Response.AccessTokenExpiresUtc);
-					await _sessionService.SetAsync(refreshedSession);
-					return refreshedSession;
+					if (!await _sessionService.TryRenewAsync(refreshedSession))
+					{
+						// Signed out while this refresh was in flight — treat as no session.
+						return RefreshResult.Failed;
+					}
+
+					return RefreshResult.Renewed(refreshedSession);
 
 				case RefreshOutcomeStatus.RetryInProgress:
 					// The server already consumed this refresh token and never returns the
@@ -118,21 +161,21 @@ public class AuthenticatingHttpMessageHandler : DelegatingHandler
 					AuthSession? afterConflict = _sessionService.Current;
 					if (afterConflict is not null && afterConflict.AccessToken != current.AccessToken)
 					{
-						return afterConflict;
+						return RefreshResult.Renewed(afterConflict);
 					}
 
 					await _sessionService.SignOutAsync(revokeServer: false);
-					return null;
+					return RefreshResult.Failed;
 
 				case RefreshOutcomeStatus.Invalid:
 					await _sessionService.SignOutAsync(revokeServer: false);
-					return null;
+					return RefreshResult.Failed;
 
 				case RefreshOutcomeStatus.Transient:
 				default:
 					// 429/5xx/transport failure — keep the session; the caller's original
 					// request failure propagates to the caller as a network error.
-					return null;
+					return RefreshResult.TransientFailure;
 			}
 		}
 		finally
@@ -147,18 +190,20 @@ public class AuthenticatingHttpMessageHandler : DelegatingHandler
 		return AnonymousAuthPaths.Any(anonymousPath => path.EndsWith(anonymousPath, StringComparison.OrdinalIgnoreCase));
 	}
 
-	private static async Task<HttpRequestMessage> CloneRequestAsync(HttpRequestMessage request)
+	private static HttpRequestMessage CloneRequest(
+		HttpRequestMessage request,
+		byte[]? bufferedContent,
+		List<KeyValuePair<string, IEnumerable<string>>>? bufferedContentHeaders)
 	{
 		var clone = new HttpRequestMessage(request.Method, request.RequestUri)
 		{
 			Version = request.Version
 		};
 
-		if (request.Content is not null)
+		if (bufferedContent is not null)
 		{
-			byte[] buffer = await request.Content.ReadAsByteArrayAsync();
-			clone.Content = new ByteArrayContent(buffer);
-			foreach (var header in request.Content.Headers)
+			clone.Content = new ByteArrayContent(bufferedContent);
+			foreach (var header in bufferedContentHeaders ?? [])
 			{
 				clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
 			}

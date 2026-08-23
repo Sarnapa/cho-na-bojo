@@ -5,8 +5,20 @@
 - **Scope**: Full plan — Phases 1–4 of 4
 - **Date**: 2026-08-23
 - **Git range**: `7969849..HEAD` (39 files under `app/`, `server/`, `shared/`)
-- **Verdict**: REJECTED
+- **Verdict**: REJECTED → **RESOLVED after triage (2026-08-24)** — 9 of 10 findings fixed, 1 skipped (cosmetic).
 - **Findings**: 1 critical, 6 warnings, 3 observations
+
+## Triage summary (2026-08-24)
+
+| Outcome | Findings |
+|---------|----------|
+| Fixed in code | F1, F2 (Fix A), F3 (Fix A), F4, F6 (Fix A), F7, F8 |
+| Fixed in plan | F5 (Fix A — Addendum A.1/A.2), F10 (Addendum A.4/A.5/A.6) |
+| Skipped | F9 (indentation — cosmetic) |
+
+Post-triage build: `dotnet build solutions/ChoNaBojo.slnx` → **PASS** (0 errors, 17 warnings — down from 23; all CS0168 cleared).
+
+Dimension verdicts after triage: Plan Adherence PASS, Scope Discipline PASS, Safety & Quality PASS, Architecture PASS, Pattern Consistency WARNING (F9 skipped), Success Criteria PASS.
 
 ## Verdicts
 
@@ -51,7 +63,7 @@
   - Tradeoff: `SetAsync` becomes silently lossy in the race window — acceptable, since the discarded token belongs to a family the server is revoking anyway.
   - Confidence: HIGH — `_signOutLock` + `_signedOut` already exist for exactly this class of problem in `SignOutAsync` (`SessionService.cs:63-76`); this closes the other half.
   - Blind spot: `SetAsync` is also the login/register success path; the guard must not block the legitimate first sign-in (it won't — login calls `SetAsync` after a deliberate user action, but the flag starts `true` from `InitializeAsync`, so the guard must be reset on the explicit auth paths).
-- **Decision**: PENDING
+- **Decision**: FIXED — `SetAsync` now acquires `_signOutLock` and always clears `_signedOut` (explicit sign-in wins); new `ISessionService.TryRenewAsync` is used by the refresh path and discards the session when `_signedOut` is already `true`. Handler line 111 returns `null` when renewal is refused. Lock order `_refreshLock → _signOutLock` preserved.
 
 ### F2 — Transient refresh failure (429/5xx) surfaces as a silent `Unauthorized`, not a retry snackbar
 
@@ -70,7 +82,7 @@
   - Tradeoff: Touches the result unions, `ApiService`, and every consuming ViewModel — a wider edit, and `ApiService` still needs the handler to tell it the 401 was transient.
   - Confidence: MEDIUM — cleaner long-term, but does not by itself solve how the handler communicates the cause.
   - Blind spot: Haven't checked how many S-02+ call sites would need the new branch.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `RefreshAsync` now returns a `RefreshResult` (`Session` + `IsTransient`); the reactive 401 path throws `HttpRequestException` on a transient refresh failure, which `ApiService`'s existing catch maps to `Network()` → retry snackbar. Pre-flight refresh still ignores transient failures so a token valid for <60s gets its chance.
 
 ### F3 — Single-flight refresh lock is per-handler-instance; it holds only by accident
 
@@ -89,7 +101,7 @@
   - Tradeoff: Widens `ISessionService`, and moves refresh-outcome classification out of the handler that consumes it — a real refactor across two files.
   - Confidence: MEDIUM — architecturally cleaner, but `SessionService` currently has no knowledge of refresh classification and would grow responsibilities.
   - Blind spot: Haven't traced whether the pre-flight path's `Current` re-read still reads correctly after the move.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `_refreshLock` is now `private static readonly`, with a comment explaining that the guarded resource (the single stored refresh token) is process-global.
 
 ### F4 — Retry clone reads request content *after* the request was already sent
 
@@ -99,7 +111,7 @@
 - **Location**: `app/ChoNaBojoApp/Services/Auth/AuthenticatingHttpMessageHandler.cs:75,157-165`
 - **Detail**: On a successful 401-refresh the handler calls `CloneRequestAsync(request)` *after* `base.SendAsync(request, ...)` has completed, and the clone does `byte[] buffer = await request.Content.ReadAsByteArrayAsync();`. `HttpClient` disposes the request content once the response is received, and non-buffered/one-shot content streams cannot be re-read — so this can throw `ObjectDisposedException` or silently produce an empty body. The bug is **latent today**: the only protected call in this slice is `GET /auth/me`, which has no content. It will fire the first time S-02+ sends a protected `POST`/`PUT` (create event, join request) whose access token has just expired — i.e. it will surface as an intermittent, hard-to-reproduce failure in a later slice.
 - **Fix**: Buffer the content before the first send — call `await request.Content.LoadIntoBufferAsync()` at the top of `SendAsync` when `request.Content is not null`, or build the clone before `base.SendAsync` rather than after.
-- **Decision**: PENDING
+- **Decision**: FIXED — `SendAsync` now snapshots the body bytes and content headers before the first send; `CloneRequestAsync` became the synchronous `CloneRequest(request, bufferedContent, bufferedContentHeaders)` and rebuilds the body from that snapshot.
 
 ### F5 — Unplanned `server/` and `shared/` changes despite "No server/API changes"
 
@@ -121,7 +133,7 @@
   - Tradeoff: Re-introduces a mismatch between the server error text ("handle") and the Register screen label ("login") — a worse user-facing outcome.
   - Confidence: MEDIUM — the copy change is arguably an improvement, so reverting trades correctness for process purity.
   - Blind spot: Haven't checked whether any other UI copy references "handle".
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `plan.md` gained "Addendum A — Post-implementation deviations" (A.1 HTTPS-redirection/emulator-TLS, A.2 validation copy), and the "No server/API changes" bullet is now narrowed to "no changes to auth endpoint contracts or business rules".
 
 ### F6 — `SecureStorage` token triple is written non-atomically with no error handling
 
@@ -140,7 +152,7 @@
   - Tradeoff: Only covers thrown exceptions — a process kill between writes still leaves a mixed triple.
   - Confidence: MEDIUM — narrows the window, does not close it.
   - Blind spot: Haven't measured how likely a mid-save process kill is on Android in practice.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `TokenStore` now stores the whole `AuthSession` as JSON under a single `auth_session` key (atomic write), `SaveAsync` clears the store on write failure. Recorded in `plan.md` Addendum A.3.
 
 ### F7 — JSON deserialization failures are unguarded on every API boundary
 
@@ -150,7 +162,7 @@
 - **Location**: `app/ChoNaBojoApp/Services/ApiService.cs:87,94,103`, `app/ChoNaBojoApp/Services/Auth/AuthTokenClient.cs:35`
 - **Detail**: Every `ReadFromJsonAsync` call sits inside a try block that catches only `HttpRequestException` and `TaskCanceledException`. A malformed body, an HTML error page from a proxy, or a contract drift throws `JsonException`/`NotSupportedException`, which escapes `ApiService` and faults the `[RelayCommand]` task — an unobserved exception with no user feedback. The plan's stated contract is that "no raw `HttpResponseMessage` leaks to ViewModels" and every outcome maps to a typed result; an escaping `JsonException` breaks that guarantee.
 - **Fix**: Add `catch (JsonException)` (and `NotSupportedException`) to the existing catch blocks in `PostAuthAsync`, `GetCurrentUserAsync`, and `AuthTokenClient.RefreshAsync`, mapping to `Unknown()` / `Transient` respectively.
-- **Decision**: PENDING
+- **Decision**: FIXED — added `catch (Exception ex) when (ex is JsonException or NotSupportedException)` to `GetCurrentUserAsync` → `Unknown()`, `PostAuthAsync` → `Unknown()`, and `AuthTokenClient.RefreshAsync` → `Transient()` (a body we cannot parse must never sign the user out).
 
 ### F8 — New code introduces CS0168 build warnings
 
@@ -160,7 +172,7 @@
 - **Location**: `app/ChoNaBojoApp/Services/ApiService.cs:113,117`
 - **Detail**: `catch (HttpRequestException ex)` and `catch (TaskCanceledException ex)` declare `ex` but never use it, producing four `warning CS0168` entries in the solution build (once per target framework). The rest of the file's catch blocks correctly omit the identifier (`ApiService.cs:32,67,71`).
 - **Fix**: Drop the unused `ex` identifiers, or log them — the surrounding code already uses the identifier-less form.
-- **Decision**: PENDING
+- **Decision**: FIXED — removed the unused `ex` identifiers from both catch blocks in `PostAuthAsync`.
 
 ### F9 — Mixed tab/space indentation introduced in touched files
 
@@ -170,7 +182,7 @@
 - **Location**: `server/Program.cs:17-48,102-118`, `app/ChoNaBojoApp/Services/ApiService.cs:18-36`
 - **Detail**: `server/Program.cs` was previously 4-space indented throughout; this change rewrote blocks to a mix of 2-space and tab indentation, producing diff noise in a file whose only intended change was the HTTPS-redirection guard. `ApiService.cs` similarly mixes the pre-existing 2-space style with tab-indented new members. This is cosmetic, but it inflates the diff of an "out of scope" file (F5) and makes future blame/review harder.
 - **Fix**: Normalize indentation in the touched blocks to each file's original convention (or add an `.editorconfig` to settle it project-wide).
-- **Decision**: PENDING
+- **Decision**: SKIPPED — cosmetic only; not worth churning the diff now.
 
 ### F10 — Documented deviations from planned contracts were never written back to the plan
 
@@ -180,4 +192,4 @@
 - **Location**: `app/ChoNaBojoApp/ViewModels/LoginViewModel.cs:137-144`, `app/ChoNaBojoApp/Views/LoginPage.xaml.cs:43-57`, `app/ChoNaBojoApp/ViewModels/RegisterViewModel.cs:43-44,184-190`, `app/ChoNaBojoApp/ViewModels/HomeViewModel.cs:32-38`
 - **Detail**: Three deliberate, well-commented deviations from the plan's contracts: (1) the plan says the ViewModel calls `INavigationRootService.SetAppRoot()` on success, but the implementation raises a `LoginSucceeded`/`LoggedOut` event and the **page** performs the root swap — the code comment explains this avoids tearing down the page while the command is still flushing `CanExecuteChanged`, which is a sound reason; (2) `CommunicatorHandle` was renamed `CommunicatorLogin` in the VM and UI copy (the wire DTO field is unchanged); (3) the plan's `LoginViewModel` contract lists a "form-level error" property that does not exist — form-level failures go to the snackbar instead. All three are reasonable; none are recorded in the plan, so a future reader will see contradictions between plan and code.
 - **Fix**: Add a short "Deviations" addendum to `plan.md` capturing all three with their rationale (fold into the same addendum as F5).
-- **Decision**: PENDING
+- **Decision**: FIXED — recorded in `plan.md` Addendum A as A.4 (page performs the root swap), A.5 (`CommunicatorHandle` → `CommunicatorLogin`, wire DTO unchanged), and A.6 (no form-level error property; snackbar instead).

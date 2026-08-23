@@ -51,9 +51,40 @@ public class SessionService: ISessionService
 
 	public async Task SetAsync(AuthSession session)
 	{
-		await _tokenStore.SaveAsync(session);
-		Current = session;
-		_signedOut = false;
+		await _signOutLock.WaitAsync();
+		try
+		{
+			// An explicit sign-in always wins — it clears any prior signed-out state.
+			await _tokenStore.SaveAsync(session);
+			Current = session;
+			_signedOut = false;
+		}
+		finally
+		{
+			_signOutLock.Release();
+		}
+	}
+
+	public async Task<bool> TryRenewAsync(AuthSession session)
+	{
+		await _signOutLock.WaitAsync();
+		try
+		{
+			if (_signedOut)
+			{
+				// Sign-out won the race: a refresh landing afterwards is stale and must not
+				// re-persist tokens or resurrect Current.
+				return false;
+			}
+
+			await _tokenStore.SaveAsync(session);
+			Current = session;
+			return true;
+		}
+		finally
+		{
+			_signOutLock.Release();
+		}
 	}
 
 	public async Task SignOutAsync(bool revokeServer)

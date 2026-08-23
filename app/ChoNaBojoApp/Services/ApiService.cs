@@ -6,7 +6,7 @@ using ChoNaBojo.Contracts.DTOs;
 
 namespace ChoNaBojo.App.Services;
 
-public class ApiService : IApiService
+public class ApiService: IApiService
 {
 	#region Private fields
 	private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -16,24 +16,24 @@ public class ApiService : IApiService
 
 	#region Constructors
 	public ApiService(IHttpClientFactory httpClientFactory)
-  {
-    _httpClient = httpClientFactory.CreateClient("ChoNaBojoApi");
-  }
+	{
+		_httpClient = httpClientFactory.CreateClient("ChoNaBojoApi");
+	}
 	#endregion
 
 	#region Public methods
 	public async Task<bool> CheckHealthAsync()
-  {
-    try
-    {
+	{
+		try
+		{
 			var response = await _httpClient.GetAsync("/health");
-      return response.IsSuccessStatusCode;
-    }
-    catch (HttpRequestException)
-    {
-      return false;
-    }
-  }
+			return response.IsSuccessStatusCode;
+		}
+		catch (HttpRequestException)
+		{
+			return false;
+		}
+	}
 
 	public Task<AuthResult> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken)
 	{
@@ -71,6 +71,12 @@ public class ApiService : IApiService
 		catch (TaskCanceledException)
 		{
 			return CurrentUserResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			// Malformed body, an HTML error page from a proxy, or contract drift — must map to a
+			// typed result rather than escaping into the caller's command.
+			return CurrentUserResult.Unknown();
 		}
 	}
 	#endregion
@@ -110,13 +116,19 @@ public class ApiService : IApiService
 					return AuthResult.Unknown();
 			}
 		}
-		catch (HttpRequestException ex)
+		catch (HttpRequestException)
 		{
 			return AuthResult.Network();
 		}
-		catch (TaskCanceledException ex)
+		catch (TaskCanceledException)
 		{
 			return AuthResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			// Malformed body, an HTML error page from a proxy, or contract drift — must map to a
+			// typed result rather than escaping into the caller's command.
+			return AuthResult.Unknown();
 		}
 	}
 	#endregion

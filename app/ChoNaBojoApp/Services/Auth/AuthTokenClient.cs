@@ -58,6 +58,12 @@ public class AuthTokenClient : IAuthTokenClient
 		{
 			return RefreshOutcome.Transient();
 		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			// A body we cannot parse says nothing about the refresh token's validity — treat it
+			// as transient so the user is never signed out over a malformed response.
+			return RefreshOutcome.Transient();
+		}
 	}
 
 	public async Task LogoutAsync(string refreshToken, CancellationToken cancellationToken)
