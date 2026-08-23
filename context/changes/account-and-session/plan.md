@@ -399,14 +399,14 @@ Manual-only, mirroring F-02 — no automated test project is added in this slice
 
 #### Automated
 
-- [x] 4.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 4.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
+- [x] 4.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — eb71c84
+- [x] 4.2 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android` — eb71c84
 
 #### Manual
 
-- [x] 4.3 Logout shows MD3 confirm; confirming returns to Login and blocks back-nav
-- [x] 4.4 After logout, relaunch shows Login (session cleared + family revoked)
-- [x] 4.5 Invalid refresh → auto-sign-out to Login + "session expired" snackbar
-- [x] 4.6 Concurrent failing calls result in a single sign-out
-- [x] 4.7 Airplane mode / 429 during a protected call → retry snackbar, session preserved
-- [x] 4.8 Expired access token + valid refresh → transparent refresh, `GET /auth/me` succeeds uninterrupted
+- [x] 4.3 Logout shows MD3 confirm; confirming returns to Login and blocks back-nav — eb71c84
+- [x] 4.4 After logout, relaunch shows Login (session cleared + family revoked) — eb71c84
+- [x] 4.5 Invalid refresh → auto-sign-out to Login + "session expired" snackbar — eb71c84
+- [x] 4.6 Concurrent failing calls result in a single sign-out — eb71c84
+- [x] 4.7 Airplane mode / 429 during a protected call → retry snackbar, session preserved — eb71c84
+- [x] 4.8 Expired access token + valid refresh → transparent refresh, `GET /auth/me` succeeds uninterrupted — eb71c84
