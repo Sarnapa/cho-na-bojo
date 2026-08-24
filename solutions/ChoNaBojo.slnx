@@ -62,6 +62,9 @@
   <Folder Name="/context/changes/">
     <File Path="../context/changes/README.md" />
   </Folder>
+  <Folder Name="/context/changes/map-venue-discovery/">
+    <File Path="../context/changes/map-venue-discovery/change.md" />
+  </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
     <File Path="../context/foundation/lessons.md" />
