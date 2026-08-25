@@ -79,7 +79,7 @@ The one ordering constraint that matters: **Phase 2 must land the Google Maps AP
 
 **Pin hue mapping must run after `VirtualView` is set.** Assign the hue through an added `PropertyMapper` entry on a `MapPinHandler` subclass, never by overriding `CreatePlatformElement()` — see Key Discoveries.
 
-**Marker rebuild on filter change.** MAUI has no marker-diffing API; changing the filter means clearing and repopulating `Map.Pins`. With ≤100 pins this is acceptable, but pins must be added in a single batch (build the list, then assign) rather than one `Add` per venue inside a loop over a bound collection, to avoid a MAUI→native marshaling round trip per pin.
+**Marker rebuild on filter change.** Bind `Map.ItemsSource` to a replacement `VisiblePins` list and render each item through an `ItemTemplate` that creates a `VenuePin`. Build the complete list first, then replace the property once per filter change so MAUI performs one native marker rebuild rather than rebuilding after every `Map.Pins.Add()`.
 
 ## Phase 1: Server — venue & sport read API
 
@@ -103,7 +103,7 @@ Expose the seeded reference data over the existing authorized `/api` group as tw
 
 **Intent**: Serve the full venue list and the sport lookup as read-only, authorized endpoints.
 
-**Contract**: `public static IEndpointRouteBuilder MapVenueEndpoints(this IEndpointRouteBuilder endpoints)` following `AuthEndpoints.cs:15`. Maps `GET /venues` (`WithName("VenuesList")`) and `GET /sports` (`WithName("SportsList")`) onto the passed builder — authorization is **inherited from the `/api` group**, so no per-endpoint `RequireAuthorization()` is needed. Both handlers take `ChoNaBojoContext` and `CancellationToken`, use `AsNoTracking()`, and project directly into the DTOs. Venue projection reads `v.Location.Y` as latitude and `v.Location.X` as longitude (NetTopologySuite `Point` is X=longitude, Y=latitude — getting this backwards puts every Warsaw venue in Somalia) and includes `v.VenueSports.Select(vs => vs.SportId)`. Sports are ordered by `Id`, venues by `Name`.
+**Contract**: `public static IEndpointRouteBuilder MapVenueEndpoints(this IEndpointRouteBuilder endpoints)` following `AuthEndpoints.cs:15`. Maps `GET /venues` (`WithName("VenuesList")`) and `GET /sports` (`WithName("SportsList")`) onto the passed builder — authorization is **inherited from the `/api` group**, so no per-endpoint `RequireAuthorization()` is needed. Both handlers take `ChoNaBojoContext` and `CancellationToken`, use `AsNoTracking()`, and project directly into the DTOs. Venue projection reads `v.Location.Y` as latitude and `v.Location.X` as longitude (NetTopologySuite `Point` is X=longitude, Y=latitude — getting this backwards puts every Warsaw venue in Somalia) and includes `v.VenueSports.Select(vs => vs.SportId).ToList()` so the value matches `VenueResponse`'s `IReadOnlyList<int>` contract. Sports are ordered by `Id`, venues by `Name`.
 
 This file carries the scale caveat comment described in "What We're NOT Doing".
 
@@ -174,7 +174,7 @@ Add the map dependency, get a Google Maps API key into the manifest without comm
 
 **File**: `secrets/maps.props` (new, untracked)
 
-**Contract**: A minimal MSBuild file setting `<GoogleMapsApiKey>` in a `PropertyGroup`. **Never committed.** The plan's implementer creates it locally; `AGENTS.md` gains a short "Google Maps API key" note describing how to obtain one (GCP project → enable Maps SDK for Android → restrict to package `com.cho_na_bojo` + signing cert) and where to put it.
+**Contract**: A minimal MSBuild file setting `<GoogleMapsApiKey>` in a `PropertyGroup`. **Never committed.** The plan's implementer creates it locally with a development key restricted to package `com.cho_na_bojo` and the Android debug certificate SHA-1. `AGENTS.md` gains a short "Google Maps API key" note describing how to enable Maps SDK for Android, create the restricted development key, place it in `secrets/maps.props`, and obtain the debug SHA-1 with `keytool -list -v -alias androiddebugkey -keystore "$env:USERPROFILE\.android\debug.keystore" -storepass android -keypass android`. It separately documents that CI uses a production key restricted to the same package and the release signing certificate SHA-1.
 
 #### 4. CI wiring
 
@@ -232,7 +232,7 @@ Replace the Home placeholder with the map, center it on the user (Warsaw fallbac
 
 **Intent**: Map a venue to a marker hue. Presentation-only, so it stays in the app — not in `Contracts` (per `lessons.md`, shared projects carry cross-boundary contracts, not client rendering choices).
 
-**Contract**: `static float HueFor(IReadOnlyList<int> sportIds, int? selectedSportId)`. When a sport filter is active, return that sport's hue. When a venue supports exactly one sport, return that sport's hue. When it supports several, return the multi-sport hue. Keyed on the stable `Sport.Code` (never the Polish display name). Proposed values, tunable:
+**Contract**: `static float HueFor(IReadOnlyList<int> sportIds, int? selectedSportId, IReadOnlyDictionary<int, string> sportCodesById)`. Build `sportCodesById` once in `MapViewModel` from the cached `SportResponse` values. When a sport filter is active, resolve its ID through the lookup and return that code's hue. When a venue supports exactly one sport, resolve that ID and return its code's hue. When it supports several, return the multi-sport hue. A missing ID or unknown code also returns the multi-sport/brand-green hue rather than throwing. The palette is keyed on stable `Sport.Code` values, never Polish display names. Proposed values, tunable:
 
 | Sport | Hue | Sport | Hue |
 |---|---|---|---|
@@ -249,7 +249,7 @@ This file carries the deferred-work note: from .NET 11, replace hue encoding wit
 
 **File**: `app/ChoNaBojoApp/Views/Maps/VenuePin.cs` (new)
 
-**Contract**: `public sealed class VenuePin : Pin` adding `float Hue` and `int VenueId`. A plain property suffices (set once at construction; no binding). `VenueId` lets the tap handler resolve the venue without matching on `Label`.
+**Contract**: `public sealed class VenuePin : Pin` adding bindable `float Hue` and `int VenueId` properties backed by `BindableProperty` definitions because the map `ItemTemplate` binds both values. `VenueId` lets the tap handler resolve the venue without matching on `Label`.
 
 **File**: `app/ChoNaBojoApp/Platforms/Android/VenuePinHandler.cs` (new)
 
@@ -261,13 +261,13 @@ This file carries the deferred-work note: from .NET 11, replace hue encoding wit
 
 **Intent**: Host the map, its chrome, and the three screen states from ui-guidelines §10.
 
-**Contract**: `ContentPage` with `x:DataType="viewModels:MapViewModel"`, `xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"`. Root `Grid` layering, bottom to top: the `maps:Map` (named, `IsShowingUser` bound), the chip row placeholder (Phase 5), the address box and banner placeholders (Phase 5), the bottom sheet (Phase 4), and centered loading/error overlays bound to the view model. A **Log out** `ToolbarItem` replaces `HomePage`'s button, invoking the same confirm-then-`SignOutAsync` flow and root swap that `HomePage.xaml.cs` performs today — including awaiting `LogoutCommand.ExecutionTask` before `SetAuthRoot()` to avoid the null `PlatformView` noted in that file.
+**Contract**: `ContentPage` with `x:DataType="viewModels:MapViewModel"`, `xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"`. Root `Grid` layering, bottom to top: the `maps:Map` (named, `IsShowingUser` bound), the chip row placeholder (Phase 5), the address box and banner placeholders (Phase 5), the bottom sheet (Phase 4), and centered loading/error overlays bound to the view model. Bind `Map.ItemsSource` to `VisiblePins`; its typed `ItemTemplate` creates `VenuePin` instances and binds `VenueId`, `Hue`, `Location`, `Label`, and `Address`. A **Log out** `ToolbarItem` replaces `HomePage`'s button, invoking the same confirm-then-`SignOutAsync` flow and root swap that `HomePage.xaml.cs` performs today — including awaiting `LogoutCommand.ExecutionTask` before `SetAuthRoot()` to avoid the null `PlatformView` noted in that file.
 
-Pins are populated from code-behind (the `Map.Pins` collection has no bindable-items API in .NET 10), rebuilt as one batch whenever the view model signals the visible set changed. Every interactive element sets `SemanticProperties.Description`; all sizing uses the 8pt grid and `{StaticResource}` tokens only.
+The view model exposes `IReadOnlyList<VenuePinViewData> VisiblePins`, where the internal presentation record carries `VenueId`, `Hue`, `Location`, `Label`, and `Address`. Build a complete replacement list from cached venues and raise one property change whenever the visible set or coloring changes; do not mutate `Map.Pins` from code-behind. Every interactive element sets `SemanticProperties.Description`; all sizing uses the 8pt grid and `{StaticResource}` tokens only.
 
 **File**: `app/ChoNaBojoApp/ViewModels/MapViewModel.cs` (new)
 
-**Contract**: Extends `ViewModelBase`. `[RelayCommand] AppearingAsync` resolves location and loads the catalog **concurrently**, then exposes `VisibleVenues`. Observable state: `IsLoading`, `HasError`, `ErrorMessage`, `InitialCenter`, `LocationDenied`, `SelectedSportId`. Location flow: check then request `Permissions.LocationWhenInUse` on the main thread; on `Granted`, `GetLastKnownLocationAsync()` and fall back to `GetLocationAsync(Medium, 8s)`; on denial set `LocationDenied` and center on Warsaw (52.2297, 21.0122) at roughly a 5 km radius. Catalog failures surface the §10 error state with a `Retry` command; they never crash and never leave a blank map with no explanation.
+**Contract**: Extends `ViewModelBase`. `[RelayCommand] AppearingAsync` resolves location and loads the catalog **concurrently**, then builds one ID→code lookup from the cached sports and exposes `VisibleVenues`. Observable state: `IsLoading`, `HasError`, `ErrorMessage`, `InitialCenter`, `LocationDenied`, `SelectedSportId`. Location flow: check then request `Permissions.LocationWhenInUse` on the main thread; on `Granted`, `GetLastKnownLocationAsync()` and fall back to `GetLocationAsync(Medium, 8s)`; on denial set `LocationDenied` and center on Warsaw (52.2297, 21.0122) at roughly a 5 km radius. Catalog failures surface the §10 error state with a `Retry` command; they never crash and never leave a blank map with no explanation.
 
 #### 4. Navigation swap
 
@@ -355,7 +355,7 @@ Add the single-select chip row and the location-denied address fallback — the 
 
 **Contract**: A horizontally scrolling `CollectionView` pinned above the map, bound to a chip collection built from the cached sports with a leading **"All"** chip selected by default. Chip visuals per §6E: height `48`, `CornerRadius="24"`, `8` spacing, sport Material Symbol icon left of the name; unselected = `SurfaceColor` background + `DividerColor` border + `OnSurfaceColor` text, selected = `PrimaryColor` background + `OnPrimaryColor` text. Selection is **single-select** — choosing a sport clears any other, and "All" clears the filter.
 
-`SelectedSportId` drives `VisibleVenues`, which filters to venues whose `SportIds` contain it; non-matching venues are removed from the map entirely. Pins are rebuilt as one batch, recolored via `SportPinPalette.HueFor(..., selectedSportId)` so every visible pin takes the selected sport's color. Filtering is pure in-memory over the cached list — **no network call on filter change**. An active filter that matches nothing shows the §10 empty state.
+`SelectedSportId` drives `VisibleVenues`, which filters to venues whose `SportIds` contain it; non-matching venues are removed from the map entirely. Build a complete replacement `VisiblePins` list and recolor each item via `SportPinPalette.HueFor(sportIds, selectedSportId, sportCodesById)` so every visible pin takes the selected sport's color; assigning the list once lets `ItemsSource` trigger one marker rebuild. Filtering is pure in-memory over the cached list — **no network call on filter change**. An active filter that matches nothing shows the §10 empty state.
 
 #### 2. Manual-address fallback
 
@@ -363,7 +363,7 @@ Add the single-select chip row and the location-denied address fallback — the 
 
 **Intent**: Satisfy FR-004's fallback for users who deny location permission.
 
-**Contract**: A `material:TextField` (`TextFieldStyle`) at the top of the screen plus a dismissible info banner, both visible only when `LocationDenied` is true. Banner styling follows ui-guidelines §9's in-app banner: `SurfaceColor` with `CardShadow`. A `SearchAddressCommand` — triggered by an explicit submit, never per keystroke — calls `Geocoding.Default.GetLocationsAsync(address)` and recenters the map on the first result via `MoveToRegion`. Empty results or an exception surface a "Couldn't find that address" snackbar through the existing `IFeedbackService`; the geocoder throws `IOException` on transient failures, so catch broadly rather than assuming a null return.
+**Contract**: A `material:TextField` (`TextFieldStyle`) at the top of the screen plus a dismissible info banner, both visible only when `LocationDenied` is true. Banner styling follows ui-guidelines §9's in-app banner: `SurfaceColor` with `CardShadow`. A `SearchAddressCommand` — triggered by an explicit submit, never per keystroke — calls `Geocoding.Default.GetLocationsAsync(address)` and recenters the map on the first result via `MoveToRegion`. Empty results and documented geocoding failures (`IOException`, `FeatureNotSupportedException`, and `PermissionException`) surface a "Couldn't find that address" snackbar through the existing `IFeedbackService`. Do not catch cancellation or unexpected exceptions here; let them propagate through the established command/error path rather than presenting a misleading address-not-found message.
 
 Record in code that empty results are **expected on emulators without Google Play Services**, so this path must be tested on a Google APIs image.
 
@@ -418,14 +418,15 @@ No test projects exist in this repo and none are added here (consistent with F-0
 
 ## Performance Considerations
 
-The 2-second map NFR is met structurally rather than through optimization: all venue data is fetched once per session, so pan, zoom, and filter operations are pure local work. Location resolution runs concurrently with the venue fetch so startup latency is the max of the two, not the sum, and `GeolocationAccuracy.Medium` with an 8-second cap prevents a GPS fix from dominating. Pin population is batched to avoid one MAUI→native marshaling round trip per marker; at 100 pins no clustering is warranted, but clustering becomes the first thing to add if the venue set grows substantially.
+The 2-second map NFR is met structurally rather than through optimization: all venue data is fetched once per session, so pan, zoom, and filter operations are pure local work. Location resolution runs concurrently with the venue fetch so startup latency is the max of the two, not the sum, and `GeolocationAccuracy.Medium` with an 8-second cap prevents a GPS fix from dominating. Each filter change builds a complete `VisiblePins` replacement list before assigning it to `Map.ItemsSource`, avoiding the O(n²) native churn caused by repeated `Map.Pins.Add()` calls. At 100 pins no clustering is warranted, but clustering becomes the first thing to add if the venue set grows substantially.
 
 ## Migration Notes
 
 No database migration — this slice only reads F-01's seeded tables. Two operational prerequisites are **not** code and must be done by hand:
 
-1. A Google Cloud project with billing enabled, the **Maps SDK for Android** enabled, and an API key restricted to package `com.cho_na_bojo` plus the release signing certificate's SHA-1.
-2. A `GOOGLE_MAPS_API_KEY` GitHub repository secret for the Android release workflow.
+1. A Google Cloud project with billing enabled and the **Maps SDK for Android** enabled.
+2. A development API key restricted to package `com.cho_na_bojo` plus the Android debug certificate SHA-1, stored only in local `secrets/maps.props`.
+3. A production API key restricted to package `com.cho_na_bojo` plus the release signing certificate SHA-1, stored as the `GOOGLE_MAPS_API_KEY` GitHub repository secret for the Android release workflow.
 
 `HomePage`/`HomeViewModel` are deleted rather than deprecated; nothing outside `AppShell.xaml` and `MauiProgram.cs` references them.
 

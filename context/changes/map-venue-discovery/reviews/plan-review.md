@@ -4,18 +4,18 @@
 - **Plan**: `context/changes/map-venue-discovery/plan.md`
 - **Mode**: Deep
 - **Date**: 2026-08-25
-- **Verdict**: REVISE
-- **Findings**: 4 critical, 1 warning, 0 observations
+- **Verdict**: SOUND
+- **Findings**: 4 critical, 1 warning, 0 observations — all fixed
 
 ## Verdicts
 
 | Dimension | Verdict |
 |-----------|---------|
-| End-State Alignment | WARNING |
+| End-State Alignment | PASS |
 | Lean Execution | PASS |
-| Architectural Fitness | WARNING |
-| Blind Spots | FAIL |
-| Plan Completeness | FAIL |
+| Architectural Fitness | PASS |
+| Blind Spots | PASS |
+| Plan Completeness | PASS |
 
 ## Grounding
 
@@ -42,7 +42,7 @@ Additional verification: Maps 10.0.100 restores beside Controls 10.0.71; the Win
   - Tradeoff: O(n²) native churn may violate the instant-filter/2s goal.
   - Confidence: HIGH — collection and handler behavior are verified.
   - Blind spot: Performance on target Android hardware is unmeasured.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A
 
 ### F2 — Venue DTO projection does not compile
 
@@ -52,7 +52,7 @@ Additional verification: Maps 10.0.100 restores beside Controls 10.0.71; the Win
 - **Location**: Phase 1 §2 — Venue endpoints
 - **Detail**: `VenueResponse` requires `IReadOnlyList<int>`, but the specified `v.VenueSports.Select(vs => vs.SportId)` is `IEnumerable<int>`. A matching EF Core 10 probe fails with CS1503; adding `ToList()` compiles and translates.
 - **Fix**: Specify `v.VenueSports.Select(vs => vs.SportId).ToList()`.
-- **Decision**: PENDING
+- **Decision**: FIXED
 
 ### F3 — Release-only API-key restriction breaks debug maps
 
@@ -62,7 +62,7 @@ Additional verification: Maps 10.0.100 restores beside Controls 10.0.71; the Win
 - **Location**: Phase 2 §3; Migration Notes
 - **Detail**: The setup instructions restrict the key to package `com.cho_na_bojo` plus the release signing certificate, but Phase 3 verification uses a Debug emulator build signed by the Android debug certificate. Google rejects that combination, producing the exact silent grey map the plan warns about.
 - **Fix**: Require both debug and release package/SHA-1 restrictions (or separate dev/prod keys), and document how to obtain the debug SHA-1.
-- **Decision**: PENDING
+- **Decision**: FIXED
 
 ### F4 — Sport palette contract cannot use Sport.Code
 
@@ -72,7 +72,7 @@ Additional verification: Maps 10.0.100 restores beside Controls 10.0.71; the Win
 - **Location**: Phase 3 §1 — Sport→hue palette
 - **Detail**: `HueFor` receives only sport IDs and `selectedSportId`, while the plan requires palette lookup by `Sport.Code`. The method has no way to obtain a code, so the implementer must invent an unstated mapping or violate the contract.
 - **Fix**: Add an ID→code lookup parameter built once from cached `SportResponse` values, and specify unknown-code fallback behavior.
-- **Decision**: PENDING
+- **Decision**: FIXED
 
 ### F5 — Broad geocoding catch hides cancellation and defects
 
@@ -82,4 +82,9 @@ Additional verification: Maps 10.0.100 restores beside Controls 10.0.71; the Win
 - **Location**: Phase 5 §2 — Manual-address fallback
 - **Detail**: “Catch broadly” conflicts with the repository’s filtered exception pattern and would turn cancellation or programming defects into a misleading “Couldn’t find that address” snackbar.
 - **Fix**: Catch documented geocoding failures explicitly, including `IOException` and unsupported/permission cases; let cancellation and unexpected defects propagate through the established command/error path.
-- **Decision**: PENDING
+- **Decision**: FIXED
+
+## Triage Summary
+
+- **Fixed**: F1 (Fix A), F2, F3, F4, F5
+- **Verdict after fixes**: SOUND
