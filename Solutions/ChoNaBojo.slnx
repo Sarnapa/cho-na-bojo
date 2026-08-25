@@ -67,6 +67,9 @@
     <File Path="../context/changes/map-venue-discovery/plan-brief.md" />
     <File Path="../context/changes/map-venue-discovery/plan.md" />
   </Folder>
+  <Folder Name="/context/changes/map-venue-discovery/reviews/">
+    <File Path="../context/changes/map-venue-discovery/reviews/plan-review.md" />
+  </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
     <File Path="../context/foundation/lessons.md" />

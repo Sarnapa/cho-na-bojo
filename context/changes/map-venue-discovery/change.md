@@ -1,7 +1,7 @@
 ---
 change_id: map-venue-discovery
 title: Map venue discovery
-status: planned
+status: plan_reviewed
 created: 2026-08-24
 updated: 2026-08-25
 archived_at: null
