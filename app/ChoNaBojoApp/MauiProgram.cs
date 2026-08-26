@@ -6,6 +6,7 @@ using ChoNaBojo.App.Services;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Navigation;
+using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.ViewModels;
 using ChoNaBojo.App.Views;
 
@@ -21,6 +22,9 @@ namespace ChoNaBojo.App
 				.UseUraniumUI()
 				.UseUraniumUIMaterial()
 				.UseMauiCommunityToolkit()
+				// Unconditional across all TFMs: Windows has a real (Azure Maps-backed) handler
+				// that renders blank without a token rather than failing to build or crashing.
+				.UseMauiMaps()
 				.ConfigureFonts(fonts =>
 				{
 					fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -51,6 +55,7 @@ namespace ChoNaBojo.App
 			builder.Services.AddSingleton<IApiService, ApiService>();
 			builder.Services.AddSingleton<IFeedbackService, FeedbackService>();
 			builder.Services.AddSingleton<SessionExpiryCoordinator>();
+			builder.Services.AddSingleton<IVenueCatalog, VenueCatalog>();
 
 			builder.Services.AddTransient<AppShell>();
 			builder.Services.AddTransient<LoadingPage>();

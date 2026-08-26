@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ChoNaBojo.App.Services.Auth;
+using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.Contracts.DTOs;
 
 namespace ChoNaBojo.App.Services;
@@ -77,6 +78,76 @@ public class ApiService: IApiService
 			// Malformed body, an HTML error page from a proxy, or contract drift — must map to a
 			// typed result rather than escaping into the caller's command.
 			return CurrentUserResult.Unknown();
+		}
+	}
+
+	public async Task<VenueCatalogResult> GetVenuesAsync(CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.GetAsync("/api/venues", cancellationToken);
+
+			if (response.IsSuccessStatusCode)
+			{
+				var body = await response.Content.ReadFromJsonAsync<List<VenueResponse>>(JsonOptions, cancellationToken);
+				return body is null ? VenueCatalogResult.Unknown() : VenueCatalogResult.Success(body);
+			}
+
+			if (response.StatusCode == HttpStatusCode.Unauthorized)
+			{
+				return VenueCatalogResult.Unauthorized();
+			}
+
+			return VenueCatalogResult.Unknown();
+		}
+		catch (HttpRequestException)
+		{
+			return VenueCatalogResult.Network();
+		}
+		catch (TaskCanceledException)
+		{
+			return VenueCatalogResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			// Malformed body, an HTML error page from a proxy, or contract drift — must map to a
+			// typed result rather than escaping into the caller's command.
+			return VenueCatalogResult.Unknown();
+		}
+	}
+
+	public async Task<SportCatalogResult> GetSportsAsync(CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.GetAsync("/api/sports", cancellationToken);
+
+			if (response.IsSuccessStatusCode)
+			{
+				var body = await response.Content.ReadFromJsonAsync<List<SportResponse>>(JsonOptions, cancellationToken);
+				return body is null ? SportCatalogResult.Unknown() : SportCatalogResult.Success(body);
+			}
+
+			if (response.StatusCode == HttpStatusCode.Unauthorized)
+			{
+				return SportCatalogResult.Unauthorized();
+			}
+
+			return SportCatalogResult.Unknown();
+		}
+		catch (HttpRequestException)
+		{
+			return SportCatalogResult.Network();
+		}
+		catch (TaskCanceledException)
+		{
+			return SportCatalogResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			// Malformed body, an HTML error page from a proxy, or contract drift — must map to a
+			// typed result rather than escaping into the caller's command.
+			return SportCatalogResult.Unknown();
 		}
 	}
 	#endregion

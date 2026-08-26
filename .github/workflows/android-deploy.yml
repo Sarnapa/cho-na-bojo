@@ -76,7 +76,8 @@ jobs:
             -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS" \
             -p:AndroidSigningKeyPass="$ANDROID_KEY_PASSWORD" \
             -p:AndroidSigningStorePass="$ANDROID_KEYSTORE_PASSWORD" \
-            -p:AndroidPackageFormats=aab
+            -p:AndroidPackageFormats=aab \
+            -p:GoogleMapsApiKey=${{ secrets.GOOGLE_MAPS_API_KEY }}
 
       - name: Locate signed AAB
         id: aab

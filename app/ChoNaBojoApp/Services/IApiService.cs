@@ -1,4 +1,5 @@
 using ChoNaBojo.App.Services.Auth;
+using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.Contracts.DTOs;
 
 namespace ChoNaBojo.App.Services;
@@ -17,4 +18,8 @@ public interface IApiService
   Task<AuthResult> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
 
   Task<CurrentUserResult> GetCurrentUserAsync(CancellationToken cancellationToken);
+
+  Task<VenueCatalogResult> GetVenuesAsync(CancellationToken cancellationToken);
+
+  Task<SportCatalogResult> GetSportsAsync(CancellationToken cancellationToken);
 }
