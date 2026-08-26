@@ -452,17 +452,17 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 
 #### Automated
 
-- [ ] 1.1 Solution builds
-- [ ] 1.2 API starts without error
-- [ ] 1.3 GET /api/venues unauthenticated returns 401
-- [ ] 1.4 GET /api/sports unauthenticated returns 401
-- [ ] 1.5 GET /api/venues authenticated returns 200 with 100 items
-- [ ] 1.6 GET /api/sports authenticated returns 200 with 10 items
-- [ ] 1.7 Venue id 1 coordinates land in Warsaw (X/Y not transposed)
+- [x] 1.1 Solution builds
+- [x] 1.2 API starts without error
+- [x] 1.3 GET /api/venues unauthenticated returns 401
+- [x] 1.4 GET /api/sports unauthenticated returns 401
+- [x] 1.5 GET /api/venues authenticated returns 200 with 100 items
+- [x] 1.6 GET /api/sports authenticated returns 200 with 10 items
+- [x] 1.7 Venue id 1 coordinates land in Warsaw (X/Y not transposed)
 
 #### Manual
 
-- [ ] 1.8 Venue payload small enough for a single request
+- [x] 1.8 Venue payload small enough for a single request
 
 ### Phase 2: App plumbing — Maps package, API key, permissions, typed client
 

@@ -9,6 +9,7 @@ using Npgsql;
 using ChoNaBojo.Server.Auth;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Seeding;
+using ChoNaBojo.Server.Venues;
 
 var builder = WebApplication.CreateBuilder(args);
 string appDbConnectionString = ResolveRuntimeAppDbConnectionString(builder.Configuration.GetConnectionString("AppDb"));
@@ -119,9 +120,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy" }))
 
 app.MapAuthEndpoints();
 
-// Protected domain seam: future feature endpoints (S-03+) map onto this group to inherit authorization.
 var apiGroup = app.MapGroup("/api")
 	.RequireAuthorization();
+apiGroup.MapVenueEndpoints();
 
 app.Run();
 
