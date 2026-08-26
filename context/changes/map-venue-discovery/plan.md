@@ -468,15 +468,15 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 
 #### Automated
 
-- [x] 2.1 Android head builds
-- [x] 2.2 Windows head builds
-- [x] 2.3 No API key or secrets/maps.props in tracked files
-- [x] 2.4 Built manifest contains the substituted key
+- [x] 2.1 Android head builds — c5c6f75
+- [x] 2.2 Windows head builds — c5c6f75
+- [x] 2.3 No API key or secrets/maps.props in tracked files — c5c6f75
+- [x] 2.4 Built manifest contains the substituted key — c5c6f75
 
 #### Manual
 
-- [x] 2.5 App launches and existing login flow is unchanged
-- [x] 2.6 Build succeeds with secrets/maps.props absent
+- [x] 2.5 App launches and existing login flow is unchanged — c5c6f75
+- [x] 2.6 Build succeeds with secrets/maps.props absent — c5c6f75
 
 ### Phase 3: Map screen with venue pins
 
