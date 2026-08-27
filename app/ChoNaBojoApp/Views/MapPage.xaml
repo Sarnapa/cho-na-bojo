@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.MapPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"
+    xmlns:mapViews="clr-namespace:ChoNaBojo.App.Views.Maps"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:MapViewModel"
+    Title="Map"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem
+            Text="Log out"
+            Command="{Binding LogoutCommand}"
+            IsEnabled="{Binding IsNotBusy}"
+            SemanticProperties.Description="Log out" />
+    </ContentPage.ToolbarItems>
+
+    <Grid>
+        <maps:Map
+            x:Name="VenueMap"
+            ItemsSource="{Binding VisiblePins}"
+            IsShowingUser="{Binding IsShowingUser}"
+            SemanticProperties.Description="Map of nearby sports venues">
+            <maps:Map.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:VenuePinViewData">
+                    <mapViews:VenuePin
+                        VenueId="{Binding VenueId}"
+                        Hue="{Binding Hue}"
+                        Location="{Binding Location}"
+                        Label="{Binding Label}"
+                        Address="{Binding Address}" />
+                </DataTemplate>
+            </maps:Map.ItemTemplate>
+        </maps:Map>
+
+        <Grid
+            BackgroundColor="{StaticResource SurfaceColor}"
+            IsVisible="{Binding IsLoading}">
+            <Border
+                Margin="16"
+                Padding="16"
+                MaximumWidthRequest="320"
+                HorizontalOptions="Center"
+                VerticalOptions="Center"
+                BackgroundColor="{StaticResource SurfaceColor}"
+                Shadow="{StaticResource CardShadow}"
+                Stroke="{StaticResource DividerColor}"
+                StrokeShape="RoundRectangle 16">
+                <VerticalStackLayout Spacing="16">
+                    <ActivityIndicator
+                        IsRunning="{Binding IsLoading}"
+                        SemanticProperties.Description="Loading venues" />
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        HorizontalTextAlignment="Center"
+                        Text="Loading nearby venues..." />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <Border
+            Margin="16"
+            Padding="16"
+            MaximumWidthRequest="320"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            BackgroundColor="{StaticResource SurfaceColor}"
+            Shadow="{StaticResource CardShadow}"
+            Stroke="{StaticResource ErrorColor}"
+            StrokeShape="RoundRectangle 16"
+            IsVisible="{Binding HasError}">
+            <VerticalStackLayout Spacing="16">
+                <Label
+                    Style="{StaticResource HeadlineStyle}"
+                    HorizontalTextAlignment="Center"
+                    Text="!"
+                    TextColor="{StaticResource ErrorColor}"
+                    SemanticProperties.Description="Error" />
+                <Label
+                    Style="{StaticResource BodyStyle}"
+                    HorizontalTextAlignment="Center"
+                    Text="{Binding ErrorMessage}" />
+                <Button
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Text="Retry"
+                    Command="{Binding RetryCommand}"
+                    IsEnabled="{Binding IsNotBusy}"
+                    SemanticProperties.Description="Retry loading venues" />
+            </VerticalStackLayout>
+        </Border>
+    </Grid>
+
+</ContentPage>

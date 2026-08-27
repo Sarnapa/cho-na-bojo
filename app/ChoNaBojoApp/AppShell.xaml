@@ -7,8 +7,8 @@
     Title="ChoNaBojoApp">
 
     <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate views:HomePage}"
-        Route="HomePage" />
+        Title="Map"
+        ContentTemplate="{DataTemplate views:MapPage}"
+        Route="MapPage" />
 
 </Shell>

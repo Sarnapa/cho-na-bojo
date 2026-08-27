@@ -38,7 +38,7 @@ This slice is what consumes it. Endpoints follow the `MapXEndpoints(this IEndpoi
 
 ## Desired End State
 
-A logged-in user opens the app and lands directly on the map. It centers on their location if permission is granted, otherwise on Warsaw with a dismissible banner and an address box that recenters the map on submit. All 100 venues render as pins — colored by sport for single-sport venues, brand green for multi-sport ones. Tapping a pin opens a bottom sheet with the venue's name, address, description and supported sports, plus a disabled "Create event" button marking where S-03 will land. A chip row pinned above the map filters to one discipline at a time, hiding non-matching venues and recoloring the rest; "All" is selected by default. Venue and sport data is fetched once per app session and every subsequent filter or pan is instant.
+A logged-in user opens the app and lands directly on the map. It centers on their location if permission is granted, otherwise on Warsaw with a dismissible banner and an address box that recenters the map on submit. All 100 venues render as pins — colored by sport for single-sport venues, red orange for multi-sport ones. Tapping a pin opens a bottom sheet with the venue's name, address, description and supported sports, plus a disabled "Create event" button marking where S-03 will land. A chip row pinned above the map filters to one discipline at a time, hiding non-matching venues and recoloring the rest; "All" is selected by default. Venue and sport data is fetched once per app session and every subsequent filter or pan is instant.
 
 Verified by: launching the app on an Android emulator (Google APIs image) and walking the manual script in "Testing Strategy".
 
@@ -232,16 +232,16 @@ Replace the Home placeholder with the map, center it on the user (Warsaw fallbac
 
 **Intent**: Map a venue to a marker hue. Presentation-only, so it stays in the app — not in `Contracts` (per `lessons.md`, shared projects carry cross-boundary contracts, not client rendering choices).
 
-**Contract**: `static float HueFor(IReadOnlyList<int> sportIds, int? selectedSportId, IReadOnlyDictionary<int, string> sportCodesById)`. Build `sportCodesById` once in `MapViewModel` from the cached `SportResponse` values. When a sport filter is active, resolve its ID through the lookup and return that code's hue. When a venue supports exactly one sport, resolve that ID and return its code's hue. When it supports several, return the multi-sport hue. A missing ID or unknown code also returns the multi-sport/brand-green hue rather than throwing. The palette is keyed on stable `Sport.Code` values, never Polish display names. Proposed values, tunable:
+**Contract**: `static float HueFor(IReadOnlyList<int> sportIds, int? selectedSportId, IReadOnlyDictionary<int, string> sportCodesById)`. Build `sportCodesById` once in `MapViewModel` from the cached `SportResponse` values. When a sport filter is active, resolve its ID through the lookup and return that code's hue. When a venue supports exactly one sport, resolve that ID and return its code's hue. When it supports several, return the multi-sport hue. A missing ID or unknown code also returns the multi-sport/red-orange hue rather than throwing. The palette is keyed on stable `Sport.Code` values, never Polish display names. Proposed values, tunable:
 
 | Sport | Hue | Sport | Hue |
 |---|---|---|---|
-| `football` | 0 | `cycling` | 185 |
-| `basketball` | 30 | `rollerblading` | 210 |
-| `volleyball` | 60 | `gym` | 240 |
-| `tennis` | 85 | `street_workout` | 270 |
-| `running` | 160 | `swimming` | 300 |
-| *multi-sport* | 120 (brand green) | | |
+| `football` | 120 | `cycling` | 300 |
+| `basketball` | 35 | `rollerblading` | 330 |
+| `volleyball` | 60 | `gym` | 270 |
+| `tennis` | 75 | `street_workout` | 240 |
+| `running` | 150 | `swimming` | 210 |
+| *multi-sport* | 15 | | |
 
 This file carries the deferred-work note: from .NET 11, replace hue encoding with `Pin.ImageSource` and a sport-classification–driven glyph icon per ui-guidelines §7.
 
@@ -287,7 +287,7 @@ The view model exposes `IReadOnlyList<VenuePinViewData> VisiblePins`, where the 
 
 - Granting the location prompt centers the map on the emulator's mock location
 - Denying the prompt centers the map on Warsaw without crashing
-- All 100 venues render as pins; single-sport venues show distinct colors and multi-sport venues show brand green
+- All 100 venues render as pins; single-sport venues show distinct colors and multi-sport venues show red orange
 - Panning and zooming stay responsive (NFR: under 2 seconds)
 - Log out from the map toolbar returns to Login and clears the back stack
 - Killing and relaunching the app returns to the map still logged in (S-01 session persistence intact)
@@ -407,7 +407,7 @@ No test projects exist in this repo and none are added here (consistent with F-0
 **Emulator requirement: use a system image with Google APIs.** A bare AOSP image has no Google Play Services, so Google Maps tiles won't render and `Geocoding` returns empty — both would look like implementation bugs.
 
 1. **First run, permission granted** — launch, log in, accept the location prompt. Map centers on the emulator's mock location; pins render.
-2. **Pin colors** — confirm single-sport venues show distinct colors and multi-sport venues show brand green.
+2. **Pin colors** — confirm single-sport venues show distinct colors and multi-sport venues show red orange.
 3. **Venue sheet** — tap a pin; verify name, address, description, sports. Tap another pin; verify the sheet swaps. Dismiss it.
 4. **Filter** — select a sport; confirm non-matching venues vanish and the rest recolor. Confirm no network call. Return to "All".
 5. **Performance** — pan and zoom across Warsaw; confirm responsiveness within the 2s NFR.
@@ -482,19 +482,19 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 
 #### Automated
 
-- [ ] 3.1 Android head builds
-- [ ] 3.2 Windows head builds
-- [ ] 3.3 No HomePage/HomeViewModel references remain
+- [x] 3.1 Android head builds
+- [x] 3.2 Windows head builds
+- [x] 3.3 No HomePage/HomeViewModel references remain
 
 #### Manual
 
-- [ ] 3.4 Granting location centers the map on the user
-- [ ] 3.5 Denying location centers on Warsaw without crashing
-- [ ] 3.6 All 100 venues render with correct sport colors
-- [ ] 3.7 Pan and zoom respond within the 2s NFR
-- [ ] 3.8 Log out from the map toolbar returns to Login
-- [ ] 3.9 Relaunch returns to the map still logged in
-- [ ] 3.10 API down shows the error state with Retry
+- [x] 3.4 Granting location centers the map on the user
+- [x] 3.5 Denying location centers on Warsaw without crashing
+- [x] 3.6 All 100 venues render with correct sport colors
+- [x] 3.7 Pan and zoom respond within the 2s NFR
+- [x] 3.8 Log out from the map toolbar returns to Login
+- [x] 3.9 Relaunch returns to the map still logged in
+- [x] 3.10 API down shows the error state with Retry
 
 ### Phase 4: Venue bottom sheet
 

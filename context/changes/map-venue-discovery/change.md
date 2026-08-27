@@ -3,7 +3,7 @@ change_id: map-venue-discovery
 title: Map venue discovery
 status: implementing
 created: 2026-08-24
-updated: 2026-08-26
+updated: 2026-08-27
 archived_at: null
 ---
 

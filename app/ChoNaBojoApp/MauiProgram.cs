@@ -14,6 +14,7 @@ namespace ChoNaBojo.App
 {
 	public static class MauiProgram
 	{
+		#region Public static methods
 		public static MauiApp CreateMauiApp()
 		{
 			var builder = MauiApp.CreateBuilder();
@@ -25,6 +26,12 @@ namespace ChoNaBojo.App
 				// Unconditional across all TFMs: Windows has a real (Azure Maps-backed) handler
 				// that renders blank without a token rather than failing to build or crashing.
 				.UseMauiMaps()
+				.ConfigureMauiHandlers(handlers =>
+				{
+#if ANDROID
+					handlers.AddHandler<Views.Maps.VenuePin, Platforms.Android.VenuePinHandler>();
+#endif
+				})
 				.ConfigureFonts(fonts =>
 				{
 					fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -61,11 +68,11 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<LoadingPage>();
 			builder.Services.AddTransient<LoginPage>();
 			builder.Services.AddTransient<RegisterPage>();
-			builder.Services.AddTransient<HomePage>();
+			builder.Services.AddTransient<MapPage>();
 
 			builder.Services.AddTransient<LoginViewModel>();
 			builder.Services.AddTransient<RegisterViewModel>();
-			builder.Services.AddTransient<HomeViewModel>();
+			builder.Services.AddTransient<MapViewModel>();
 
 #if DEBUG
 			builder.Logging.AddDebug();
@@ -79,7 +86,9 @@ namespace ChoNaBojo.App
 
 			return app;
 		}
+		#endregion
 
+		#region Private static methods
 		// Shared by both named clients so the dev/prod split is defined once.
 		private static string GetApiBaseAddress()
 		{
@@ -91,5 +100,6 @@ namespace ChoNaBojo.App
 			return "https://cho-na-bojo-production.up.railway.app";
 #endif
 		}
+		#endregion
 	}
 }
