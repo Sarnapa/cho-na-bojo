@@ -482,19 +482,19 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 
 #### Automated
 
-- [x] 3.1 Android head builds
-- [x] 3.2 Windows head builds
-- [x] 3.3 No HomePage/HomeViewModel references remain
+- [x] 3.1 Android head builds — d8514fa
+- [x] 3.2 Windows head builds — d8514fa
+- [x] 3.3 No HomePage/HomeViewModel references remain — d8514fa
 
 #### Manual
 
-- [x] 3.4 Granting location centers the map on the user
-- [x] 3.5 Denying location centers on Warsaw without crashing
-- [x] 3.6 All 100 venues render with correct sport colors
-- [x] 3.7 Pan and zoom respond within the 2s NFR
-- [x] 3.8 Log out from the map toolbar returns to Login
-- [x] 3.9 Relaunch returns to the map still logged in
-- [x] 3.10 API down shows the error state with Retry
+- [x] 3.4 Granting location centers the map on the user — d8514fa
+- [x] 3.5 Denying location centers on Warsaw without crashing — d8514fa
+- [x] 3.6 All 100 venues render with correct sport colors — d8514fa
+- [x] 3.7 Pan and zoom respond within the 2s NFR — d8514fa
+- [x] 3.8 Log out from the map toolbar returns to Login — d8514fa
+- [x] 3.9 Relaunch returns to the map still logged in — d8514fa
+- [x] 3.10 API down shows the error state with Retry — d8514fa
 
 ### Phase 4: Venue bottom sheet
 
