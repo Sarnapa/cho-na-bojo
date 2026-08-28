@@ -500,17 +500,17 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 
 #### Automated
 
-- [ ] 4.1 Android head builds
-- [ ] 4.2 Windows head builds
+- [x] 4.1 Android head builds
+- [x] 4.2 Windows head builds
 
 #### Manual
 
-- [ ] 4.3 Pin tap opens the sheet with correct venue details
-- [ ] 4.4 Tapping another pin swaps sheet content
-- [ ] 4.5 Sheet dismisses and the map stays interactive
-- [ ] 4.6 Create event button is disabled and inert
-- [ ] 4.7 Supported sports list correctly for multi- and single-sport venues
-- [ ] 4.8 Sheet honors the 8pt grid and design tokens
+- [x] 4.3 Pin tap opens the sheet with correct venue details
+- [x] 4.4 Tapping another pin swaps sheet content
+- [x] 4.5 Sheet dismisses and the map stays interactive
+- [x] 4.6 Create event button is disabled and inert
+- [x] 4.7 Supported sports list correctly for multi- and single-sport venues
+- [x] 4.8 Sheet honors the 8pt grid and design tokens
 
 ### Phase 5: Sport filter and manual-address fallback
 

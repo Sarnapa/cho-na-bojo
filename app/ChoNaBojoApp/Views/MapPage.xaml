@@ -31,10 +31,115 @@
                         Hue="{Binding Hue}"
                         Location="{Binding Location}"
                         Label="{Binding Label}"
-                        Address="{Binding Address}" />
+                        Address="{Binding Address}"
+                        MarkerClicked="OnPinClicked" />
                 </DataTemplate>
             </maps:Map.ItemTemplate>
         </maps:Map>
+
+        <Grid
+            IsVisible="{Binding IsVenueSheetVisible}"
+            RowDefinitions="*,Auto">
+            <BoxView
+                Grid.Row="0"
+                BackgroundColor="{StaticResource OnSurfaceColor}"
+                Opacity="0.08"
+                SemanticProperties.Description="Dismiss venue details">
+                <BoxView.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding DismissVenueSheetCommand}" />
+                </BoxView.GestureRecognizers>
+            </BoxView>
+
+            <Border
+                Grid.Row="1"
+                Padding="16"
+                BackgroundColor="{StaticResource SurfaceColor}"
+                Shadow="{StaticResource CardShadow}"
+                Stroke="{StaticResource DividerColor}">
+                <Border.StrokeShape>
+                    <RoundRectangle CornerRadius="16,16,0,0" />
+                </Border.StrokeShape>
+
+                <ScrollView>
+                    <VerticalStackLayout Spacing="0">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Label
+                                Grid.Column="0"
+                                Style="{StaticResource TitleStyle}"
+                                Text="{Binding SelectedVenue.Name}"
+                                VerticalOptions="Center" />
+                            <Button
+                                Grid.Column="1"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Text="Close"
+                                Command="{Binding DismissVenueSheetCommand}"
+                                SemanticProperties.Description="Close venue details" />
+                        </Grid>
+
+                        <Label
+                            Margin="0,8,0,0"
+                            Style="{StaticResource LabelStyle}"
+                            Text="{Binding SelectedVenue.Address}" />
+
+                        <Label
+                            Margin="0,8,0,0"
+                            Style="{StaticResource BodyStyle}"
+                            Text="{Binding SelectedVenue.Description}" />
+
+                        <ScrollView
+                            Margin="0,16,0,0"
+                            HeightRequest="48"
+                            HorizontalScrollBarVisibility="Never"
+                            Orientation="Horizontal">
+                            <HorizontalStackLayout
+                                Spacing="8"
+                                BindableLayout.ItemsSource="{Binding SelectedVenueSports}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="viewModels:VenueSportViewData">
+                                        <Border
+                                            Padding="16,8"
+                                            HeightRequest="48"
+                                            BackgroundColor="{StaticResource SurfaceColor}"
+                                            Stroke="{StaticResource DividerColor}"
+                                            StrokeShape="RoundRectangle 24">
+                                            <Label
+                                                Style="{StaticResource BodyStyle}"
+                                                Text="{Binding Name}"
+                                                VerticalOptions="Center" />
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </HorizontalStackLayout>
+                        </ScrollView>
+
+                        <Label
+                            Margin="0,24,0,0"
+                            Style="{StaticResource TitleStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="No events here yet" />
+
+                        <Label
+                            Margin="0,8,0,0"
+                            Style="{StaticResource BodyStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="Create an event to get a game started." />
+
+                        <Button
+                            Margin="0,32,0,0"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Text="Create event"
+                            IsEnabled="False"
+                            SemanticProperties.Description="Create event, coming soon" />
+
+                        <Label
+                            Margin="0,8,0,0"
+                            Style="{StaticResource LabelStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="Coming soon" />
+                    </VerticalStackLayout>
+                </ScrollView>
+            </Border>
+        </Grid>
 
         <Grid
             BackgroundColor="{StaticResource SurfaceColor}"

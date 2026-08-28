@@ -1,12 +1,13 @@
+using Microsoft.Maui.Controls.Maps;
+using Microsoft.Maui.Devices.Sensors;
+using Microsoft.Maui.Maps;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.Views.Maps;
-using Microsoft.Maui.Controls.Maps;
-using Microsoft.Maui.Devices.Sensors;
-using Microsoft.Maui.Maps;
+using ChoNaBojo.Contracts.DTOs;
 
 namespace ChoNaBojo.App.ViewModels;
 
@@ -17,6 +18,10 @@ public sealed record VenuePinViewData(
 	Location Location,
 	string Label,
 	string Address);
+#endregion
+
+#region VenueSportViewData
+public sealed record VenueSportViewData(string Name);
 #endregion
 
 public partial class MapViewModel : ViewModelBase
@@ -32,6 +37,7 @@ public partial class MapViewModel : ViewModelBase
 	private readonly ISessionService _sessionService;
 	private readonly IFeedbackService _feedbackService;
 	private IReadOnlyDictionary<int, string> _sportCodesById = new Dictionary<int, string>();
+	private IReadOnlyDictionary<int, string> _sportNamesById = new Dictionary<int, string>();
 	#endregion
 
 	#region Observable properties
@@ -58,6 +64,15 @@ public partial class MapViewModel : ViewModelBase
 
 	[ObservableProperty]
 	private IReadOnlyList<VenuePinViewData> visiblePins = [];
+
+	[ObservableProperty]
+	private VenueResponse? selectedVenue;
+
+	[ObservableProperty]
+	private IReadOnlyList<VenueSportViewData> selectedVenueSports = [];
+
+	[ObservableProperty]
+	private bool isVenueSheetVisible;
 	#endregion
 
 	#region Constructors
@@ -90,6 +105,14 @@ public partial class MapViewModel : ViewModelBase
 	}
 
 	[RelayCommand]
+	private void DismissVenueSheet()
+	{
+		IsVenueSheetVisible = false;
+		SelectedVenue = null;
+		SelectedVenueSports = [];
+	}
+
+	[RelayCommand]
 	private async Task LogoutAsync()
 	{
 		if (IsBusy)
@@ -118,6 +141,23 @@ public partial class MapViewModel : ViewModelBase
 		}
 
 		LoggedOut?.Invoke(this, EventArgs.Empty);
+	}
+	#endregion
+
+	#region Public methods
+	public void SelectVenue(int venueId)
+	{
+		VenueResponse venue = _venueCatalog.Venues.SingleOrDefault(item => item.Id == venueId)
+			?? throw new InvalidOperationException(
+				$"The selected venue with ID {venueId} is not present in the loaded catalog.");
+
+		IReadOnlyList<VenueSportViewData> sports = venue.SportIds
+			.Select(sportId => new VenueSportViewData(ResolveSportName(sportId)))
+			.ToList();
+
+		SelectedVenue = venue;
+		SelectedVenueSports = sports;
+		IsVenueSheetVisible = true;
 	}
 	#endregion
 
@@ -161,6 +201,9 @@ public partial class MapViewModel : ViewModelBase
 			_sportCodesById = _venueCatalog.Sports.ToDictionary(
 				sport => sport.Id,
 				sport => sport.Code);
+			_sportNamesById = _venueCatalog.Sports.ToDictionary(
+				sport => sport.Id,
+				sport => sport.Name);
 			BuildVisiblePins();
 		}
 		finally
@@ -238,6 +281,17 @@ public partial class MapViewModel : ViewModelBase
 				venue.Name,
 				venue.Address))
 			.ToList();
+	}
+
+	private string ResolveSportName(int sportId)
+	{
+		if (_sportNamesById.TryGetValue(sportId, out string? sportName))
+		{
+			return sportName;
+		}
+
+		throw new InvalidOperationException(
+			$"Sport ID {sportId} referenced by a venue is not present in the loaded catalog.");
 	}
 	#endregion
 }

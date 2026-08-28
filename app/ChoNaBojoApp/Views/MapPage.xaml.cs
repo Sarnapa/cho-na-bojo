@@ -1,7 +1,9 @@
 using System.ComponentModel;
+using Microsoft.Maui.Controls.Maps;
+using Microsoft.Maui.Maps;
 using ChoNaBojo.App.Services.Navigation;
 using ChoNaBojo.App.ViewModels;
-using Microsoft.Maui.Maps;
+using ChoNaBojo.App.Views.Maps;
 #if ANDROID
 using Android.Gms.Maps;
 using Android.Gms.Maps.Model;
@@ -57,6 +59,19 @@ public partial class MapPage : ContentPage
 	#endregion
 
 	#region Events handlers
+	private void OnPinClicked(object? sender, PinClickedEventArgs e)
+	{
+		e.HideInfoWindow = true;
+
+		if (sender is not VenuePin venuePin)
+		{
+			throw new InvalidOperationException(
+				$"Expected the event sender to be a {nameof(VenuePin)}.");
+		}
+
+		_viewModel.SelectVenue(venuePin.VenueId);
+	}
+
 	private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
 		if (e.PropertyName == nameof(MapViewModel.InitialCenter)
