@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"
     xmlns:mapViews="clr-namespace:ChoNaBojo.App.Views.Maps"
+    xmlns:materialSymbols="clr-namespace:UraniumUI.Icons.MaterialSymbols;assembly=UraniumUI.Icons.MaterialSymbols"
     xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
     x:DataType="viewModels:MapViewModel"
     Title="Map"
@@ -19,12 +20,10 @@
     </ContentPage.ToolbarItems>
 
     <Grid>
-        <maps:Map
+        <mapViews:VenueMap
             x:Name="VenueMap"
-            ItemsSource="{Binding VisiblePins}"
-            IsShowingUser="{Binding IsShowingUser}"
             SemanticProperties.Description="Map of nearby sports venues">
-            <maps:Map.ItemTemplate>
+            <mapViews:VenueMap.ItemTemplate>
                 <DataTemplate x:DataType="viewModels:VenuePinViewData">
                     <mapViews:VenuePin
                         VenueId="{Binding VenueId}"
@@ -34,8 +33,194 @@
                         Address="{Binding Address}"
                         MarkerClicked="OnPinClicked" />
                 </DataTemplate>
-            </maps:Map.ItemTemplate>
-        </maps:Map>
+            </mapViews:VenueMap.ItemTemplate>
+        </mapViews:VenueMap>
+
+        <Border
+            Margin="16"
+            Padding="16"
+            MaximumWidthRequest="320"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            BackgroundColor="{StaticResource SurfaceColor}"
+            Shadow="{StaticResource CardShadow}"
+            Stroke="{StaticResource DividerColor}"
+            StrokeShape="RoundRectangle 16"
+            IsVisible="{Binding HasNoVisibleVenues}">
+            <VerticalStackLayout Spacing="8">
+                <Label
+                    Style="{StaticResource TitleStyle}"
+                    HorizontalTextAlignment="Center"
+                    Text="No venues found" />
+                <Label
+                    Style="{StaticResource BodyStyle}"
+                    HorizontalTextAlignment="Center"
+                    Text="Try a different sport." />
+            </VerticalStackLayout>
+        </Border>
+
+        <VerticalStackLayout
+            Margin="16"
+            Spacing="8"
+            VerticalOptions="Start">
+            <Border
+                Padding="16,8"
+                MinimumHeightRequest="48"
+                BackgroundColor="{StaticResource SurfaceColor}"
+                Shadow="{StaticResource CardShadow}"
+                Stroke="{StaticResource DividerColor}"
+                StrokeShape="RoundRectangle 16"
+                SemanticProperties.Description="Open address search"
+                IsVisible="{Binding LocationDenied}">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnAddressSearchTapped" />
+                </Border.GestureRecognizers>
+                <VerticalStackLayout Spacing="4">
+                    <Label
+                        Style="{StaticResource LabelStyle}"
+                        Text="Address" />
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        LineBreakMode="TailTruncation"
+                        Text="{Binding AddressSearchLabel}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <CollectionView
+                HeightRequest="48"
+                HorizontalScrollBarVisibility="Never"
+                ItemsSource="{Binding SportFilters}"
+                SelectedItem="{Binding SelectedSportFilter, Mode=TwoWay}"
+                SelectionMode="Single"
+                SemanticProperties.Description="Filter venues by sport">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout
+                        ItemSpacing="8"
+                        Orientation="Horizontal" />
+                </CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="viewModels:SportFilterViewData">
+                        <Border
+                            x:Name="ChipBorder"
+                            Padding="16,8"
+                            HeightRequest="48"
+                            BackgroundColor="{StaticResource SurfaceColor}"
+                            Stroke="{StaticResource DividerColor}"
+                            StrokeShape="RoundRectangle 24"
+                            SemanticProperties.Description="{Binding SemanticDescription}">
+                            <HorizontalStackLayout Spacing="8">
+                                <Label
+                                    x:Name="ChipIcon"
+                                    FontFamily="MaterialOutlined"
+                                    FontSize="24"
+                                    Text="{Binding IconGlyph}"
+                                    TextColor="{StaticResource OnSurfaceColor}"
+                                    VerticalOptions="Center"
+                                    AutomationProperties.IsInAccessibleTree="False" />
+                                <Label
+                                    x:Name="ChipLabel"
+                                    Style="{StaticResource BodyStyle}"
+                                    Text="{Binding Name}"
+                                    VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal">
+                                        <VisualState.Setters>
+                                            <Setter
+                                                TargetName="ChipBorder"
+                                                Property="BackgroundColor"
+                                                Value="{StaticResource SurfaceColor}" />
+                                            <Setter
+                                                TargetName="ChipBorder"
+                                                Property="Stroke"
+                                                Value="{StaticResource DividerColor}" />
+                                            <Setter
+                                                TargetName="ChipIcon"
+                                                Property="Label.TextColor"
+                                                Value="{StaticResource OnSurfaceColor}" />
+                                            <Setter
+                                                TargetName="ChipLabel"
+                                                Property="Label.TextColor"
+                                                Value="{StaticResource OnSurfaceColor}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Selected">
+                                        <VisualState.Setters>
+                                            <Setter
+                                                TargetName="ChipBorder"
+                                                Property="BackgroundColor"
+                                                Value="{StaticResource PrimaryColor}" />
+                                            <Setter
+                                                TargetName="ChipBorder"
+                                                Property="Stroke"
+                                                Value="{StaticResource PrimaryColor}" />
+                                            <Setter
+                                                TargetName="ChipIcon"
+                                                Property="Label.TextColor"
+                                                Value="{StaticResource OnPrimaryColor}" />
+                                            <Setter
+                                                TargetName="ChipLabel"
+                                                Property="Label.TextColor"
+                                                Value="{StaticResource OnPrimaryColor}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </VerticalStackLayout>
+
+        <Button
+            Margin="16,16,16,48"
+            Padding="8"
+            HeightRequest="48"
+            WidthRequest="48"
+            HorizontalOptions="Start"
+            VerticalOptions="End"
+            Style="{StaticResource SecondaryButtonStyle}"
+            BackgroundColor="{StaticResource SurfaceColor}"
+            BorderColor="{StaticResource DividerColor}"
+            CornerRadius="24"
+            Shadow="{StaticResource CardShadow}"
+            Command="{Binding RecenterOnCurrentLocationCommand}"
+            IsEnabled="{Binding IsNotBusy}"
+            IsVisible="{Binding IsShowingUser}"
+            SemanticProperties.Description="Center map on current location">
+            <Button.ImageSource>
+                <FontImageSource
+                    FontFamily="MaterialOutlined"
+                    Glyph="{x:Static materialSymbols:MaterialOutlined.My_location}"
+                    Color="{StaticResource OnSurfaceColor}"
+                    Size="24" />
+            </Button.ImageSource>
+        </Button>
+
+        <Border
+            Margin="16"
+            Padding="16"
+            MaximumWidthRequest="320"
+            HorizontalOptions="Center"
+            VerticalOptions="Center"
+            BackgroundColor="{StaticResource SurfaceColor}"
+            Shadow="{StaticResource CardShadow}"
+            Stroke="{StaticResource DividerColor}"
+            StrokeShape="RoundRectangle 16"
+            IsVisible="{Binding IsLocationBannerVisible}">
+            <VerticalStackLayout Spacing="16">
+                <Label
+                    Style="{StaticResource BodyStyle}"
+                    HorizontalTextAlignment="Center"
+                    Text="Location access is off. The map is centered on Warsaw; search for an address to move it." />
+                <Button
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    Text="Dismiss"
+                    Command="{Binding DismissLocationBannerCommand}"
+                    SemanticProperties.Description="Dismiss location information" />
+            </VerticalStackLayout>
+        </Border>
 
         <Grid
             IsVisible="{Binding IsVenueSheetVisible}"
@@ -166,6 +351,7 @@
             </Border>
         </Grid>
 
+        <!-- Declared after the location warning so a blocking error always covers it. -->
         <Border
             Margin="16"
             Padding="16"

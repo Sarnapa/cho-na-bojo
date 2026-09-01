@@ -5,6 +5,7 @@ using UraniumUI;
 using ChoNaBojo.App.Services;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Feedback;
+using ChoNaBojo.App.Services.Geocoding;
 using ChoNaBojo.App.Services.Navigation;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.ViewModels;
@@ -28,6 +29,7 @@ namespace ChoNaBojo.App
 				.UseMauiMaps()
 				.ConfigureMauiHandlers(handlers =>
 				{
+					handlers.AddHandler<Views.Maps.VenueMap, Views.Maps.VenueMapHandler>();
 #if ANDROID
 					handlers.AddHandler<Views.Maps.VenuePin, Platforms.Android.VenuePinHandler>();
 #endif
@@ -61,6 +63,7 @@ namespace ChoNaBojo.App
 			builder.Services.AddSingleton<INavigationRootService, NavigationRootService>();
 			builder.Services.AddSingleton<IApiService, ApiService>();
 			builder.Services.AddSingleton<IFeedbackService, FeedbackService>();
+			builder.Services.AddSingleton<IAddressSearchService, AddressSearchService>();
 			builder.Services.AddSingleton<SessionExpiryCoordinator>();
 			builder.Services.AddSingleton<IVenueCatalog, VenueCatalog>();
 
@@ -69,10 +72,12 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<LoginPage>();
 			builder.Services.AddTransient<RegisterPage>();
 			builder.Services.AddTransient<MapPage>();
+			builder.Services.AddTransient<AddressSearchPage>();
 
 			builder.Services.AddTransient<LoginViewModel>();
 			builder.Services.AddTransient<RegisterViewModel>();
 			builder.Services.AddTransient<MapViewModel>();
+			builder.Services.AddTransient<AddressSearchViewModel>();
 
 #if DEBUG
 			builder.Logging.AddDebug();

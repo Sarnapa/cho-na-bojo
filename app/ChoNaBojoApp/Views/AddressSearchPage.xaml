@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.AddressSearchPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:geocoding="clr-namespace:ChoNaBojo.App.Services.Geocoding"
+    xmlns:material="clr-namespace:UraniumUI.Material.Controls;assembly=UraniumUI.Material"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:AddressSearchViewModel"
+    Title="Search address"
+    BackgroundColor="{StaticResource SurfaceColor}">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem
+            Text="Cancel"
+            Command="{Binding CancelCommand}"
+            SemanticProperties.Description="Close address search" />
+    </ContentPage.ToolbarItems>
+
+    <Grid
+        Padding="16"
+        RowDefinitions="Auto,Auto,*"
+        RowSpacing="16">
+        <material:TextField
+            x:Name="AddressField"
+            Grid.Row="0"
+            Style="{StaticResource TextFieldStyle}"
+            AllowClear="True"
+            BackgroundColor="{StaticResource SurfaceColor}"
+            ReturnCommand="{Binding SubmitCommand}"
+            ReturnType="Search"
+            Text="{Binding Query}"
+            Title="Search for an address"
+            SemanticProperties.Description="Type an address to search" />
+
+        <Grid
+            Grid.Row="1"
+            ColumnDefinitions="Auto,*"
+            ColumnSpacing="8"
+            IsVisible="{Binding IsSearching}">
+            <ActivityIndicator
+                Grid.Column="0"
+                IsRunning="{Binding IsSearching}"
+                SemanticProperties.Description="Searching addresses" />
+            <Label
+                Grid.Column="1"
+                Style="{StaticResource BodyStyle}"
+                Text="Searching..."
+                VerticalOptions="Center" />
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <CollectionView
+                ItemsSource="{Binding Suggestions}"
+                SelectionMode="None"
+                SemanticProperties.Description="Address suggestions">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="geocoding:AddressSuggestion">
+                        <Border
+                            Margin="0,0,0,8"
+                            Padding="16"
+                            MinimumHeightRequest="48"
+                            BackgroundColor="{StaticResource SurfaceColor}"
+                            Stroke="{StaticResource DividerColor}"
+                            StrokeShape="RoundRectangle 16"
+                            SemanticProperties.Description="{Binding DisplayName}">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:AddressSearchViewModel}}, Path=SelectSuggestionCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Border.GestureRecognizers>
+                            <Label
+                                Style="{StaticResource BodyStyle}"
+                                Text="{Binding DisplayName}"
+                                VerticalOptions="Center" />
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Label
+                Style="{StaticResource BodyStyle}"
+                HorizontalTextAlignment="Center"
+                IsVisible="{Binding HasStatusMessage}"
+                Text="{Binding StatusMessage}"
+                VerticalOptions="Center" />
+        </Grid>
+    </Grid>
+
+</ContentPage>

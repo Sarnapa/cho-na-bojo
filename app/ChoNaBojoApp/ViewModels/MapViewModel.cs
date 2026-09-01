@@ -3,8 +3,10 @@ using Microsoft.Maui.Devices.Sensors;
 using Microsoft.Maui.Maps;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UraniumUI.Icons.MaterialSymbols;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Feedback;
+using ChoNaBojo.App.Services.Geocoding;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.Views.Maps;
 using ChoNaBojo.Contracts.DTOs;
@@ -24,6 +26,30 @@ public sealed record VenuePinViewData(
 public sealed record VenueSportViewData(string Name);
 #endregion
 
+#region SportFilterViewData
+public sealed record SportFilterViewData(
+	int? SportId,
+	string Name,
+	string IconGlyph,
+	string SemanticDescription);
+#endregion
+
+#region MapCenterRequestedEventArgs
+public sealed class MapCenterRequestedEventArgs : EventArgs
+{
+	#region Properties
+	public MapSpan Region { get; }
+	#endregion
+
+	#region Constructors
+	public MapCenterRequestedEventArgs(MapSpan region)
+	{
+		Region = region;
+	}
+	#endregion
+}
+#endregion
+
 public partial class MapViewModel : ViewModelBase
 {
 	#region Private static fields
@@ -38,6 +64,8 @@ public partial class MapViewModel : ViewModelBase
 	private readonly IFeedbackService _feedbackService;
 	private IReadOnlyDictionary<int, string> _sportCodesById = new Dictionary<int, string>();
 	private IReadOnlyDictionary<int, string> _sportNamesById = new Dictionary<int, string>();
+	private bool _hasLoadedMap;
+	private Location? _lastKnownCurrentLocation;
 	#endregion
 
 	#region Observable properties
@@ -63,7 +91,16 @@ public partial class MapViewModel : ViewModelBase
 	private int? selectedSportId;
 
 	[ObservableProperty]
+	private IReadOnlyList<SportFilterViewData> sportFilters = [];
+
+	[ObservableProperty]
+	private SportFilterViewData? selectedSportFilter;
+
+	[ObservableProperty]
 	private IReadOnlyList<VenuePinViewData> visiblePins = [];
+
+	[ObservableProperty]
+	private bool hasNoVisibleVenues;
 
 	[ObservableProperty]
 	private VenueResponse? selectedVenue;
@@ -73,6 +110,13 @@ public partial class MapViewModel : ViewModelBase
 
 	[ObservableProperty]
 	private bool isVenueSheetVisible;
+
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(AddressSearchLabel))]
+	private string addressQuery = string.Empty;
+
+	[ObservableProperty]
+	private bool isLocationBannerVisible;
 	#endregion
 
 	#region Constructors
@@ -89,6 +133,19 @@ public partial class MapViewModel : ViewModelBase
 
 	#region Events
 	public event EventHandler? LoggedOut;
+	public event EventHandler<MapCenterRequestedEventArgs>? MapCenterRequested;
+	#endregion
+
+	#region Public properties
+	public string AddressSearchLabel
+	{
+		get
+		{
+			return string.IsNullOrWhiteSpace(AddressQuery)
+				? "Search for an address"
+				: AddressQuery;
+		}
+	}
 	#endregion
 
 	#region Commmands
@@ -110,6 +167,58 @@ public partial class MapViewModel : ViewModelBase
 		IsVenueSheetVisible = false;
 		SelectedVenue = null;
 		SelectedVenueSports = [];
+	}
+
+	[RelayCommand]
+	private void DismissLocationBanner()
+	{
+		IsLocationBannerVisible = false;
+	}
+
+	[RelayCommand]
+	private async Task RecenterOnCurrentLocationAsync()
+	{
+		try
+		{
+			PermissionStatus status =
+				await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+			if (status != PermissionStatus.Granted)
+			{
+				UseWarsawFallback();
+				await ShowCurrentLocationUnavailableAsync();
+				return;
+			}
+
+			Location? location = await Geolocation.Default.GetLastKnownLocationAsync()
+				?? _lastKnownCurrentLocation
+				?? await GetFreshCurrentLocationAsync();
+			if (location is null)
+			{
+				await ShowCurrentLocationUnavailableAsync();
+				return;
+			}
+
+			UseCurrentLocation(location);
+		}
+		catch (FeatureNotSupportedException)
+		{
+			UseWarsawFallback();
+			await ShowCurrentLocationUnavailableAsync();
+		}
+		catch (FeatureNotEnabledException)
+		{
+			UseWarsawFallback();
+			await ShowCurrentLocationUnavailableAsync();
+		}
+		catch (PermissionException)
+		{
+			UseWarsawFallback();
+			await ShowCurrentLocationUnavailableAsync();
+		}
+		catch (TimeoutException)
+		{
+			await ShowCurrentLocationUnavailableAsync();
+		}
 	}
 
 	[RelayCommand]
@@ -159,12 +268,31 @@ public partial class MapViewModel : ViewModelBase
 		SelectedVenueSports = sports;
 		IsVenueSheetVisible = true;
 	}
+
+	public void CenterOnAddress(AddressSuggestion suggestion)
+	{
+		AddressQuery = suggestion.DisplayName;
+		RequestMapCenter(MapSpan.FromCenterAndRadius(suggestion.Location, InitialRadius));
+	}
+	#endregion
+
+	#region Observable property handlers
+	partial void OnSelectedSportFilterChanged(SportFilterViewData? value)
+	{
+		SelectedSportId = value?.SportId;
+	}
+
+	partial void OnSelectedSportIdChanged(int? value)
+	{
+		BuildVisiblePins();
+	}
+
 	#endregion
 
 	#region Private methods
 	private async Task LoadMapAsync()
 	{
-		if (IsBusy)
+		if (IsBusy || _hasLoadedMap)
 		{
 			return;
 		}
@@ -204,7 +332,9 @@ public partial class MapViewModel : ViewModelBase
 			_sportNamesById = _venueCatalog.Sports.ToDictionary(
 				sport => sport.Id,
 				sport => sport.Name);
+			BuildSportFilters();
 			BuildVisiblePins();
+			_hasLoadedMap = true;
 		}
 		finally
 		{
@@ -231,10 +361,7 @@ public partial class MapViewModel : ViewModelBase
 				return;
 			}
 
-			Location? location = await Geolocation.Default.GetLastKnownLocationAsync();
-			location ??= await Geolocation.Default.GetLocationAsync(
-				new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10)),
-				CancellationToken.None);
+			Location? location = await GetInitialLocationAsync();
 
 			if (location is null)
 			{
@@ -242,9 +369,7 @@ public partial class MapViewModel : ViewModelBase
 				return;
 			}
 
-			LocationDenied = false;
-			IsShowingUser = true;
-			InitialCenter = MapSpan.FromCenterAndRadius(location, InitialRadius);
+			UseCurrentLocation(location);
 		}
 		catch (FeatureNotSupportedException)
 		{
@@ -267,13 +392,68 @@ public partial class MapViewModel : ViewModelBase
 	private void UseWarsawFallback()
 	{
 		LocationDenied = true;
+		IsLocationBannerVisible = true;
 		IsShowingUser = false;
-		InitialCenter = MapSpan.FromCenterAndRadius(WarsawCenter, WarsawCenterInitialRadius);
+		RequestMapCenter(
+			MapSpan.FromCenterAndRadius(WarsawCenter, WarsawCenterInitialRadius));
+	}
+
+	private static async Task<Location?> GetInitialLocationAsync()
+	{
+		Location? location = await Geolocation.Default.GetLastKnownLocationAsync();
+		return location ?? await GetFreshCurrentLocationAsync();
+	}
+
+	private static Task<Location?> GetFreshCurrentLocationAsync()
+	{
+		return Geolocation.Default.GetLocationAsync(
+			new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(8)),
+			CancellationToken.None);
+	}
+
+	private void UseCurrentLocation(Location location)
+	{
+		_lastKnownCurrentLocation = location;
+		LocationDenied = false;
+		IsLocationBannerVisible = false;
+		IsShowingUser = true;
+		RequestMapCenter(MapSpan.FromCenterAndRadius(location, InitialRadius));
+	}
+
+	private void RequestMapCenter(MapSpan region)
+	{
+		InitialCenter = region;
+		MapCenterRequested?.Invoke(this, new MapCenterRequestedEventArgs(region));
+	}
+
+	private void BuildSportFilters()
+	{
+		var allFilter = new SportFilterViewData(
+			null,
+			"All",
+			MaterialOutlined.Sports,
+			"Show all venues");
+		IReadOnlyList<SportFilterViewData> filters =
+		[
+			allFilter,
+			.. _venueCatalog.Sports.Select(sport => new SportFilterViewData(
+				sport.Id,
+				sport.Name,
+				IconFor(sport.Code),
+				$"Filter venues by {sport.Name}"))
+		];
+
+		int? currentSportId = SelectedSportId;
+		SportFilters = filters;
+		SelectedSportFilter = filters.FirstOrDefault(filter => filter.SportId == currentSportId)
+			?? allFilter;
 	}
 
 	private void BuildVisiblePins()
 	{
-		VisiblePins = _venueCatalog.Venues
+		IReadOnlyList<VenuePinViewData> pins = _venueCatalog.Venues
+			.Where(venue =>
+				SelectedSportId is null || venue.SportIds.Contains(SelectedSportId.Value))
 			.Select(venue => new VenuePinViewData(
 				venue.Id,
 				SportPinPalette.HueFor(venue.SportIds, SelectedSportId, _sportCodesById),
@@ -281,6 +461,32 @@ public partial class MapViewModel : ViewModelBase
 				venue.Name,
 				venue.Address))
 			.ToList();
+
+		VisiblePins = pins;
+		HasNoVisibleVenues = SelectedSportId is not null && pins.Count == 0;
+		if (SelectedVenue is not null
+			&& pins.All(pin => pin.VenueId != SelectedVenue.Id))
+		{
+			DismissVenueSheet();
+		}
+	}
+
+	private static string IconFor(string sportCode)
+	{
+		return sportCode switch
+		{
+			"football" => MaterialOutlined.Sports_soccer,
+			"basketball" => MaterialOutlined.Sports_basketball,
+			"volleyball" => MaterialOutlined.Sports_volleyball,
+			"tennis" => MaterialOutlined.Sports_tennis,
+			"running" => MaterialOutlined.Directions_run,
+			"cycling" => MaterialOutlined.Cycle,
+			"rollerblading" => MaterialOutlined.Roller_skating,
+			"gym" => MaterialOutlined.Fitness_center,
+			"street_workout" => MaterialOutlined.Sports_gymnastics,
+			"swimming" => MaterialOutlined.Pool,
+			_ => MaterialOutlined.Sports
+		};
 	}
 
 	private string ResolveSportName(int sportId)
@@ -292,6 +498,12 @@ public partial class MapViewModel : ViewModelBase
 
 		throw new InvalidOperationException(
 			$"Sport ID {sportId} referenced by a venue is not present in the loaded catalog.");
+	}
+
+	private Task ShowCurrentLocationUnavailableAsync()
+	{
+		return _feedbackService.ShowSnackbarAsync(
+			"Current location isn't available");
 	}
 	#endregion
 }

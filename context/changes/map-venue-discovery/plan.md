@@ -343,7 +343,7 @@ Tapping a pin opens the ui-guidelines §7 bottom sheet with venue details and th
 
 ### Overview
 
-Add the single-select chip row and the location-denied address fallback — the two remaining FR-003 / FR-004 obligations.
+Add the single-select chip row, the location-denied address-search flow, and a repeatable current-location control — the remaining FR-003 / FR-004 obligations.
 
 ### Changes Required:
 
@@ -355,17 +355,27 @@ Add the single-select chip row and the location-denied address fallback — the 
 
 **Contract**: A horizontally scrolling `CollectionView` pinned above the map, bound to a chip collection built from the cached sports with a leading **"All"** chip selected by default. Chip visuals per §6E: height `48`, `CornerRadius="24"`, `8` spacing, sport Material Symbol icon left of the name; unselected = `SurfaceColor` background + `DividerColor` border + `OnSurfaceColor` text, selected = `PrimaryColor` background + `OnPrimaryColor` text. Selection is **single-select** — choosing a sport clears any other, and "All" clears the filter.
 
-`SelectedSportId` drives `VisibleVenues`, which filters to venues whose `SportIds` contain it; non-matching venues are removed from the map entirely. Build a complete replacement `VisiblePins` list and recolor each item via `SportPinPalette.HueFor(sportIds, selectedSportId, sportCodesById)` so every visible pin takes the selected sport's color; assigning the list once lets `ItemsSource` trigger one marker rebuild. Filtering is pure in-memory over the cached list — **no network call on filter change**. An active filter that matches nothing shows the §10 empty state.
+`SelectedSportId` drives `VisibleVenues`, which filters to venues whose `SportIds` contain it; non-matching venues are removed from the map entirely. Build a complete replacement `VisiblePins` list and recolor each item via `SportPinPalette.HueFor(sportIds, selectedSportId, sportCodesById)` so every visible pin takes the selected sport's color. `VenueMap.ReplacePins` and `VenueMapHandler` suppress MAUI's per-pin native rebuilds and perform one refresh after the complete list is ready. Filtering is pure in-memory over the cached list — **no network call on filter change**. An active filter that matches nothing shows the §10 empty state.
 
 #### 2. Manual-address fallback
 
-**File**: `app/ChoNaBojoApp/Views/MapPage.xaml`, `app/ChoNaBojoApp/ViewModels/MapViewModel.cs`
+**Files**: `app/ChoNaBojoApp/Views/MapPage.xaml`, `app/ChoNaBojoApp/Views/MapPage.xaml.cs`, `app/ChoNaBojoApp/ViewModels/MapViewModel.cs`, `app/ChoNaBojoApp/Views/AddressSearchPage.xaml`, `app/ChoNaBojoApp/Views/AddressSearchPage.xaml.cs`, `app/ChoNaBojoApp/ViewModels/AddressSearchViewModel.cs`, `app/ChoNaBojoApp/Services/Geocoding/AddressSearchService.cs`, `app/ChoNaBojoApp/Services/Geocoding/IAddressSearchService.cs`, `app/ChoNaBojoApp/Services/Geocoding/AddressSearchResult.cs`
 
 **Intent**: Satisfy FR-004's fallback for users who deny location permission.
 
-**Contract**: A `material:TextField` (`TextFieldStyle`) at the top of the screen plus a dismissible info banner, both visible only when `LocationDenied` is true. Banner styling follows ui-guidelines §9's in-app banner: `SurfaceColor` with `CardShadow`. A `SearchAddressCommand` — triggered by an explicit submit, never per keystroke — calls `Geocoding.Default.GetLocationsAsync(address)` and recenters the map on the first result via `MoveToRegion`. Empty results and documented geocoding failures (`IOException`, `FeatureNotSupportedException`, and `PermissionException`) surface a "Couldn't find that address" snackbar through the existing `IFeedbackService`. Do not catch cancellation or unexpected exceptions here; let them propagate through the established command/error path rather than presenting a misleading address-not-found message.
+**Contract**: An opaque, elevated address-search surface is pinned above the map and visible only when `LocationDenied` is true. Tapping it opens a dedicated modal `AddressSearchPage` with an automatically focused `material:TextField`. Typing at least two characters starts a cancellation-aware 350 ms debounce, then shows up to five address suggestions below the field. Selecting a suggestion closes the modal and recenters the map; pressing the keyboard Search action without selecting performs the lookup and chooses the service's first result.
 
-Record in code that empty results are **expected on emulators without Google Play Services**, so this path must be tested on a Google APIs image.
+`AddressSearchService` serializes access to `Geocoding.Default`, reverse-geocodes result labels, and returns typed `Success`, `NotFound`, or `Unavailable` results. Empty results and documented .NET/Android geocoder failures (`IOException`, `FeatureNotSupportedException`, `PermissionException`, direct `Java.IO.IOException`, and Android runtime wrappers whose cause chain contains that I/O failure) produce an inline unavailable/not-found state and snackbar rather than crashing. Cancellation and unexpected exceptions are not converted into misleading address-not-found results.
+
+The location warning is a centered, dismissible `SurfaceColor` card with `CardShadow` and a neutral `DividerColor` border. The blocking map-load error is also centered, retains its `ErrorColor` border and Retry action, and is declared later in the visual layer so it covers the warning when both are active.
+
+#### 3. Current-location control
+
+**Files**: `app/ChoNaBojoApp/Views/MapPage.xaml`, `app/ChoNaBojoApp/Views/MapPage.xaml.cs`, `app/ChoNaBojoApp/ViewModels/MapViewModel.cs`
+
+**Contract**: Do not bind `Map.IsShowingUser`, because the Android handler briefly enables Google's native top-right current-location button. The app owns a 48×48 circular Material `my_location` icon button in the lower-left corner, raised above map attribution. It checks permission, resolves the latest cached device location (falling back to a fresh medium-accuracy request with an eight-second timeout), and emits an explicit `MapCenterRequested` event on every tap. Camera movement must not depend on `InitialCenter` property equality, because panning changes the native camera without changing that stored value.
+
+Record in code that native geocoding is provider-dependent: `Geocoder.IsPresent` does not guarantee an individual lookup succeeds, and stale emulator images may return `grpc failed`. Test successful search on an image with a functioning geocoder provider and graceful failure on one without it.
 
 ### Success Criteria:
 
@@ -381,10 +391,12 @@ Record in code that empty results are **expected on emulators without Google Pla
 - Selecting a sport hides non-matching venues and recolors the remainder to that sport's color
 - Re-selecting "All" restores every venue and its base coloring
 - Filter changes are instant and issue no network request
-- With location denied, the address field and banner appear; submitting a Warsaw address recenters the map
-- An unresolvable address shows the "couldn't find" snackbar rather than failing silently
-- With location granted, the address field and banner are absent
-- The banner can be dismissed and does not obstruct the chip row or map
+- With location denied, the centered warning and address-search surface appear; tapping the surface opens the dedicated search screen
+- Typing shows debounced suggestions; selecting one recenters the map, while submitting free text selects the first result
+- Unresolvable addresses and unavailable native geocoding show feedback rather than failing silently or crashing
+- With location granted, the fallback UI is absent and only the custom lower-left current-location button is shown
+- The current-location button works repeatedly after panning
+- The warning can be dismissed; a simultaneous blocking error covers it with the red error border
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for manual confirmation. This is the final phase — confirm the full Testing Strategy script passes before closing the change.
 
@@ -404,7 +416,7 @@ No test projects exist in this repo and none are added here (consistent with F-0
 
 ### Manual emulator script
 
-**Emulator requirement: use a system image with Google APIs.** A bare AOSP image has no Google Play Services, so Google Maps tiles won't render and `Geocoding` returns empty — both would look like implementation bugs.
+**Emulator requirement: use a system image with Google APIs.** A bare AOSP image has no Google Play Services, so Google Maps tiles won't render. Native geocoding is provider-dependent even on Google images; use a fresh image with a functioning provider for the success path and verify unavailable providers fail gracefully.
 
 1. **First run, permission granted** — launch, log in, accept the location prompt. Map centers on the emulator's mock location; pins render.
 2. **Pin colors** — confirm single-sport venues show distinct colors and multi-sport venues show red orange.
@@ -412,9 +424,10 @@ No test projects exist in this repo and none are added here (consistent with F-0
 4. **Filter** — select a sport; confirm non-matching venues vanish and the rest recolor. Confirm no network call. Return to "All".
 5. **Performance** — pan and zoom across Warsaw; confirm responsiveness within the 2s NFR.
 6. **Session** — kill and relaunch; confirm you land back on the map, still logged in.
-7. **Permission denied** — revoke location in emulator settings, clear app data, relaunch and deny. Confirm Warsaw centering, banner, and address field. Submit "Pole Mokotowskie, Warszawa" and confirm recentering. Submit gibberish and confirm the snackbar.
-8. **Offline** — disable emulator networking and cold-start; confirm the error state with Retry, then re-enable and confirm Retry recovers.
-9. **Logout** — log out from the toolbar; confirm return to Login with no map content in the back stack.
+7. **Permission denied** — revoke location in emulator settings, clear app data, relaunch and deny. Confirm Warsaw centering, the centered warning, and the opaque address-search surface. Open the dedicated search screen, type a partial address, select a suggestion, and confirm recentering. Reopen it, submit free text without selecting, and confirm the first result is used. Submit gibberish and confirm feedback appears. Dismiss the warning.
+8. **Current location** — grant location, pan away, and repeatedly tap the custom lower-left icon; each tap returns to the current location and Google's native top-right button never appears.
+9. **Offline** — disable emulator networking and cold-start; confirm the centered red error state covers the location warning, then re-enable networking and confirm Retry recovers.
+10. **Logout** — log out from the toolbar; confirm return to Login with no map content in the back stack.
 
 ## Performance Considerations
 
@@ -516,17 +529,17 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 
 #### Automated
 
-- [ ] 5.1 Android head builds
-- [ ] 5.2 Windows head builds
-- [ ] 5.3 Whole solution builds
+- [x] 5.1 Android head builds
+- [x] 5.2 Windows head builds
+- [x] 5.3 Whole solution builds
 
 #### Manual
 
-- [ ] 5.4 All chip selected by default with every venue visible
-- [ ] 5.5 Selecting a sport hides non-matching venues and recolors the rest
-- [ ] 5.6 Re-selecting All restores every venue and base coloring
-- [ ] 5.7 Filter changes are instant with no network request
-- [ ] 5.8 Location denied shows address field and banner; valid address recenters
-- [ ] 5.9 Unresolvable address shows the snackbar
-- [ ] 5.10 Location granted hides the address field and banner
-- [ ] 5.11 Banner dismisses without obstructing the chip row or map
+- [x] 5.4 All chip selected by default with every venue visible
+- [x] 5.5 Selecting a sport hides non-matching venues and recolors the rest
+- [x] 5.6 Re-selecting All restores every venue and base coloring
+- [x] 5.7 Filter changes are instant with no network request
+- [x] 5.8 Location denied shows the centered warning and address-search launcher; a chosen or first result recenters
+- [x] 5.9 AddressSearchPage shows the correct message for unresolvable or unavailable searches
+- [x] 5.10 Location granted hides fallback UI and shows only the custom current-location button
+- [x] 5.11 Warning dismisses cleanly and a simultaneous blocking error covers it
