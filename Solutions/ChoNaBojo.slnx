@@ -68,6 +68,7 @@
     <File Path="../context/changes/map-venue-discovery/plan.md" />
   </Folder>
   <Folder Name="/context/changes/map-venue-discovery/reviews/">
+    <File Path="../context/changes/map-venue-discovery/reviews/impl-review.md" />
     <File Path="../context/changes/map-venue-discovery/reviews/plan-review.md" />
   </Folder>
   <Folder Name="/context/foundation/">
