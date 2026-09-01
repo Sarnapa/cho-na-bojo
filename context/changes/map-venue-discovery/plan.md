@@ -529,17 +529,17 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 
 #### Automated
 
-- [x] 5.1 Android head builds
-- [x] 5.2 Windows head builds
-- [x] 5.3 Whole solution builds
+- [x] 5.1 Android head builds — abdab86
+- [x] 5.2 Windows head builds — abdab86
+- [x] 5.3 Whole solution builds — abdab86
 
 #### Manual
 
-- [x] 5.4 All chip selected by default with every venue visible
-- [x] 5.5 Selecting a sport hides non-matching venues and recolors the rest
-- [x] 5.6 Re-selecting All restores every venue and base coloring
-- [x] 5.7 Filter changes are instant with no network request
-- [x] 5.8 Location denied shows the centered warning and address-search launcher; a chosen or first result recenters
-- [x] 5.9 AddressSearchPage shows the correct message for unresolvable or unavailable searches
-- [x] 5.10 Location granted hides fallback UI and shows only the custom current-location button
-- [x] 5.11 Warning dismisses cleanly and a simultaneous blocking error covers it
+- [x] 5.4 All chip selected by default with every venue visible — abdab86
+- [x] 5.5 Selecting a sport hides non-matching venues and recolors the rest — abdab86
+- [x] 5.6 Re-selecting All restores every venue and base coloring — abdab86
+- [x] 5.7 Filter changes are instant with no network request — abdab86
+- [x] 5.8 Location denied shows the centered warning and address-search launcher; a chosen or first result recenters — abdab86
+- [x] 5.9 AddressSearchPage shows the correct message for unresolvable or unavailable searches — abdab86
+- [x] 5.10 Location granted hides fallback UI and shows only the custom current-location button — abdab86
+- [x] 5.11 Warning dismisses cleanly and a simultaneous blocking error covers it — abdab86
