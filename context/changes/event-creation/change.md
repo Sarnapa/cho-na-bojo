@@ -1,7 +1,7 @@
 ---
 change_id: event-creation
 title: Event creation
-status: new
+status: planned
 created: 2026-09-02
 updated: 2026-09-02
 archived_at: null

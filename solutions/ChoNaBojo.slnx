@@ -74,6 +74,8 @@
   </Folder>
   <Folder Name="/context/changes/event-creation/">
     <File Path="../context/changes/event-creation/change.md" />
+    <File Path="../context/changes/event-creation/plan-brief.md" />
+    <File Path="../context/changes/event-creation/plan.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
