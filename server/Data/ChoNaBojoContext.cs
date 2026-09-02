@@ -71,16 +71,16 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 			entity.HasIndex(s => s.Code).IsUnique();
 
 			entity.HasData(
-				new Sport { Id = 1, Code = "football", Name = "Piłka nożna" },
-				new Sport { Id = 2, Code = "basketball", Name = "Koszykówka" },
-				new Sport { Id = 3, Code = "volleyball", Name = "Siatkówka" },
-				new Sport { Id = 4, Code = "tennis", Name = "Tenis" },
-				new Sport { Id = 5, Code = "running", Name = "Bieganie" },
-				new Sport { Id = 6, Code = "cycling", Name = "Kolarstwo" },
-				new Sport { Id = 7, Code = "rollerblading", Name = "Jazda na rolkach" },
-				new Sport { Id = 8, Code = "gym", Name = "Siłownia" },
-				new Sport { Id = 9, Code = "street_workout", Name = "Street workout" },
-				new Sport { Id = 10, Code = "swimming", Name = "Pływanie" }
+				new Sport { Id = 1, Code = "football", Name = "Football" },
+				new Sport { Id = 2, Code = "basketball", Name = "Basketball" },
+				new Sport { Id = 3, Code = "volleyball", Name = "Volleyball" },
+				new Sport { Id = 4, Code = "tennis", Name = "Tennis" },
+				new Sport { Id = 5, Code = "running", Name = "Running" },
+				new Sport { Id = 6, Code = "cycling", Name = "Cycling" },
+				new Sport { Id = 7, Code = "rollerblading", Name = "Rollerblading" },
+				new Sport { Id = 8, Code = "gym", Name = "Gym" },
+				new Sport { Id = 9, Code = "street_workout", Name = "Street Workout" },
+				new Sport { Id = 10, Code = "swimming", Name = "Swimming" }
 			);
 		});
 

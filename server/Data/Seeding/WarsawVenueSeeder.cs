@@ -6,6 +6,15 @@ using ChoNaBojo.Server.Data.Entities;
 
 namespace ChoNaBojo.Server.Data.Seeding;
 
+/// <summary>
+/// Seeds <c>Venues</c> and <c>VenueSports</c> from <c>data/warsaw-venues.csv</c>, which is the
+/// source of truth for both. Venues are upserted on the stable CSV id, so edits to the CSV
+/// (name, coordinates, address, description) overwrite the stored rows on the next
+/// <c>dotnet ef database update</c>. Sport links are reconciled — added when new, dropped when the
+/// CSV no longer lists them. Rows already matching the CSV are skipped, keeping repeat runs no-ops.
+/// Venues removed from the CSV are deliberately left in place rather than deleted, because
+/// <c>Venues</c> is referenced by user-generated data.
+/// </summary>
 public static class WarsawVenueSeeder
 {
 	#region Private constants
@@ -67,9 +76,25 @@ public static class WarsawVenueSeeder
 				$"CSV references sport id(s) with no matching seeded Sport row: {string.Join(", ", missingSportIds)}.");
 		}
 
-		var existingVenueIds = isAsync
-			? await dbContext.Venues.AsNoTracking().Select(venue => venue.Id).ToHashSetAsync(cancellationToken)
-			: dbContext.Venues.AsNoTracking().Select(venue => venue.Id).ToHashSet();
+		var existingVenues = isAsync
+			? await dbContext.Venues.AsNoTracking()
+				.Select(venue => new VenueSnapshot(
+					venue.Id,
+					venue.Name,
+					venue.Location.Y,
+					venue.Location.X,
+					venue.Address,
+					venue.Description))
+				.ToDictionaryAsync(venue => venue.Id, cancellationToken)
+			: dbContext.Venues.AsNoTracking()
+				.Select(venue => new VenueSnapshot(
+					venue.Id,
+					venue.Name,
+					venue.Location.Y,
+					venue.Location.X,
+					venue.Address,
+					venue.Description))
+				.ToDictionary(venue => venue.Id);
 
 		var existingVenueSportPairs = isAsync
 			? (await dbContext.VenueSports.AsNoTracking()
@@ -81,43 +106,67 @@ public static class WarsawVenueSeeder
 
 		foreach (var row in csvRows)
 		{
-			if (!existingVenueIds.Contains(row.Id))
+			// The CSV is the source of truth: insert missing venues and overwrite drifted ones.
+			if (existingVenues.TryGetValue(row.Id, out var snapshot) && snapshot.Matches(row))
 			{
-				if (isAsync)
-				{
-					await dbContext.Database.ExecuteSqlInterpolatedAsync(
-						$"""
-						INSERT INTO "Venues" ("Id", "Name", "Location", "Address", "Description")
-						VALUES ({row.Id}, {row.Name}, ST_SetSRID(ST_MakePoint({row.Longitude}, {row.Latitude}), {Wgs84Srid}), {row.Address}, {row.Description})
-						ON CONFLICT ("Id") DO NOTHING;
-						""",
-						cancellationToken);
-				}
-				else
-				{
-					dbContext.Database.ExecuteSqlInterpolated(
-						$"""
-						INSERT INTO "Venues" ("Id", "Name", "Location", "Address", "Description")
-						VALUES ({row.Id}, {row.Name}, ST_SetSRID(ST_MakePoint({row.Longitude}, {row.Latitude}), {Wgs84Srid}), {row.Address}, {row.Description})
-						ON CONFLICT ("Id") DO NOTHING;
-						""");
-				}
-
-				existingVenueIds.Add(row.Id);
+				continue;
 			}
 
-			foreach (int sportId in row.SportIds)
+			if (isAsync)
 			{
-				var key = new VenueSportKey(row.Id, sportId);
-				if (existingVenueSportPairs.Add(key))
-				{
-					dbContext.VenueSports.Add(new VenueSport
-					{
-						VenueId = row.Id,
-						SportId = sportId
-					});
-				}
+				await dbContext.Database.ExecuteSqlInterpolatedAsync(
+					$"""
+					INSERT INTO "Venues" ("Id", "Name", "Location", "Address", "Description")
+					VALUES ({row.Id}, {row.Name}, ST_SetSRID(ST_MakePoint({row.Longitude}, {row.Latitude}), {Wgs84Srid}), {row.Address}, {row.Description})
+					ON CONFLICT ("Id") DO UPDATE SET
+						"Name" = EXCLUDED."Name",
+						"Location" = EXCLUDED."Location",
+						"Address" = EXCLUDED."Address",
+						"Description" = EXCLUDED."Description";
+					""",
+					cancellationToken);
 			}
+			else
+			{
+				dbContext.Database.ExecuteSqlInterpolated(
+					$"""
+					INSERT INTO "Venues" ("Id", "Name", "Location", "Address", "Description")
+					VALUES ({row.Id}, {row.Name}, ST_SetSRID(ST_MakePoint({row.Longitude}, {row.Latitude}), {Wgs84Srid}), {row.Address}, {row.Description})
+					ON CONFLICT ("Id") DO UPDATE SET
+						"Name" = EXCLUDED."Name",
+						"Location" = EXCLUDED."Location",
+						"Address" = EXCLUDED."Address",
+						"Description" = EXCLUDED."Description";
+					""");
+			}
+		}
+
+		var desiredVenueSportPairs = csvRows
+			.SelectMany(row => row.SportIds.Select(sportId => new VenueSportKey(row.Id, sportId)))
+			.ToHashSet();
+
+		foreach (var pair in desiredVenueSportPairs.Where(pair => !existingVenueSportPairs.Contains(pair)))
+		{
+			dbContext.VenueSports.Add(new VenueSport
+			{
+				VenueId = pair.VenueId,
+				SportId = pair.SportId
+			});
+		}
+
+		// Join rows are derived data, so links dropped from the CSV are removed for venues it still owns.
+		var csvVenueIds = csvRows.Select(row => row.Id).ToHashSet();
+		var staleVenueSportPairs = existingVenueSportPairs
+			.Where(pair => csvVenueIds.Contains(pair.VenueId) && !desiredVenueSportPairs.Contains(pair))
+			.ToList();
+
+		foreach (var pair in staleVenueSportPairs)
+		{
+			dbContext.VenueSports.Remove(new VenueSport
+			{
+				VenueId = pair.VenueId,
+				SportId = pair.SportId
+			});
 		}
 
 		if (!dbContext.ChangeTracker.HasChanges())
@@ -181,24 +230,24 @@ public static class WarsawVenueSeeder
 			}
 
 			double latitude = ParseDouble(
-				GetRequiredValue(fields, headerMap["szerokosc_geograficzna"], "szerokosc_geograficzna", rowNumber),
-				"szerokosc_geograficzna",
+				GetRequiredValue(fields, headerMap["latitude"], "latitude", rowNumber),
+				"latitude",
 				rowNumber);
 
 			double longitude = ParseDouble(
-				GetRequiredValue(fields, headerMap["dlugosc_geograficzna"], "dlugosc_geograficzna", rowNumber),
-				"dlugosc_geograficzna",
+				GetRequiredValue(fields, headerMap["longitude"], "longitude", rowNumber),
+				"longitude",
 				rowNumber);
 
 			rows.Add(new VenueCsvRow(
 				Id: id,
-				Name: GetRequiredValue(fields, headerMap["nazwa"], "nazwa", rowNumber),
+				Name: GetRequiredValue(fields, headerMap["name"], "name", rowNumber),
 				Latitude: latitude,
 				Longitude: longitude,
-				Address: GetRequiredValue(fields, headerMap["adres"], "adres", rowNumber),
-				Description: GetRequiredValue(fields, headerMap["opis"], "opis", rowNumber),
+				Address: GetRequiredValue(fields, headerMap["address"], "address", rowNumber),
+				Description: GetRequiredValue(fields, headerMap["description"], "description", rowNumber),
 				SportIds: ParseSportIds(
-					GetRequiredValue(fields, headerMap["wspierane_dyscypliny"], "wspierane_dyscypliny", rowNumber),
+					GetRequiredValue(fields, headerMap["supported_sports"], "supported_sports", rowNumber),
 					rowNumber)));
 		}
 
@@ -218,12 +267,12 @@ public static class WarsawVenueSeeder
 		string[] requiredHeaders =
 		[
 			"id",
-			"nazwa",
-			"szerokosc_geograficzna",
-			"dlugosc_geograficzna",
-			"adres",
-			"opis",
-			"wspierane_dyscypliny"
+			"name",
+			"latitude",
+			"longitude",
+			"address",
+			"description",
+			"supported_sports"
 		];
 
 		string[] missingHeaders = requiredHeaders
@@ -283,13 +332,13 @@ public static class WarsawVenueSeeder
 
 		foreach (string token in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
 		{
-			int sportId = ParsePositiveInt(token, "wspierane_dyscypliny", rowNumber);
+			int sportId = ParsePositiveInt(token, "supported_sports", rowNumber);
 			sportIds.Add(sportId);
 		}
 
 		if (sportIds.Count == 0)
 		{
-			throw new InvalidOperationException($"Row {rowNumber} has no sport ids in 'wspierane_dyscypliny'.");
+			throw new InvalidOperationException($"Row {rowNumber} has no sport ids in 'supported_sports'.");
 		}
 
 		return sportIds;
@@ -350,6 +399,27 @@ public static class WarsawVenueSeeder
 		string Address,
 		string Description,
 		IReadOnlyCollection<int> SportIds);
+
+	private sealed record VenueSnapshot(
+		int Id,
+		string Name,
+		double Latitude,
+		double Longitude,
+		string Address,
+		string Description)
+	{
+		/// <summary>Coordinates round-trip through PostGIS as doubles, so compare them within a tolerance.</summary>
+		private const double CoordinateTolerance = 1e-7;
+
+		public bool Matches(VenueCsvRow row)
+		{
+			return string.Equals(Name, row.Name, StringComparison.Ordinal)
+				&& string.Equals(Address, row.Address, StringComparison.Ordinal)
+				&& string.Equals(Description, row.Description, StringComparison.Ordinal)
+				&& Math.Abs(Latitude - row.Latitude) <= CoordinateTolerance
+				&& Math.Abs(Longitude - row.Longitude) <= CoordinateTolerance;
+		}
+	}
 
 	private readonly record struct VenueSportKey(int VenueId, int SportId);
 	#endregion

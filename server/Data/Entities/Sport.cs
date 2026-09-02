@@ -14,7 +14,7 @@ public class Sport
 	/// <summary>Stable identifier (e.g. "football"). Required and unique.</summary>
 	public string Code { get; set; } = null!;
 
-	/// <summary>Display name (e.g. "Piłka nożna").</summary>
+	/// <summary>Display name (e.g. "Football").</summary>
 	public string Name { get; set; } = null!;
 
 	public ICollection<VenueSport> VenueSports { get; set; } = [];
