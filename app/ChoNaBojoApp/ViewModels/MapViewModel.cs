@@ -56,6 +56,7 @@ public partial class MapViewModel : ViewModelBase
 	private static readonly Location WarsawCenter = new(52.2297, 21.0122);
 	private static readonly Distance WarsawCenterInitialRadius = Distance.FromKilometers(5);
 	private static readonly Distance InitialRadius = Distance.FromKilometers(2);
+	private static readonly TimeSpan CachedLocationFreshness = TimeSpan.FromMinutes(2);
 	#endregion
 
 	#region Private fields
@@ -150,15 +151,15 @@ public partial class MapViewModel : ViewModelBase
 
 	#region Commmands
 	[RelayCommand]
-	private Task AppearingAsync()
+	private Task AppearingAsync(CancellationToken cancellationToken)
 	{
-		return LoadMapAsync();
+		return LoadMapAsync(cancellationToken);
 	}
 
 	[RelayCommand]
-	private Task RetryAsync()
+	private Task RetryAsync(CancellationToken cancellationToken)
 	{
-		return LoadMapAsync();
+		return LoadMapAsync(cancellationToken);
 	}
 
 	[RelayCommand]
@@ -189,11 +190,13 @@ public partial class MapViewModel : ViewModelBase
 				return;
 			}
 
-			Location? location = await Geolocation.Default.GetLastKnownLocationAsync()
-				?? _lastKnownCurrentLocation
+			Location? location = GetFreshCachedLocation(
+					await Geolocation.Default.GetLastKnownLocationAsync())
+				?? GetFreshCachedLocation(_lastKnownCurrentLocation)
 				?? await GetFreshCurrentLocationAsync();
 			if (location is null)
 			{
+				UseWarsawFallback();
 				await ShowCurrentLocationUnavailableAsync();
 				return;
 			}
@@ -217,6 +220,7 @@ public partial class MapViewModel : ViewModelBase
 		}
 		catch (TimeoutException)
 		{
+			UseWarsawFallback();
 			await ShowCurrentLocationUnavailableAsync();
 		}
 	}
@@ -290,7 +294,7 @@ public partial class MapViewModel : ViewModelBase
 	#endregion
 
 	#region Private methods
-	private async Task LoadMapAsync()
+	private async Task LoadMapAsync(CancellationToken cancellationToken)
 	{
 		if (IsBusy || _hasLoadedMap)
 		{
@@ -304,11 +308,12 @@ public partial class MapViewModel : ViewModelBase
 
 		try
 		{
-			Task resolveLocationTask = ResolveInitialCenterAsync();
+			Task resolveLocationTask = ResolveInitialCenterAsync(cancellationToken);
 			Task<VenueCatalogLoadResult> catalogTask =
-				_venueCatalog.EnsureLoadedAsync(CancellationToken.None);
+				_venueCatalog.EnsureLoadedAsync(cancellationToken);
 
 			await Task.WhenAll(resolveLocationTask, catalogTask);
+			cancellationToken.ThrowIfCancellationRequested();
 			VenueCatalogLoadResult catalogResult = await catalogTask;
 
 			if (catalogResult.Status != VenueCatalogLoadStatus.Success)
@@ -343,16 +348,18 @@ public partial class MapViewModel : ViewModelBase
 		}
 	}
 
-	private async Task ResolveInitialCenterAsync()
+	private async Task ResolveInitialCenterAsync(CancellationToken cancellationToken)
 	{
 		try
 		{
 			PermissionStatus status =
 				await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+			cancellationToken.ThrowIfCancellationRequested();
 			if (status != PermissionStatus.Granted)
 			{
 				status = await MainThread.InvokeOnMainThreadAsync(
 					Permissions.RequestAsync<Permissions.LocationWhenInUse>);
+				cancellationToken.ThrowIfCancellationRequested();
 			}
 
 			if (status != PermissionStatus.Granted)
@@ -361,7 +368,8 @@ public partial class MapViewModel : ViewModelBase
 				return;
 			}
 
-			Location? location = await GetInitialLocationAsync();
+			Location? location = await GetInitialLocationAsync(cancellationToken);
+			cancellationToken.ThrowIfCancellationRequested();
 
 			if (location is null)
 			{
@@ -398,17 +406,37 @@ public partial class MapViewModel : ViewModelBase
 			MapSpan.FromCenterAndRadius(WarsawCenter, WarsawCenterInitialRadius));
 	}
 
-	private static async Task<Location?> GetInitialLocationAsync()
+	private static async Task<Location?> GetInitialLocationAsync(
+		CancellationToken cancellationToken)
 	{
-		Location? location = await Geolocation.Default.GetLastKnownLocationAsync();
-		return location ?? await GetFreshCurrentLocationAsync();
+		Location? location = GetFreshCachedLocation(
+			await Geolocation.Default.GetLastKnownLocationAsync());
+		cancellationToken.ThrowIfCancellationRequested();
+		return location ?? await GetFreshCurrentLocationAsync(cancellationToken);
+	}
+
+	private static Location? GetFreshCachedLocation(Location? location)
+	{
+		if (location is null)
+		{
+			return null;
+		}
+
+		TimeSpan age = DateTimeOffset.UtcNow - location.Timestamp;
+		return age <= CachedLocationFreshness ? location : null;
 	}
 
 	private static Task<Location?> GetFreshCurrentLocationAsync()
 	{
+		return GetFreshCurrentLocationAsync(CancellationToken.None);
+	}
+
+	private static Task<Location?> GetFreshCurrentLocationAsync(
+		CancellationToken cancellationToken)
+	{
 		return Geolocation.Default.GetLocationAsync(
 			new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(8)),
-			CancellationToken.None);
+			cancellationToken);
 	}
 
 	private void UseCurrentLocation(Location location)

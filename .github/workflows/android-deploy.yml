@@ -66,7 +66,13 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
+          if [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+            echo "::error::GOOGLE_MAPS_API_KEY secret is required for release builds"
+            exit 1
+          fi
+
           dotnet publish "${{ env.PROJECT_PATH }}" \
             -f net10.0-android \
             -c Release \
@@ -77,7 +83,7 @@ jobs:
             -p:AndroidSigningKeyPass="$ANDROID_KEY_PASSWORD" \
             -p:AndroidSigningStorePass="$ANDROID_KEYSTORE_PASSWORD" \
             -p:AndroidPackageFormats=aab \
-            -p:GoogleMapsApiKey=${{ secrets.GOOGLE_MAPS_API_KEY }}
+            -p:GoogleMapsApiKey="$GOOGLE_MAPS_API_KEY"
 
       - name: Locate signed AAB
         id: aab

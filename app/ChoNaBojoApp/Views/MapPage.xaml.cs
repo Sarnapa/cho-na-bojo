@@ -21,6 +21,7 @@ public partial class MapPage : ContentPage
 	private readonly INavigationRootService _navigationRootService;
 	private readonly IServiceProvider _serviceProvider;
 	private readonly MapViewModel _viewModel;
+	private bool _isAppeared;
 #if ANDROID
 	private readonly CurrentLocationSource _currentLocationSource = new();
 #endif
@@ -44,6 +45,7 @@ public partial class MapPage : ContentPage
 	protected override void OnAppearing()
 	{
 		base.OnAppearing();
+		_isAppeared = true;
 		_viewModel.LoggedOut += OnLoggedOut;
 		_viewModel.MapCenterRequested += OnMapCenterRequested;
 		_viewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -59,6 +61,10 @@ public partial class MapPage : ContentPage
 
 	protected override void OnDisappearing()
 	{
+		_isAppeared = false;
+		_viewModel.AppearingCommand.Cancel();
+		_viewModel.RetryCommand.Cancel();
+		DisableUserLocationLayer();
 		_viewModel.LoggedOut -= OnLoggedOut;
 		_viewModel.MapCenterRequested -= OnMapCenterRequested;
 		_viewModel.PropertyChanged -= OnViewModelPropertyChanged;
@@ -92,6 +98,11 @@ public partial class MapPage : ContentPage
 			{
 				ReplaceVisiblePins();
 			}
+		}
+
+		if (e.PropertyName == nameof(MapViewModel.IsShowingUser))
+		{
+			ConfigureUserLocationLayer();
 		}
 	}
 
@@ -159,9 +170,7 @@ public partial class MapPage : ContentPage
 	private async void ConfigureUserLocationLayer()
 	{
 #if ANDROID
-		if (!_viewModel.IsShowingUser
-			|| _viewModel.InitialCenter is null
-			|| VenueMap.Handler is not MapHandler handler)
+		if (!_isAppeared || VenueMap.Handler is not MapHandler handler)
 		{
 			return;
 		}
@@ -173,30 +182,72 @@ public partial class MapPage : ContentPage
 		}
 		else
 		{
+			if (!_viewModel.IsShowingUser || _viewModel.InitialCenter is null)
+			{
+				return;
+			}
+
 			using var callback = new GoogleMapReadyCallback();
 			handler.PlatformView.GetMapAsync(callback);
 			map = await callback.MapReady;
+		}
+
+		if (!_isAppeared
+			|| !_viewModel.IsShowingUser
+			|| _viewModel.InitialCenter is null)
+		{
+			ApplyUserLocationLayer(map, false);
+			return;
 		}
 
 		PermissionStatus permission =
 			await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
 		if (permission != PermissionStatus.Granted)
 		{
+			ApplyUserLocationLayer(map, false);
 			return;
 		}
 
-		_currentLocationSource.Update(_viewModel.InitialCenter.Center);
+		Location currentLocation = _viewModel.InitialCenter.Center;
 		await MainThread.InvokeOnMainThreadAsync(() =>
 		{
-			map.MyLocationEnabled = false;
-			map.SetLocationSource(_currentLocationSource);
-			map.MyLocationEnabled = true;
-			map.UiSettings.MyLocationButtonEnabled = false;
+			bool shouldEnable = _isAppeared && _viewModel.IsShowingUser;
+			if (shouldEnable)
+			{
+				_currentLocationSource.Update(currentLocation);
+			}
+
+			ApplyUserLocationLayer(map, shouldEnable);
 		});
 #else
 		await Task.CompletedTask;
 #endif
 	}
+
+	private void DisableUserLocationLayer()
+	{
+#if ANDROID
+		if (VenueMap.Handler is MapHandler { Map: not null } handler)
+		{
+			ApplyUserLocationLayer(handler.Map, false);
+		}
+#endif
+	}
+
+#if ANDROID
+	private void ApplyUserLocationLayer(GoogleMap map, bool isEnabled)
+	{
+		map.MyLocationEnabled = false;
+		map.UiSettings.MyLocationButtonEnabled = false;
+		if (!isEnabled)
+		{
+			return;
+		}
+
+		map.SetLocationSource(_currentLocationSource);
+		map.MyLocationEnabled = true;
+	}
+#endif
 	#endregion
 
 	#region GoogleMapReadyCallback

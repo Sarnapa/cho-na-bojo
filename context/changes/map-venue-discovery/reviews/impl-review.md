@@ -4,19 +4,20 @@
 - **Plan**: `context/changes/map-venue-discovery/plan.md`
 - **Scope**: Phases 1-5 of 5
 - **Date**: 2026-09-01
-- **Verdict**: NEEDS ATTENTION
-- **Findings**: 0 critical, 5 warnings, 2 observations
+- **Triage completed**: 2026-09-02
+- **Verdict**: APPROVED
+- **Findings**: 0 critical, 5 warnings, 2 observations - all fixed
 
 ## Verdicts
 
 | Dimension | Verdict |
 |-----------|---------|
-| Plan Adherence | FAIL |
+| Plan Adherence | PASS |
 | Scope Discipline | PASS |
-| Safety & Quality | WARNING |
+| Safety & Quality | PASS |
 | Architecture | PASS |
 | Pattern Consistency | PASS |
-| Success Criteria | WARNING |
+| Success Criteria | PASS |
 
 ## Verification
 
@@ -47,7 +48,7 @@
   - Tradeoff: A stale or unavailable fix may make the user wait up to eight seconds.
   - Confidence: HIGH - the current null-coalescing order and early return make both stale-location paths explicit.
   - Blind spot: The most appropriate freshness threshold still needs product/device testing.
-- **Decision**: PENDING
+- **Decision**: FIXED - Cached locations are limited to a two-minute freshness window, and the native location layer is disabled on fallback, permission loss, and page disappearance.
 
 ### F2 - Obsolete address searches can block the latest query
 
@@ -61,7 +62,7 @@
   - Tradeoff: Introduces an Android-specific provider adapter instead of relying only on the MAUI abstraction.
   - Confidence: MEDIUM - the defect is explicit, but the exact .NET 10 Android geocoder callback/binding behavior needs emulator validation.
   - Blind spot: Provider-specific result quality and timeout behavior vary across emulator images and devices.
-- **Decision**: PENDING
+- **Decision**: FIXED - Android now uses one timeout-bounded native forward-geocoder lookup without the shared semaphore or sequential reverse lookups; Windows retains the MAUI fallback.
 
 ### F3 - Release workflow can publish an AAB with an empty Maps key
 
@@ -71,7 +72,7 @@
 - **Location**: `.github/workflows/android-deploy.yml:80`
 - **Detail**: A missing `GOOGLE_MAPS_API_KEY` secret expands to an empty MSBuild property. The project deliberately permits an empty key for fresh-clone builds, so CI can still publish and upload a release whose map is blank.
 - **Fix**: Map the secret to an environment variable, fail the workflow when it is empty, and pass the quoted variable to `GoogleMapsApiKey`.
-- **Decision**: PENDING
+- **Decision**: FIXED - The release job now rejects an empty GOOGLE_MAPS_API_KEY before publishing and passes the quoted environment variable to MSBuild.
 
 ### F4 - Required native-geocoder caveat is absent from code
 
@@ -81,7 +82,7 @@
 - **Location**: `app/ChoNaBojoApp/Services/Geocoding/AddressSearchService.cs:21`
 - **Detail**: The plan explicitly requires code to record that `Geocoder.IsPresent` does not guarantee an individual lookup succeeds and that stale emulator providers may return `grpc failed`. The implementation handles provider failures but omits the required rationale.
 - **Fix**: Add the concise provider caveat beside the `Geocoder.IsPresent` check and transport-failure handling.
-- **Decision**: PENDING
+- **Decision**: FIXED - The active Android geocoder now documents that provider presence does not guarantee lookup success and that stale emulators can surface grpc transport failures.
 
 ### F5 - Repeated current-location behavior has no Progress criterion
 
@@ -91,7 +92,7 @@
 - **Location**: `context/changes/map-venue-discovery/plan.md:538`
 - **Detail**: Phase 5 requires manually confirming that the current-location button works repeatedly after panning, but the Progress mirror jumps from checking the button's visibility to warning/error layering. No checkbox or commit evidence records this required behavior.
 - **Fix**: Add the missing Phase 5 Manual Progress item without renaming existing steps, run the emulator check, and record its result and commit SHA.
-- **Decision**: PENDING
+- **Decision**: FIXED - Added Progress item 5.10a and recorded the user's successful repeated-current-location emulator check against abdab86.
 
 ### F6 - Completed emulator checks have no retained review evidence
 
@@ -101,7 +102,7 @@
 - **Location**: `context/changes/map-venue-discovery/plan.md:491-545`
 - **Detail**: Twenty-three emulator/fresh-clone manual checks are marked complete with implementation commit SHAs, but the reviewed diff contains no verification log or other observable evidence. The API payload check was independently reproduced; the device-only claims cannot be independently distinguished from unchecked assertions during this review.
 - **Fix**: Retain a concise manual verification log identifying the emulator image, permission scenarios, and pass/fail outcome for each manual script step.
-- **Decision**: PENDING
+- **Decision**: FIXED - Added reviews/manual-verification.md with the user-reported emulator image and pass results for every manual script step plus the fresh-clone secret check.
 
 ### F7 - Initial map loading is not canceled when the page disappears
 
@@ -115,4 +116,4 @@
   - Tradeoff: Requires careful command-state cleanup so a later appearance can retry normally.
   - Confidence: HIGH - the current call explicitly uses `CancellationToken.None` and has no other cancellation path.
   - Blind spot: Root navigation during startup was not reproduced on an emulator in this review.
-- **Decision**: PENDING
+- **Decision**: FIXED - Appearance and retry commands now cancel on page disappearance and propagate their tokens through location and catalog loading; caller cancellation is preserved at the venue API boundary.

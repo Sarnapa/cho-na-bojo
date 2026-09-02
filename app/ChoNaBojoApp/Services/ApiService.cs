@@ -104,7 +104,7 @@ public class ApiService: IApiService
 		{
 			return VenueCatalogResult.Network();
 		}
-		catch (TaskCanceledException)
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
 		{
 			return VenueCatalogResult.Network();
 		}
@@ -139,7 +139,7 @@ public class ApiService: IApiService
 		{
 			return SportCatalogResult.Network();
 		}
-		catch (TaskCanceledException)
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
 		{
 			return SportCatalogResult.Network();
 		}

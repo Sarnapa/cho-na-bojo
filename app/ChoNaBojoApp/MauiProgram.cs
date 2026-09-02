@@ -10,6 +10,9 @@ using ChoNaBojo.App.Services.Navigation;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.ViewModels;
 using ChoNaBojo.App.Views;
+#if ANDROID
+using ChoNaBojo.App.Platforms.Android;
+#endif
 
 namespace ChoNaBojo.App
 {
@@ -63,7 +66,11 @@ namespace ChoNaBojo.App
 			builder.Services.AddSingleton<INavigationRootService, NavigationRootService>();
 			builder.Services.AddSingleton<IApiService, ApiService>();
 			builder.Services.AddSingleton<IFeedbackService, FeedbackService>();
+#if ANDROID
+			builder.Services.AddSingleton<IAddressSearchService, AndroidAddressSearchService>();
+#else
 			builder.Services.AddSingleton<IAddressSearchService, AddressSearchService>();
+#endif
 			builder.Services.AddSingleton<SessionExpiryCoordinator>();
 			builder.Services.AddSingleton<IVenueCatalog, VenueCatalog>();
 

@@ -542,4 +542,5 @@ No database migration — this slice only reads F-01's seeded tables. Two operat
 - [x] 5.8 Location denied shows the centered warning and address-search launcher; a chosen or first result recenters — abdab86
 - [x] 5.9 AddressSearchPage shows the correct message for unresolvable or unavailable searches — abdab86
 - [x] 5.10 Location granted hides fallback UI and shows only the custom current-location button — abdab86
+- [x] 5.10a Current-location button works repeatedly after panning and the native button stays hidden — abdab86
 - [x] 5.11 Warning dismisses cleanly and a simultaneous blocking error covers it — abdab86
