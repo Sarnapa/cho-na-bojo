@@ -53,7 +53,7 @@ The client combines the selected date and times in `TimeZoneInfo.Local`, rejects
 
 ### State sequencing
 
-The endpoint must look up `(OrganizerUserId, ClientRequestId)` and compare the canonical payload before applying the dynamic "start is not in the past" rule. Otherwise an exact retry could fail merely because time advanced after the original event was created. On the client, an uncertain transport failure preserves both the normalized request snapshot and request id; Retry resends that exact request rather than rebuilding it from editable fields.
+The endpoint must look up `(OrganizerUserId, ClientRequestId)` before applying the dynamic "start is not in the past" rule. Otherwise an exact retry could fail merely because time advanced after the original event was created. A request id that already exists always returns the stored event; the payload is not re-compared, because the client mints one id per draft and Retry resends only the captured snapshot, so a same-key/different-payload request is unreachable from the app. On the client, an uncertain transport failure preserves both the normalized request snapshot and request id; Retry resends that exact request rather than rebuilding it from editable fields.
 
 ### User experience spec
 
@@ -97,7 +97,7 @@ Define the event creation wire shape, domain constants, stable error keys, respo
 
 - Shared contracts and validation compile: `dotnet build shared\ChoNaBojo.Validation\ChoNaBojo.Validation.csproj`
 - Whole solution compiles against the new contract: `dotnet build solutions\ChoNaBojo.slnx`
-- Event contract privacy scan finds no forbidden fields: `rg "Contact|LoginEmail|Communicator|Password|Hash|Token" shared\ChoNaBojo.Contracts\DTOs\EventDTOs.cs` returns no match
+- Contract privacy scan covers the whole shared DTO folder, not just the new file: `rg "Contact|LoginEmail|Communicator|Password|Hash|Token" shared\ChoNaBojo.Contracts\DTOs` returns no match in any type reachable from the event contracts
 
 #### Manual Verification:
 
@@ -144,7 +144,7 @@ Add durable event storage with database-level protection for organizer ownership
 
 **Intent**: Register and constrain `SportsEvent` consistently with the existing EF Core model.
 
-**Contract**: Add `DbSet<SportsEvent> SportsEvents`. Map to `SportsEvents`; generate `Id` with `gen_random_uuid()`; require and size title/description; require UTC timestamp columns; use restrictive organizer and composite `(VenueId, SportId)` relationships; add unique `(OrganizerUserId, ClientRequestId)` and lookup `(VenueId, EstimatedEndsAtUtc)` indexes. Add checks for a non-empty trimmed title, null-or-non-empty trimmed description, participant range, end after start, elapsed duration at most 24 hours, and non-empty client request id. Do not add `Status` or an overlap constraint.
+**Contract**: Add `DbSet<SportsEvent> SportsEvents`. Map to `SportsEvents`; generate `Id` with `gen_random_uuid()`; require and size title/description; require UTC timestamp columns; use restrictive organizer and composite `(VenueId, SportId)` relationships; add the unique `(OrganizerUserId, ClientRequestId)` index. Do not add a `(VenueId, EstimatedEndsAtUtc)` lookup index — S-03 issues no listing query, and S-04 also filters by sport and availability, so it must add the index its actual query shape needs. Add checks for a non-empty trimmed title, null-or-non-empty trimmed description, participant range, end after start, elapsed duration at most 24 hours, and non-empty client request id. Do not add `Status` or an overlap constraint.
 
 #### 4. Generated migration
 
@@ -152,7 +152,9 @@ Add durable event storage with database-level protection for organizer ownership
 
 **Intent**: Materialize the event table and all constraints through the repository's out-of-band EF migration workflow.
 
-**Contract**: Generate `AddSportsEvents`. The migration creates the `SportsEvents` table, organizer and composite venue/sport foreign keys with restrictive deletion, all application-mirroring checks, the unique replay index, and the S-04 venue/end-time lookup index. The application must not call `Database.Migrate()`.
+**Contract**: Generate `AddSportsEvents`. The migration creates the `SportsEvents` table, organizer and composite venue/sport foreign keys with restrictive deletion, all application-mirroring checks, and the unique replay index. The application must not call `Database.Migrate()`.
+
+**Reference-data operational contract**: `VenueSport` already cascades from both `Venue` (`ChoNaBojoContext.cs:107-110`) and `Sport` (`:112-115`), and `Sport` rows are seeded with `HasData` (`:73`). Adding a RESTRICT edge from `SportsEvents` to `VenueSport` therefore means that once any event row exists, deleting a `Venue` or a `Sport` cascades into `VenueSport` and is rejected, failing the entire statement — including an EF-generated `DeleteData` produced by editing the `HasData` sport list. RESTRICT is still the correct choice, because cascading a venue deletion into users' events would silently destroy their data. The consequence must be treated as an explicit rule: **once events exist, venue/sport reference data is append-only** — corrections are `UPDATE`s (rename, re-address, re-map), never deletes; the seeded sport list may gain rows but must not lose or renumber them; and manual Warsaw venue uploads must add rather than replace. Retiring a sport or venue (or removing a `VenueSport` pairing) is out of scope for S-03 and needs its own slice with a deactivation flag and a story for the events already attached.
 
 ### Success Criteria:
 
@@ -167,7 +169,7 @@ Add durable event storage with database-level protection for organizer ownership
 #### Manual Verification:
 
 - Apply the migration through the Supabase session-mode 5432 connection and confirm the application still uses transaction-mode 6543 at runtime
-- Supabase schema inspection confirms the organizer FK, composite venue/sport FK, text/capacity/time/request-id checks, unique replay index, and venue/end-time index
+- Supabase schema inspection confirms the organizer FK, composite venue/sport FK, text/capacity/time/request-id checks, and the unique replay index
 - Direct invalid inserts are rejected for unsupported venue/sport, blank title, participant limits outside 2-300, non-positive duration, and duration over 24 hours
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation that the migration applied and the database constraints are present before proceeding.
@@ -188,7 +190,9 @@ Expose `POST /api/events` as an authenticated minimal API operation that creates
 
 **Intent**: Own authoritative event creation, organizer assignment, stale-reference classification, idempotency, persistence, and safe response projection.
 
-**Contract**: Add `MapEventEndpoints` and `POST /events` under the protected `/api` group. Derive `OrganizerUserId` only through `HttpContext.GetUserId()`. Normalize title and description before comparison/persistence. Query the organizer/request-id pair before dynamic time validation: return `200 OK` with the original response for an exact canonical replay, or `409 Conflict` with `idempotency_key_reused` when the same key carries changed fields. For a new key, run shared validation, resolve the exact `VenueSport` pair and safe venue/sport summary, save the event, and return `201 Created` with no contact data.
+**Contract**: Add `MapEventEndpoints` and `POST /events` under the protected `/api` group. Derive `OrganizerUserId` only through `HttpContext.GetUserId()`. Normalize title and description before persistence. Query the organizer/request-id pair before dynamic time validation: if the pair already exists, return `200 OK` with the stored event's response, without comparing the incoming payload. For a new key, run shared validation, resolve the exact `VenueSport` pair and safe venue/sport summary, save the event, and return `201 Created` with no contact data. There is no changed-payload conflict code: standard idempotency-key semantics apply — same key, same event.
+
+**Canonical timestamp normalization**: Every incoming `DateTimeOffset` must pass through one shared conversion helper before it is persisted. The helper must (a) use `.UtcDateTime` — never `.DateTime`, which yields `Kind=Unspecified` and is rejected by Npgsql for `timestamptz` — and (b) truncate to microsecond resolution, because PostgreSQL `timestamptz` stores microseconds while .NET ticks are 100ns, so a value carrying a non-zero seventh fractional digit would otherwise be silently truncated on write and read back differently from what the client sent. There is no UTC value converter in `ChoNaBojoContext` today (the codebase relies on `DateTime.UtcNow` at call sites, e.g. `AuthEndpoints.cs:70-81`, `RefreshTokenService.cs:67-80`), so this helper is the single normalization path for event timestamps.
 
 #### 2. Reference-change and database race handling
 
@@ -196,7 +200,7 @@ Expose `POST /api/events` as an authenticated minimal API operation that creates
 
 **Intent**: Turn stale catalog data and concurrent duplicate submissions into stable client outcomes instead of unhandled EF/PostgreSQL failures.
 
-**Contract**: Return typed `409 Conflict` codes for `venue_not_found`, `sport_not_found`, `sport_not_supported_at_venue`, and `reference_data_changed`, with `venueId` or `sportId` as the affected field. Catch only the relevant unique-constraint race, detach/requery by organizer/request id, and apply the same exact-replay versus changed-payload decision. Map a relevant foreign-key race to `reference_data_changed`; propagate unrelated database failures.
+**Contract**: Return typed `409 Conflict` codes for `venue_not_found`, `sport_not_found`, `sport_not_supported_at_venue`, and `reference_data_changed`, with `venueId` or `sportId` as the affected field. Catch only the relevant unique-constraint race, detach/requery by organizer/request id, and return the stored event as a `200 OK` replay. Map a relevant foreign-key race to `reference_data_changed`; propagate unrelated database failures.
 
 #### 3. Endpoint registration
 
@@ -211,17 +215,18 @@ Expose `POST /api/events` as an authenticated minimal API operation that creates
 #### Automated Verification:
 
 - Server and solution build: `dotnet build solutions\ChoNaBojo.slnx`
-- API starts with the migrated development database: `dotnet run --project server`
+- API is started in the background and confirmed listening on `http://localhost:5100` (`dotnet run --project server` blocks, so it must not be run as a foreground verification step); it stays running for the remaining checks, which authenticate with a JWT obtained from `/auth/login`
 - Unauthenticated `POST /api/events` returns 401 and creates no row
 - A valid authenticated request returns 201 with UTC timestamps, participant count 1, safe venue/sport summaries, and no contact fields
-- Repeating the exact request id and payload returns 200 with the same event id and only one database row; changing the payload with that id returns 409 and leaves the original unchanged
+- Repeating the request id returns 200 with the same event id and only one database row, whether or not the payload is byte-identical, and leaves the stored event unchanged
 - Invalid title, description, ids, participant boundaries, past start, end ordering, and duration return the agreed 400 validation keys; stale venue/sport cases return the agreed 409 codes without creating a row
 - A normal valid create call completes within five seconds when measured from the local API against the configured development database
+- Sending start/end timestamps with sub-microsecond precision stores and returns them consistently, and replaying that request id returns 200 with the same event id
 
 #### Manual Verification:
 
 - Supabase row inspection confirms the organizer id came from the JWT, normalized text was stored, and all timestamps are UTC instants
-- API response inspection confirms no login or contact data is emitted on first creation or replay
+- API response inspection confirms no login or contact data is emitted on first creation or replay — the captured serialized 201 and 200 bodies are scanned in full, since the source-file greps cannot see nested types declared elsewhere and are a lint, not the privacy check
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation of persisted ownership and privacy before proceeding.
 
@@ -241,7 +246,7 @@ Enable event creation from the selected venue and add the typed client, local-ti
 
 **Intent**: Represent every create outcome explicitly so the ViewModel never receives a raw HTTP response.
 
-**Contract**: Model success (including whether the response was a replay), validation errors, reference changes with code/field/message, idempotency-key conflict, unauthorized, network/timeout, and unknown failures. Carry `CreatedEventResponse` only on success.
+**Contract**: Model success (including whether the response was a replay), validation errors, reference changes with code/field/message, unauthorized, network/timeout, and unknown failures. Carry `CreatedEventResponse` only on success. There is no idempotency-key conflict case — a reused request id resolves to a 200 replay success.
 
 #### 2. Event client call
 
@@ -255,7 +260,7 @@ Enable event creation from the selected venue and add the typed client, local-ti
 
 **Intent**: Send the protected JSON POST and map all documented statuses/bodies without leaking transport concerns to the form.
 
-**Contract**: Map 200/201 to success, 400 RFC-7807 errors to validation, 409 `EventConflictResponse` to reference/idempotency outcomes, 401 to unauthorized, transport or non-user cancellation to network, and malformed/unsupported JSON to unknown. Use the existing authenticated `ChoNaBojoApi` client so token refresh and buffered body replay remain active.
+**Contract**: Map 200/201 to success, 400 RFC-7807 errors to validation, 409 `EventConflictResponse` to reference-change outcomes, 401 to unauthorized, transport or non-user cancellation to network, and malformed/unsupported JSON to unknown. Use the existing authenticated `ChoNaBojoApi` client so token refresh and buffered body replay remain active.
 
 #### 3. Refreshable venue catalog
 
@@ -285,7 +290,14 @@ Enable event creation from the selected venue and add the typed client, local-ti
 
 **Intent**: Own the draft, supported-sport choices, shared validation, request identity/snapshot, create command, busy/long-wait states, recovery, and success/cancel events.
 
-**Contract**: Prepare from one selected `VenueResponse` plus the current catalog and optional active map sport. Require title, keep description optional, expose date/start/end, 2-300 participant limit, and auto-accept. Generate one request id per draft. Preselect the active map sport when valid, otherwise auto-select only a single supported sport. On submit, convert local time, run shared validation, capture one normalized request snapshot, disable inputs/navigation, and submit once. After five seconds expose a "Still creating..." state without canceling. An uncertain network failure preserves the exact snapshot/id for a safe Retry and keeps editing locked until the outcome is resolved or the draft is abandoned. A definitive validation/reference failure unlocks the form; reference failure refreshes the catalog, marks only the stale venue/sport selection invalid, and preserves every other field.
+**Contract**: Prepare from one selected `VenueResponse` plus the current catalog and optional active map sport. Require title, keep description optional, expose date/start/end, 2-300 participant limit, and auto-accept. Generate one request id per draft. Preselect the active map sport when valid, otherwise auto-select only a single supported sport. On submit, convert local time, run shared validation, capture one normalized request snapshot, disable inputs/navigation, and submit once. After five seconds expose a "Still creating..." state without canceling. An uncertain network failure preserves the exact snapshot/id for a safe Retry and keeps editing locked until the outcome is resolved or the draft is abandoned. A definitive validation failure unlocks the form and preserves every field.
+
+**Reference-conflict recovery, split by conflict class**: The venue is fixed by the map selection (`MapViewModel.cs:261-273`) and is not an editable field in the form, so the two conflict classes cannot share one recovery path.
+
+- **Sport-level** (`sport_not_found`, `sport_not_supported_at_venue`, and `reference_data_changed` naming `sportId`): refresh the catalog, unlock the form, mark only the sport selection invalid, re-open the sport picker in place, and preserve every other field. No event was created.
+- **Venue-level** (`venue_not_found`, and `reference_data_changed` naming `venueId`): the draft is anchored to a venue that no longer exists and cannot be repaired in place. Refresh the catalog, show an explanatory message, close the form, and return to the map with the stale venue's sheet dismissed. Losing the draft is accepted for this branch.
+
+Every conflict code Phase 3 can emit must terminate in one of these two defined states.
 
 #### 6. Create event page
 
@@ -294,6 +306,8 @@ Enable event creation from the selected venue and add the typed client, local-ti
 **Intent**: Present an accessible MD3 form and return either a `CreatedEventResponse` or cancellation to the map without introducing a second navigation architecture.
 
 **Contract**: Follow the existing modal `ShowAsync`/`TaskCompletionSource` handoff used by `AddressSearchPage`. Use Uranium UI form controls and existing resource styles for title, optional description, sport, date, start/end, participant limit, auto-accept, inline errors, Create, and Cancel. Show an activity indicator plus explicit "Creating event..." and long-wait copy, and block Back/Cancel while a request outcome is unknown.
+
+**In-flight dismissal guard**: `AddressSearchPage` resolves its completion source on dismissal (`AddressSearchPage.xaml.cs:31-38` nulls `_completion` and completes it with `null` in `OnDisappearing`). Copying that behavior verbatim would let Android hardware Back or swipe-dismiss tear the page down mid-POST, creating an event the app cannot show or cancel before S-04/S-07 — and a re-created draft would mint a new `ClientRequestId`, so Phase 3 idempotency would not deduplicate it. Therefore in-flight state must be authoritative over dismissal: override `OnBackButtonPressed` to return `true` while a request outcome is unknown, and complete the `TaskCompletionSource` with cancellation in `OnDisappearing` only when no request is outstanding. If the page is destroyed anyway by a dismissal path that bypasses both hooks, the in-flight request must still complete and its result must not be surfaced through a dead completion source.
 
 #### 7. Map entry point and DI
 
@@ -331,7 +345,9 @@ Enable event creation from the selected venue and add the typed client, local-ti
 - Same-day, overnight, exactly-24-hour, past-start, spring DST-gap, and autumn ambiguous-time cases follow the agreed rules using the device time zone
 - Submit immediately disables fields and navigation, shows creating feedback, changes to a clear long-wait state after five seconds, and never double-submits
 - A network/timeout outcome preserves the exact request snapshot and allows a retry that resolves to one event
-- A stale venue/sport conflict refreshes the catalog, marks the invalid selection, preserves all other draft values, and creates no event
+- A stale sport conflict refreshes the catalog, marks the sport selection invalid, preserves all other draft values, and creates no event
+- A stale venue conflict refreshes the catalog, explains the problem, closes the form, and returns to the map with the stale venue's sheet dismissed, creating no event
+- Android hardware Back and swipe-dismiss are both refused while a create request is in flight, and the form only closes once the outcome is known
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation of the Android form, timing, and recovery behavior before proceeding.
 
@@ -390,7 +406,7 @@ Complete the organizer experience by presenting the safe create response in a re
 - Detail contains no contact data; system Back and Close return to the same map and selected venue without returning to or resubmitting the completed form
 - Canceling an unsubmitted form returns directly to the selected venue sheet and creates nothing
 - With an expired access token and valid refresh token, one create action refreshes and replays the complete protected POST body exactly once
-- Double-tap, response-loss retry, and same-key changed-payload scenarios produce one event and the documented user feedback
+- Double-tap and response-loss retry scenarios produce exactly one event and the documented user feedback
 - Restarting the app does not promise to restore the detail screen; the persisted event remains available for S-04 discovery
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for final human confirmation of the end-to-end Android flow.
@@ -408,7 +424,7 @@ Complete the organizer experience by presenting the safe create response in a re
 ### Integration Tests:
 
 - No committed integration-test harness or Testcontainers dependency is added.
-- The AI agent runs operational checks against the configured development database: migration/model checks, unauthenticated 401, valid 201, exact replay 200 with the same id, changed-payload 409, stale-reference 409, validation 400, payload privacy, UTC values, row count, and five-second timing.
+- The AI agent runs operational checks against the configured development database: migration/model checks, unauthenticated 401, valid 201, request-id replay 200 with the same id, stale-reference 409, validation 400, payload privacy, UTC values, row count, and five-second timing.
 - Database constraint behavior is checked through the generated idempotent SQL and manual Supabase SQL editor probes because `psql` is not installed.
 
 ### Manual Testing Steps:
@@ -426,7 +442,7 @@ Complete the organizer experience by presenting the safe create response in a re
 
 ## Performance Considerations
 
-Creation is one indexed idempotency lookup, one venue/sport lookup, and one insert; no event-list query or participant aggregation is introduced. The `(OrganizerUserId, ClientRequestId)` unique index keeps retries constant-time, while `(VenueId, EstimatedEndsAtUtc)` anticipates S-04's non-expired venue listing without adding premature query code.
+Creation is one indexed idempotency lookup, one venue/sport lookup, and one insert; no event-list query or participant aggregation is introduced. The `(OrganizerUserId, ClientRequestId)` unique index keeps retries constant-time. No listing index is added here: S-04 filters by venue, sport, and availability together, so it must choose the index its real query shape needs rather than inherit a guess from this slice.
 
 The five-second target is measured under normal local-client-to-development-API connectivity. The MAUI client does not fail at five seconds; it changes waiting copy while the request continues. Reference refresh fetches venues and sports concurrently and swaps the cache atomically, matching the existing catalog-loading performance pattern.
 
@@ -463,7 +479,7 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 
 - [ ] 1.1 Shared contracts and validation compile
 - [ ] 1.2 Whole solution compiles against the new contract
-- [ ] 1.3 Event contract privacy scan finds no forbidden fields
+- [ ] 1.3 Contract privacy scan over the whole shared DTO folder finds no forbidden fields
 
 #### Manual
 
@@ -491,17 +507,18 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 #### Automated
 
 - [ ] 3.1 Server and solution build
-- [ ] 3.2 API starts with the migrated development database
+- [ ] 3.2 API runs in the background on http://localhost:5100 and stays up for 3.3-3.8, which use a JWT from /auth/login
 - [ ] 3.3 Unauthenticated POST /api/events returns 401 and creates no row
 - [ ] 3.4 Valid authenticated request returns 201 with safe complete detail data
-- [ ] 3.5 Exact replay returns 200 with the same event and changed-payload reuse returns 409
+- [ ] 3.5 Repeating the request id returns 200 with the same event and only one row
 - [ ] 3.6 Invalid and stale-reference requests return the agreed 400/409 outcomes without creating rows
 - [ ] 3.7 Normal valid create call completes within five seconds
+- [ ] 3.8 Sub-microsecond-precision timestamps round-trip consistently and replay returns the same event id
 
 #### Manual
 
-- [ ] 3.8 Supabase row confirms JWT-derived organizer, normalized text, and UTC timestamps
-- [ ] 3.9 First-create and replay responses contain no login or contact data
+- [ ] 3.9 Supabase row confirms JWT-derived organizer, normalized text, and UTC timestamps
+- [ ] 3.10 First-create and replay serialized response bodies contain no login or contact data
 
 ### Phase 4: MAUI Create Form and Recovery Flow
 
@@ -519,7 +536,9 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 - [ ] 4.7 Same-day, overnight, 24-hour, past-start, and DST cases follow the agreed device-time rules
 - [ ] 4.8 Submit shows immediate and long-wait feedback and never double-submits
 - [ ] 4.9 Network or timeout preserves the exact request snapshot for safe retry
-- [ ] 4.10 Stale venue or sport refreshes the catalog, marks the invalid selection, and preserves the draft
+- [ ] 4.10 Stale sport refreshes the catalog, marks the sport selection invalid, and preserves the draft
+- [ ] 4.11 Stale venue refreshes the catalog, explains, closes the form, and returns to the map
+- [ ] 4.12 Hardware Back and swipe-dismiss are refused while a create request is in flight
 
 ### Phase 5: Created Event Detail and End-to-End Handoff
 
@@ -536,5 +555,5 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 - [ ] 5.6 Detail is contact-free and Back/Close returns to the same map and venue without resubmission
 - [ ] 5.7 Canceling an unsubmitted form returns to the venue and creates nothing
 - [ ] 5.8 Expired-token refresh replays the complete protected POST body exactly once
-- [ ] 5.9 Double-tap, response-loss retry, and changed-payload reuse produce one event and correct feedback
+- [ ] 5.9 Double-tap and response-loss retry produce exactly one event and correct feedback
 - [ ] 5.10 App restart makes no detail-restoration promise while the event remains persisted for S-04

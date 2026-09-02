@@ -60,7 +60,7 @@ Shared Contracts and Validation define the wire and pure rules. The server deriv
 
 - The device time zone is treated as authoritative; invalid and ambiguous DST inputs are rejected because no offset-choice UI is in scope.
 - A normal create should complete within five seconds, but Railway/Supabase variance may trigger the longer-wait state without failing the request.
-- Exact replay comparison depends on one canonical normalization path for title, description, and UTC timestamps.
+- Replay safety depends on one canonical normalization path for UTC timestamps; a reused request id returns the stored event without payload comparison.
 - Detail is response-backed only; after process death, persisted event discovery waits for S-04.
 - Database/API operational checks require the existing development secrets and Supabase access.
 

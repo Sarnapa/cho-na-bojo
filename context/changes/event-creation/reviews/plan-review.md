@@ -4,7 +4,7 @@
 - **Plan**: `context/changes/event-creation/plan.md`
 - **Mode**: Deep
 - **Date**: 2026-09-02
-- **Verdict**: REVISE
+- **Verdict**: REVISE → SOUND after triage (all 9 findings fixed 2026-09-03)
 - **Findings**: 1 critical, 4 warnings, 4 observations
 
 ## Verdicts
@@ -49,7 +49,7 @@
   - Tradeoff: Adds durable client state and a reconciliation path the plan explicitly scoped out ("no process-death restoration"); meaningfully widens Phase 4.
   - Confidence: MEDIUM — correct in principle, but no persisted-draft storage exists in the app today.
   - Blind spot: Where that state would live (Preferences vs SecureStorage) is unexamined.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — Phase 4 §6 now carries an explicit in-flight dismissal guard (`OnBackButtonPressed` refuses while outcome is unknown; `OnDisappearing` only completes the TCS when no request is outstanding), plus manual verification 4.11.
 
 ### F2 — Restrict FK to VenueSport collides with cascading, HasData-seeded reference data
 
@@ -68,7 +68,7 @@
   - Tradeoff: Expands Phase 2 beyond S-03 and adds a filter every read path must respect; no requirement currently asks for it.
   - Confidence: MEDIUM — plausible, but no roadmap slice asks for it.
   - Blind spot: Seed/upload tooling would need updating too.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — Phase 2 §4 now carries a "Reference-data operational contract" paragraph: RESTRICT is kept, reference data is append-only once events exist (corrections are UPDATEs, seeded sports may gain but not lose rows), and retirement is deferred to its own slice.
 
 ### F3 — Replay comparison of UTC timestamps will round-trip lossily
 
@@ -82,7 +82,7 @@
   - Tradeoff: Slight extra ceremony on every timestamp write.
   - Confidence: HIGH — Npgsql 10.0.3 `timestamptz` semantics and the absence of any `HasConversion` in the context are both verified.
   - Blind spot: MAUI pickers are minute-granular, so this may never fire from the app itself — it bites API probes and any future client.
-- **Decision**: PENDING
+- **Decision**: FIXED — Phase 3 §1 now specifies a single canonical timestamp normalization helper (`.UtcDateTime` + microsecond truncation, used on both persist and compare), with new verification 3.8 replaying sub-microsecond-precision timestamps.
 
 ### F4 — venue_not_found conflict has no recovery path in the form
 
@@ -96,7 +96,7 @@
   - Tradeoff: Venue-level conflicts lose the draft — acceptable, since the draft is anchored to a venue that no longer exists.
   - Confidence: HIGH — venue immutability in the form follows directly from the plan's own "Prepare from one selected `VenueResponse`" contract.
   - Blind spot: How likely venue deletion actually is during an MVP with manually curated Warsaw data — possibly rare enough to justify a simpler message-and-close for all four codes.
-- **Decision**: PENDING
+- **Decision**: FIXED — Phase 4 §5 now splits recovery by conflict class (sport-level repairs in place; venue-level closes the form and returns to the map), with verification 4.10/4.11 covering both branches.
 
 ### F5 — Changed-payload 409 branch is the most fragile part of Phase 3 and isn't load-bearing
 
@@ -115,7 +115,7 @@
   - Tradeoff: Still two code paths and still a partial comparison to get right; "which fields count" becomes a new judgement call.
   - Confidence: MEDIUM — reduces but does not remove the fragility.
   - Blind spot: Title/description edits would silently replay the old event.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — same request id now returns the stored event with no payload comparison; `idempotency_key_reused`, its client result case, and its UI copy are removed from Phases 1/3/4/5, testing strategy, Progress 3.5 and 5.9, and plan-brief risks.
 
 ### F6 — Second 409 body shape in the same API
 
@@ -125,7 +125,7 @@
 - **Location**: Phase 1 §2 (`EventConflictResponse`), Phase 4 §2
 - **Detail**: Auth already returns conflicts as `Results.Conflict(new { message })` (`AuthEndpoints.cs:67`, `:93`) and `ApiService` parses that shape (`ApiService.cs:179-180`). `EventConflictResponse` introduces a second, structurally different conflict body. Not wrong — the new shape is better — but the plan should say so, or the codebase drifts into two conventions with no recorded decision.
 - **Fix**: Note in Phase 1 §2 that `EventConflictResponse` is the new standard conflict shape and auth's anonymous `{ message }` is legacy to be aligned later; keep reusing the existing `ValidationProblemResponse` DTO for the 400 path rather than adding a parallel RFC-7807 parser.
-- **Decision**: PENDING
+- **Decision**: FIXED via lesson — recorded in `context/foundation/lessons.md` as "API error bodies must follow one recorded shape per status code" (one shape per status; typed conflict DTO, reuse `ValidationProblemResponse` for 400, auth's anonymous `{ message }` marked legacy).
 
 ### F7 — Verification step 3.2 runs a command that never exits
 
@@ -135,7 +135,7 @@
 - **Location**: Phase 3 Automated Verification / Progress 3.2
 - **Detail**: "API starts with the migrated development database: `dotnet run --project server`" is listed as automated verification. `dotnet run` blocks indefinitely, so an agent executing the Progress checklist literally will hang on 3.2, and steps 3.3-3.7 depend on that server already running.
 - **Fix**: Restate 3.2 as "start the API in the background, confirm it is listening on `http://localhost:5100`, and keep it running for 3.3-3.7", and note that 3.3-3.7 need a JWT obtained via `/auth/login`.
-- **Decision**: PENDING
+- **Decision**: FIXED — Phase 3 verification 3.2 now starts the API in the background, confirms it is listening on http://localhost:5100, keeps it up for 3.3-3.8, and notes the JWT from /auth/login.
 
 ### F8 — Privacy verification is weaker than the guardrail it protects
 
@@ -145,7 +145,7 @@
 - **Location**: Phase 1 / Phase 5 Automated Verification (`rg` privacy scans)
 - **Detail**: Contact-info leakage is the PRD's hardest guardrail, but the checks are substring greps over one or two files. They cannot see a nested type declared elsewhere (the plan's "safe venue/sport summaries" come from other files), nor an organizer summary added later. The genuine check is the response-body inspection already listed under Manual Verification — the greps just shouldn't be mistaken for it.
 - **Fix**: Scope the scan to the whole shared Contracts DTO folder and the serialized response body captured in Phase 3, rather than to a single source file.
-- **Decision**: PENDING
+- **Decision**: FIXED — Phase 1 scan now covers the whole `shared\ChoNaBojo.Contracts\DTOs` folder, and Phase 3 manual verification scans the captured serialized 201/200 bodies, with the greps demoted to a lint.
 
 ### F9 — Speculative index shaped for a slice that isn't designed yet
 
@@ -155,4 +155,4 @@
 - **Location**: Phase 2 §3/§4, Performance Considerations
 - **Detail**: The `(VenueId, EstimatedEndsAtUtc)` index is added purely for S-04, which the plan lists under "What We're NOT Doing". Roadmap S-04 also filters by sport and availability, so the final index may well want `SportId` in it — meaning this one gets replaced rather than used. Cheap either way, but it's scope the end state doesn't need.
 - **Fix**: Drop the index from Phase 2 and let S-04 add the index its actual query shape requires; keep only the unique `(OrganizerUserId, ClientRequestId)` index, which S-03 does use.
-- **Decision**: PENDING
+- **Decision**: FIXED — the `(VenueId, EstimatedEndsAtUtc)` index is dropped from Phase 2 §3/§4, verification, and Performance Considerations; only the unique `(OrganizerUserId, ClientRequestId)` index remains.
