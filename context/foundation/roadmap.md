@@ -3,7 +3,7 @@ project: "ChoNaBojo"
 version: 1
 status: draft
 created: 2026-06-13
-updated: 2026-08-24
+updated: 2026-09-02
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -32,7 +32,7 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 | F-01 | data-layer-foundation | (foundation) Postgres (Supabase) wired up, EF Core / migrations configured, `Sports` lookup seeded with the predefined list, `Venues` table seeded with Warsaw data, and the `VenueSports` join populated | — | FR-003 (predefined sport list), Non-Goals §1 (Warsaw venue seed), NFR (privacy, perf), tech-stack `database: PostgreSQL` | done |
 | F-02 | auth-scaffold | (foundation) Email+password register/login on the API, password hashing, JWT issue+validate, authorization middleware on protected routes | F-01 | FR-001, FR-002, NFR (privacy boundary), Access Control | done |
 | S-01 | account-and-session | register an account with email, password, and at least one contact; log in and stay logged in across app restarts | F-02 | FR-001, FR-002, FR-011 (contact collection), US-01, US-02 | done |
-| S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | proposed |
+| S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | done |
 | S-03 | event-creation | create an event at a selected venue with date, estimated end time, participant limit (≥ 2, ≤ 300), and optional auto-accept | S-02 | FR-005, US-02 | proposed |
 | S-04 | event-listing-and-join-request | view the available events at a selected venue (with fill state, not past end time), optionally filter by time availability, and send a join request | S-03 | FR-006, FR-007, US-01 | proposed |
 | S-05 | approval-and-contact-reveal | (as organizer) accept or reject a join request; on acceptance both parties see each other's contact info — **north star** | S-04 | FR-009, FR-011, US-01, US-02 | proposed |
@@ -115,7 +115,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Unknowns:**
   - Which map provider for MAUI Android (Microsoft.Maui.Controls.Maps uses Google Maps on Android and requires an API key; Mapbox.Maui requires a separate account) — Owner: user. Block: no (the decision lands in `/10x-plan map-venue-discovery` and doesn't block the sequence).
 - **Risk:** NFR map < 2s on a mid-range Android + marker rendering for many venues is the typical bottleneck; the answer is a viewport-bounded query on the API (capped N markers). The discipline filter is optional → a minimal addition to the query.
-- **Status:** proposed
+- **Status:** done
 
 ### S-03: Creating an event at a selected venue
 
@@ -201,6 +201,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 ## Done
 
 - **S-01: register an account with email, password, and at least one contact; log in and stay logged in across app restarts** — Archived 2026-08-24 → `context/archive/2026-07-18-account-and-session/`. Lesson: —.
+- **S-02: A logged-in user opens the map screen centered on their location (with a manual-address fallback when permissions are denied), sees venues from the database within the current viewport, pans/zooms (the viewport is the proximity boundary per Business Logic), and optionally enables a sport filter populated from the `Sports` lookup — by default, all sports are visible.** — Archived 2026-09-02 → `context/archive/2026-08-24-map-venue-discovery/`. Lesson: —.
 
 ## Parked
 
