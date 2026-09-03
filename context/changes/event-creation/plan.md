@@ -477,14 +477,14 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 
 #### Automated
 
-- [ ] 1.1 Shared contracts and validation compile
-- [ ] 1.2 Whole solution compiles against the new contract
-- [ ] 1.3 Contract privacy scan over the whole shared DTO folder finds no forbidden fields
+- [x] 1.1 Shared contracts and validation compile
+- [x] 1.2 Whole solution compiles against the new contract
+- [x] 1.3 Contract privacy scan over the whole shared DTO folder finds no forbidden fields
 
 #### Manual
 
-- [ ] 1.4 Request fields, limits, stable error keys, UTC requirement, and response summaries match the approved product decisions
-- [ ] 1.5 CreatedEventResponse contains everything the read-only detail screen needs and no private user data
+- [x] 1.4 Request fields, limits, stable error keys, UTC requirement, and response summaries match the approved product decisions
+- [x] 1.5 CreatedEventResponse contains everything the read-only detail screen needs and no private user data
 
 ### Phase 2: Sports Event Persistence and Migration
 
