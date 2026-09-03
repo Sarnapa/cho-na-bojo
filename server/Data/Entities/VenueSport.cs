@@ -17,4 +17,5 @@ public class VenueSport
 
 	public Venue Venue { get; set; } = null!;
 	public Sport Sport { get; set; } = null!;
+	public ICollection<SportsEvent> SportsEvents { get; set; } = [];
 }

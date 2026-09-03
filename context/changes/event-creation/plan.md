@@ -490,17 +490,17 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 
 #### Automated
 
-- [ ] 2.1 Solution builds with the event model
-- [ ] 2.2 EF resolves the context
-- [ ] 2.3 Migration is generated and listed
-- [ ] 2.4 Model and snapshot agree
-- [ ] 2.5 Idempotent SQL script contains the table, checks, foreign keys, and indexes
+- [x] 2.1 Solution builds with the event model
+- [x] 2.2 EF resolves the context
+- [x] 2.3 Migration is generated and listed
+- [x] 2.4 Model and snapshot agree
+- [x] 2.5 Idempotent SQL script contains the table, checks, foreign keys, and indexes
 
 #### Manual
 
-- [ ] 2.6 Apply the migration through the Supabase session-mode 5432 connection and confirm runtime still uses transaction-mode 6543
-- [ ] 2.7 Supabase schema inspection confirms all event constraints, foreign keys, and indexes
-- [ ] 2.8 Direct invalid inserts are rejected by the database constraints
+- [x] 2.6 Apply the migration through the Supabase session-mode 5432 connection and confirm runtime still uses transaction-mode 6543
+- [x] 2.7 Supabase schema inspection confirms all event constraints, foreign keys, and indexes
+- [x] 2.8 Direct invalid inserts are rejected by the database constraints
 
 ### Phase 3: Authenticated Idempotent Create API
 

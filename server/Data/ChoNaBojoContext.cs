@@ -1,3 +1,4 @@
+using ChoNaBojo.Contracts.Consts;
 using ChoNaBojo.Server.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -49,6 +50,14 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 		get
 		{
 			return Set<RefreshToken>();
+		}
+	}
+
+	public DbSet<SportsEvent> SportsEvents
+	{
+		get
+		{
+			return Set<SportsEvent>();
 		}
 	}
 	#endregion
@@ -188,6 +197,82 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 				.WithMany(user => user.RefreshTokens)
 				.HasForeignKey(token => token.UserId)
 				.OnDelete(DeleteBehavior.Cascade);
+		});
+
+		modelBuilder.Entity<SportsEvent>(entity =>
+		{
+			entity.ToTable(tableBuilder =>
+			{
+				tableBuilder.HasCheckConstraint(
+					"CK_SportsEvents_ClientRequestId_NotEmpty",
+					"""
+					"ClientRequestId" <> '00000000-0000-0000-0000-000000000000'::uuid
+					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_SportsEvents_Title_NotBlank",
+					"""
+					BTRIM("Title") <> ''
+					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_SportsEvents_Description_NotBlank",
+					"""
+					"Description" IS NULL OR BTRIM("Description") <> ''
+					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_SportsEvents_ParticipantLimit",
+					$"""
+					"ParticipantLimit" BETWEEN {EventPolicy.ParticipantLimitMinimum} AND {EventPolicy.ParticipantLimitMaximum}
+					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_SportsEvents_TimeRange",
+					"""
+					"EstimatedEndsAtUtc" > "StartsAtUtc"
+					AND "EstimatedEndsAtUtc" <= "StartsAtUtc" + INTERVAL '24 hours'
+					""");
+			});
+
+			entity.HasKey(sportsEvent => sportsEvent.Id);
+			entity.Property(sportsEvent => sportsEvent.Id)
+				.HasDefaultValueSql("gen_random_uuid()");
+			entity.Property(sportsEvent => sportsEvent.Title)
+				.IsRequired()
+				.HasMaxLength(EventPolicy.TitleMaxLength);
+			entity.Property(sportsEvent => sportsEvent.Description)
+				.HasMaxLength(EventPolicy.DescriptionMaxLength);
+			entity.Property(sportsEvent => sportsEvent.StartsAtUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(sportsEvent => sportsEvent.EstimatedEndsAtUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(sportsEvent => sportsEvent.CreatedUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+
+			entity.HasIndex(sportsEvent => new
+				{
+					sportsEvent.OrganizerUserId,
+					sportsEvent.ClientRequestId
+				})
+				.IsUnique();
+
+			entity.HasOne(sportsEvent => sportsEvent.Organizer)
+				.WithMany(user => user.OrganizedEvents)
+				.HasForeignKey(sportsEvent => sportsEvent.OrganizerUserId)
+				.OnDelete(DeleteBehavior.Restrict);
+
+			entity.HasOne(sportsEvent => sportsEvent.VenueSport)
+				.WithMany(venueSport => venueSport.SportsEvents)
+				.HasForeignKey(sportsEvent => new
+				{
+					sportsEvent.VenueId,
+					sportsEvent.SportId
+				})
+				.OnDelete(DeleteBehavior.Restrict);
 		});
 	}
 	#endregion

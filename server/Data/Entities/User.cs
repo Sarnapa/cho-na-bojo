@@ -42,4 +42,7 @@ public class User
 
 	/// <summary>Refresh tokens issued to this user across login sessions.</summary>
 	public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
+
+	/// <summary>Events created by this user.</summary>
+	public ICollection<SportsEvent> OrganizedEvents { get; set; } = [];
 }
