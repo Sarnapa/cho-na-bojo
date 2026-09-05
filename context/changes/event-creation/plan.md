@@ -544,16 +544,16 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 
 #### Automated
 
-- [x] 5.1 Whole solution builds
-- [x] 5.2 Android and Windows heads build
-- [x] 5.3 Event detail privacy scan finds no contact binding
-- [x] 5.4 EF model remains synchronized after all source changes
+- [x] 5.1 Whole solution builds — 0f7fcd1
+- [x] 5.2 Android and Windows heads build — 0f7fcd1
+- [x] 5.3 Event detail privacy scan finds no contact binding — 0f7fcd1
+- [x] 5.4 EF model remains synchronized after all source changes — 0f7fcd1
 
 #### Manual
 
-- [x] 5.5 Valid creation opens complete device-local detail within the five-second normal target
-- [x] 5.6 Detail is contact-free and Back/Close returns to the same map and venue without resubmission
-- [x] 5.7 Canceling an unsubmitted form returns to the venue and creates nothing
-- [x] 5.8 Expired-token refresh replays the complete protected POST body exactly once
-- [x] 5.9 Double-tap and response-loss retry produce exactly one event and correct feedback
-- [x] 5.10 App restart makes no detail-restoration promise while the event remains persisted for S-04
+- [x] 5.5 Valid creation opens complete device-local detail within the five-second normal target — 0f7fcd1
+- [x] 5.6 Detail is contact-free and Back/Close returns to the same map and venue without resubmission — 0f7fcd1
+- [x] 5.7 Canceling an unsubmitted form returns to the venue and creates nothing — 0f7fcd1
+- [x] 5.8 Expired-token refresh replays the complete protected POST body exactly once — 0f7fcd1
+- [x] 5.9 Double-tap and response-loss retry produce exactly one event and correct feedback — 0f7fcd1
+- [x] 5.10 App restart makes no detail-restoration promise while the event remains persisted for S-04 — 0f7fcd1
