@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.EventDetailPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:EventDetailViewModel"
+    Title="Event details"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem
+            Text="Close"
+            Command="{Binding CloseCommand}"
+            SemanticProperties.Description="Close event details" />
+    </ContentPage.ToolbarItems>
+
+    <ScrollView>
+        <VerticalStackLayout
+            Margin="16"
+            Spacing="16">
+            <Label
+                Style="{StaticResource HeadlineStyle}"
+                Text="Event created"
+                SemanticProperties.HeadingLevel="Level1" />
+
+            <Border
+                Padding="16"
+                BackgroundColor="{StaticResource SurfaceColor}"
+                Shadow="{StaticResource CardShadow}"
+                Stroke="{StaticResource DividerColor}"
+                StrokeShape="RoundRectangle 16">
+                <VerticalStackLayout Spacing="16">
+                    <Label
+                        Style="{StaticResource TitleStyle}"
+                        Text="{Binding Title}"
+                        SemanticProperties.HeadingLevel="Level2" />
+
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        Text="{Binding Description}"
+                        IsVisible="{Binding HasDescription}" />
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label
+                            Style="{StaticResource LabelStyle}"
+                            Text="Venue" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            Text="{Binding VenueName}" />
+                        <Label
+                            Style="{StaticResource LabelStyle}"
+                            Text="{Binding VenueAddress}" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="4">
+                        <Label
+                            Style="{StaticResource LabelStyle}"
+                            Text="Sport" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            Text="{Binding SportName}" />
+                    </VerticalStackLayout>
+
+                    <Grid
+                        ColumnDefinitions="*,*"
+                        ColumnSpacing="16">
+                        <VerticalStackLayout
+                            Grid.Column="0"
+                            Spacing="4">
+                            <Label
+                                Style="{StaticResource LabelStyle}"
+                                Text="Starts" />
+                            <Label
+                                Style="{StaticResource BodyStyle}"
+                                Text="{Binding StartsAtDisplay}" />
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout
+                            Grid.Column="1"
+                            Spacing="4">
+                            <Label
+                                Style="{StaticResource LabelStyle}"
+                                Text="Estimated end" />
+                            <Label
+                                Style="{StaticResource BodyStyle}"
+                                Text="{Binding EstimatedEndsAtDisplay}" />
+                        </VerticalStackLayout>
+                    </Grid>
+
+                    <Grid
+                        ColumnDefinitions="*,*"
+                        ColumnSpacing="16">
+                        <VerticalStackLayout
+                            Grid.Column="0"
+                            Spacing="4">
+                            <Label
+                                Style="{StaticResource LabelStyle}"
+                                Text="Participants" />
+                            <Label
+                                Style="{StaticResource BodyStyle}"
+                                Text="{Binding ParticipantDisplay}" />
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout
+                            Grid.Column="1"
+                            Spacing="4">
+                            <Label
+                                Style="{StaticResource LabelStyle}"
+                                Text="Auto-accept" />
+                            <Label
+                                Style="{StaticResource BodyStyle}"
+                                Text="{Binding AutoAcceptDisplay}" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <Button
+                Margin="0,16,0,16"
+                Style="{StaticResource PrimaryButtonStyle}"
+                Text="Close"
+                Command="{Binding CloseCommand}"
+                SemanticProperties.Description="Close event details and return to the selected venue" />
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

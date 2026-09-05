@@ -22,6 +22,7 @@ public partial class MapPage : ContentPage
 	private readonly IServiceProvider _serviceProvider;
 	private readonly MapViewModel _viewModel;
 	private bool _isAppeared;
+	private bool _hasAppliedMapRegion;
 	private bool _isOpeningCreateForm;
 #if ANDROID
 	private readonly CurrentLocationSource _currentLocationSource = new();
@@ -53,7 +54,7 @@ public partial class MapPage : ContentPage
 		_viewModel.PropertyChanged += OnViewModelPropertyChanged;
 		ReplaceVisiblePins();
 
-		if (_viewModel.InitialCenter is not null)
+		if (!_hasAppliedMapRegion && _viewModel.InitialCenter is not null)
 		{
 			ShowInitialRegion(_viewModel.InitialCenter);
 		}
@@ -174,10 +175,15 @@ public partial class MapPage : ContentPage
 			{
 				await _viewModel.ShowCreateFeedbackAsync(result.Message);
 			}
-			else if (result.Status == CreateEventPageResultStatus.Created)
+			else if (result is
+				{
+					Status: CreateEventPageResultStatus.Created,
+					CreatedEvent: not null
+				})
 			{
-				await _viewModel.ShowCreateFeedbackAsync(
-					result.IsReplay ? "Event creation confirmed." : "Event created.");
+				EventDetailPage detailPage =
+					_serviceProvider.GetRequiredService<EventDetailPage>();
+				await detailPage.ShowAsync(Navigation, result.CreatedEvent);
 			}
 		}
 		finally
@@ -190,6 +196,7 @@ public partial class MapPage : ContentPage
 	#region Private methods
 	private void ShowInitialRegion(MapSpan region)
 	{
+		_hasAppliedMapRegion = true;
 #if ANDROID
 		if (VenueMap.Handler is MapHandler { Map: not null } handler)
 		{

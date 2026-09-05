@@ -82,12 +82,14 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<MapPage>();
 			builder.Services.AddTransient<AddressSearchPage>();
 			builder.Services.AddTransient<CreateEventPage>();
+			builder.Services.AddTransient<EventDetailPage>();
 
 			builder.Services.AddTransient<LoginViewModel>();
 			builder.Services.AddTransient<RegisterViewModel>();
 			builder.Services.AddTransient<MapViewModel>();
 			builder.Services.AddTransient<AddressSearchViewModel>();
 			builder.Services.AddTransient<CreateEventViewModel>();
+			builder.Services.AddTransient<EventDetailViewModel>();
 
 #if DEBUG
 			builder.Logging.AddDebug();
