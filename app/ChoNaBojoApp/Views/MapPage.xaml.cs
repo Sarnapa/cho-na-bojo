@@ -22,6 +22,7 @@ public partial class MapPage : ContentPage
 	private readonly IServiceProvider _serviceProvider;
 	private readonly MapViewModel _viewModel;
 	private bool _isAppeared;
+	private bool _isOpeningCreateForm;
 #if ANDROID
 	private readonly CurrentLocationSource _currentLocationSource = new();
 #endif
@@ -48,6 +49,7 @@ public partial class MapPage : ContentPage
 		_isAppeared = true;
 		_viewModel.LoggedOut += OnLoggedOut;
 		_viewModel.MapCenterRequested += OnMapCenterRequested;
+		_viewModel.CreateEventRequested += OnCreateEventRequested;
 		_viewModel.PropertyChanged += OnViewModelPropertyChanged;
 		ReplaceVisiblePins();
 
@@ -67,6 +69,7 @@ public partial class MapPage : ContentPage
 		DisableUserLocationLayer();
 		_viewModel.LoggedOut -= OnLoggedOut;
 		_viewModel.MapCenterRequested -= OnMapCenterRequested;
+		_viewModel.CreateEventRequested -= OnCreateEventRequested;
 		_viewModel.PropertyChanged -= OnViewModelPropertyChanged;
 		base.OnDisappearing();
 	}
@@ -138,6 +141,48 @@ public partial class MapPage : ContentPage
 		if (suggestion is not null)
 		{
 			_viewModel.CenterOnAddress(suggestion);
+		}
+	}
+
+	private async void OnCreateEventRequested(
+		object? sender,
+		CreateEventRequestedEventArgs e)
+	{
+		if (_isOpeningCreateForm)
+		{
+			return;
+		}
+
+		_isOpeningCreateForm = true;
+		try
+		{
+			CreateEventPage createPage =
+				_serviceProvider.GetRequiredService<CreateEventPage>();
+			CreateEventPageResult result = await createPage.ShowAsync(
+				Navigation,
+				e.Venue,
+				e.ActiveSportId);
+
+			if (result.CatalogWasRefreshed
+				|| result.Status == CreateEventPageResultStatus.VenueInvalidated)
+			{
+				_viewModel.ApplyRefreshedCatalog(
+					result.Status == CreateEventPageResultStatus.VenueInvalidated);
+			}
+
+			if (!string.IsNullOrEmpty(result.Message))
+			{
+				await _viewModel.ShowCreateFeedbackAsync(result.Message);
+			}
+			else if (result.Status == CreateEventPageResultStatus.Created)
+			{
+				await _viewModel.ShowCreateFeedbackAsync(
+					result.IsReplay ? "Event creation confirmed." : "Event created.");
+			}
+		}
+		finally
+		{
+			_isOpeningCreateForm = false;
 		}
 	}
 	#endregion

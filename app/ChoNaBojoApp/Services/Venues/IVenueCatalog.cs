@@ -45,4 +45,10 @@ public interface IVenueCatalog
 	/// the cache empty so a later retry re-fetches from scratch.
 	/// </summary>
 	Task<VenueCatalogLoadResult> EnsureLoadedAsync(CancellationToken cancellationToken);
+
+	/// <summary>
+	/// Reloads venues and sports together. The last successful snapshot remains visible unless
+	/// both refreshed resources are available.
+	/// </summary>
+	Task<VenueCatalogLoadResult> RefreshAsync(CancellationToken cancellationToken);
 }

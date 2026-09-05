@@ -299,28 +299,17 @@
 
                         <Label
                             Margin="0,24,0,0"
-                            Style="{StaticResource TitleStyle}"
-                            HorizontalTextAlignment="Center"
-                            Text="No events here yet" />
-
-                        <Label
-                            Margin="0,8,0,0"
                             Style="{StaticResource BodyStyle}"
                             HorizontalTextAlignment="Center"
-                            Text="Create an event to get a game started." />
+                            Text="Create an event to get a game started at this venue." />
 
                         <Button
                             Margin="0,32,0,0"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Text="Create event"
-                            IsEnabled="False"
-                            SemanticProperties.Description="Create event, coming soon" />
-
-                        <Label
-                            Margin="0,8,0,0"
-                            Style="{StaticResource LabelStyle}"
-                            HorizontalTextAlignment="Center"
-                            Text="Coming soon" />
+                            Command="{Binding CreateEventCommand}"
+                            IsEnabled="{Binding IsNotBusy}"
+                            SemanticProperties.Description="Create an event at this venue" />
                     </VerticalStackLayout>
                 </ScrollView>
             </Border>

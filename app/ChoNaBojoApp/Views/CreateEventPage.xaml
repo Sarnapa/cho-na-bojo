@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.CreateEventPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:material="clr-namespace:UraniumUI.Material.Controls;assembly=UraniumUI.Material"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:CreateEventViewModel"
+    Title="Create event"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem
+            Text="Cancel"
+            Command="{Binding CancelCommand}"
+            IsEnabled="{Binding CanCancel}"
+            SemanticProperties.Description="Cancel event creation" />
+    </ContentPage.ToolbarItems>
+
+    <ScrollView>
+        <VerticalStackLayout Margin="16" Spacing="8">
+            <Label
+                Style="{StaticResource HeadlineStyle}"
+                Text="Create event" />
+
+            <Label
+                Style="{StaticResource TitleStyle}"
+                Text="{Binding VenueName}"
+                Margin="0,8,0,0" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                Text="{Binding VenueAddress}" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Title"
+                Text="{Binding Title}"
+                IsEnabled="{Binding CanEdit}"
+                Margin="0,16,0,0"
+                SemanticProperties.Description="Event title" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding TitleError}"
+                IsVisible="{Binding HasTitleError}" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Description (optional)"
+                Text="{Binding Description}"
+                IsEnabled="{Binding CanEdit}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Optional event description" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding DescriptionError}"
+                IsVisible="{Binding HasDescriptionError}" />
+
+            <material:SelectField
+                x:Name="SportField"
+                Style="{StaticResource SelectFieldStyle}"
+                Title="Sport"
+                ItemsSource="{Binding SupportedSports}"
+                SelectedItem="{Binding SelectedSport}"
+                IsEnabled="{Binding CanEdit}"
+                Margin="0,8,0,0"
+                SemanticProperties.Description="Choose a sport supported by this venue" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding SportError}"
+                IsVisible="{Binding HasSportError}" />
+
+            <Label
+                Style="{StaticResource TitleStyle}"
+                Text="Start"
+                Margin="0,16,0,0" />
+
+            <Grid
+                ColumnDefinitions="*,*"
+                ColumnSpacing="8"
+                Margin="0,8,0,0">
+                <VerticalStackLayout Grid.Column="0" Spacing="8">
+                    <Label
+                        Style="{StaticResource LabelStyle}"
+                        Text="Start date" />
+                    <Border
+                        Padding="8,0"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Stroke="{StaticResource DividerColor}"
+                        StrokeShape="RoundRectangle 8">
+                        <DatePicker
+                            Date="{Binding StartDate}"
+                            MinimumDate="{Binding MinimumDate}"
+                            Format="dd MMM yyyy"
+                            IsEnabled="{Binding CanEdit}"
+                            SemanticProperties.Description="Event start date" />
+                    </Border>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="8">
+                    <Label
+                        Style="{StaticResource LabelStyle}"
+                        Text="Start time" />
+                    <Border
+                        Padding="8,0"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Stroke="{StaticResource DividerColor}"
+                        StrokeShape="RoundRectangle 8">
+                        <TimePicker
+                            Time="{Binding StartTime}"
+                            Format="HH:mm"
+                            IsEnabled="{Binding CanEdit}"
+                            SemanticProperties.Description="Event start time in 24-hour format" />
+                    </Border>
+                </VerticalStackLayout>
+            </Grid>
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding StartTimeError}"
+                IsVisible="{Binding HasStartTimeError}" />
+
+            <Label
+                Style="{StaticResource TitleStyle}"
+                Text="Estimated end"
+                Margin="0,16,0,0" />
+
+            <Grid
+                ColumnDefinitions="*,*"
+                ColumnSpacing="8"
+                Margin="0,8,0,0">
+                <VerticalStackLayout Grid.Column="0" Spacing="8">
+                    <Label
+                        Style="{StaticResource LabelStyle}"
+                        Text="End date" />
+                    <Border
+                        Padding="8,0"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Stroke="{StaticResource DividerColor}"
+                        StrokeShape="RoundRectangle 8">
+                        <DatePicker
+                            Date="{Binding EndDate}"
+                            MinimumDate="{Binding EndDateMinimum}"
+                            Format="dd MMM yyyy"
+                            IsEnabled="{Binding CanEdit}"
+                            SemanticProperties.Description="Estimated event end date" />
+                    </Border>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="8">
+                    <Label
+                        Style="{StaticResource LabelStyle}"
+                        Text="End time" />
+                    <Border
+                        Padding="8,0"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Stroke="{StaticResource DividerColor}"
+                        StrokeShape="RoundRectangle 8">
+                        <TimePicker
+                            Time="{Binding EndTime}"
+                            Format="HH:mm"
+                            IsEnabled="{Binding CanEdit}"
+                            SemanticProperties.Description="Estimated event end time in 24-hour format" />
+                    </Border>
+                </VerticalStackLayout>
+            </Grid>
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding EndTimeError}"
+                IsVisible="{Binding HasEndTimeError}" />
+
+            <material:TextField
+                Style="{StaticResource TextFieldStyle}"
+                Title="Participant limit"
+                Text="{Binding ParticipantLimitText}"
+                Keyboard="Numeric"
+                IsEnabled="{Binding CanEdit}"
+                Margin="0,16,0,0"
+                SemanticProperties.Description="Participant limit from 2 to 300" />
+
+            <Label
+                Style="{StaticResource LabelStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding ParticipantLimitError}"
+                IsVisible="{Binding HasParticipantLimitError}" />
+
+            <Grid
+                ColumnDefinitions="*,Auto"
+                ColumnSpacing="16"
+                Margin="0,16,0,0">
+                <VerticalStackLayout Grid.Column="0" Spacing="4">
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        Text="Auto-accept requests" />
+                    <Label
+                        Style="{StaticResource LabelStyle}"
+                        Text="New join requests are accepted automatically." />
+                </VerticalStackLayout>
+                <Switch
+                    Grid.Column="1"
+                    IsToggled="{Binding AutoAccept}"
+                    IsEnabled="{Binding CanEdit}"
+                    VerticalOptions="Center"
+                    SemanticProperties.Description="Automatically accept join requests" />
+            </Grid>
+
+            <Label
+                Style="{StaticResource BodyStyle}"
+                TextColor="{StaticResource ErrorColor}"
+                Text="{Binding GeneralError}"
+                IsVisible="{Binding HasGeneralError}"
+                Margin="0,16,0,0" />
+
+            <Border
+                Padding="16"
+                BackgroundColor="{StaticResource SurfaceColor}"
+                Stroke="{StaticResource DividerColor}"
+                StrokeShape="RoundRectangle 16"
+                IsVisible="{Binding IsRequestInFlight}"
+                Margin="0,16,0,0">
+                <HorizontalStackLayout Spacing="16">
+                    <ActivityIndicator
+                        IsRunning="{Binding IsRequestInFlight}"
+                        SemanticProperties.Description="Creating event" />
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        Text="{Binding WaitMessage}"
+                        VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Border>
+
+            <Button
+                Style="{StaticResource PrimaryButtonStyle}"
+                Text="Create"
+                Command="{Binding CreateCommand}"
+                IsEnabled="{Binding CanEdit}"
+                IsVisible="{Binding IsCreateVisible}"
+                Margin="0,24,0,0"
+                SemanticProperties.Description="Create event" />
+
+            <Button
+                Style="{StaticResource PrimaryButtonStyle}"
+                Text="Retry same request"
+                Command="{Binding RetryCommand}"
+                IsEnabled="{Binding CanCancel}"
+                IsVisible="{Binding IsRetryVisible}"
+                Margin="0,24,0,0"
+                SemanticProperties.Description="Retry the exact same event creation request" />
+
+            <Button
+                Style="{StaticResource SecondaryButtonStyle}"
+                Text="Cancel"
+                Command="{Binding CancelCommand}"
+                IsEnabled="{Binding CanCancel}"
+                Margin="0,8,0,16"
+                SemanticProperties.Description="Cancel event creation" />
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

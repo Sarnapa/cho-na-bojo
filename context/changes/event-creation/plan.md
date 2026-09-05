@@ -524,21 +524,21 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 
 #### Automated
 
-- [ ] 4.1 Whole solution builds
-- [ ] 4.2 Android head builds
-- [ ] 4.3 Windows head builds
-- [ ] 4.4 Venue create-event placeholder is removed
+- [x] 4.1 Whole solution builds
+- [x] 4.2 Android head builds
+- [x] 4.3 Windows head builds
+- [x] 4.4 Venue create-event placeholder is removed
 
 #### Manual
 
-- [ ] 4.5 Form opens for the selected venue with only supported sports and correct preselection
-- [ ] 4.6 Text and participant boundaries validate while values 2 and 300 submit
-- [ ] 4.7 Same-day, overnight, 24-hour, past-start, and DST cases follow the agreed device-time rules
-- [ ] 4.8 Submit shows immediate and long-wait feedback and never double-submits
-- [ ] 4.9 Network or timeout preserves the exact request snapshot for safe retry
-- [ ] 4.10 Stale sport refreshes the catalog, marks the sport selection invalid, and preserves the draft
-- [ ] 4.11 Stale venue refreshes the catalog, explains, closes the form, and returns to the map
-- [ ] 4.12 Hardware Back and swipe-dismiss are refused while a create request is in flight
+- [x] 4.5 Form opens for the selected venue with only supported sports and correct preselection
+- [x] 4.6 Text and participant boundaries validate while values 2 and 300 submit
+- [x] 4.7 Same-day, overnight, 24-hour, past-start, and DST cases follow the agreed device-time rules
+- [x] 4.8 Submit shows immediate and long-wait feedback and never double-submits
+- [x] 4.9 Network or timeout preserves the exact request snapshot for safe retry
+- [x] 4.10 Stale sport refreshes the catalog, marks the sport selection invalid, and preserves the draft
+- [x] 4.11 Stale venue refreshes the catalog, explains, closes the form, and returns to the map
+- [x] 4.12 Hardware Back and swipe-dismiss are refused while a create request is in flight
 
 ### Phase 5: Created Event Detail and End-to-End Handoff
 

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ChoNaBojo.App.Services.Auth;
+using ChoNaBojo.App.Services.Events;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.Contracts.DTOs;
 
@@ -148,6 +149,67 @@ public class ApiService: IApiService
 			// Malformed body, an HTML error page from a proxy, or contract drift — must map to a
 			// typed result rather than escaping into the caller's command.
 			return SportCatalogResult.Unknown();
+		}
+	}
+
+	public async Task<CreateEventResult> CreateEventAsync(
+		CreateEventRequest request,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.PostAsJsonAsync(
+				"/api/events",
+				request,
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+				case HttpStatusCode.Created:
+					var createdEvent = await response.Content.ReadFromJsonAsync<CreatedEventResponse>(
+						JsonOptions,
+						cancellationToken);
+					return createdEvent is null
+						? CreateEventResult.Unknown()
+						: CreateEventResult.Success(
+							createdEvent,
+							response.StatusCode == HttpStatusCode.OK);
+
+				case HttpStatusCode.BadRequest:
+					var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(
+						JsonOptions,
+						cancellationToken);
+					return problem?.Errors is not { } validationErrors
+						? CreateEventResult.Unknown()
+						: CreateEventResult.ValidationFailed(validationErrors);
+
+				case HttpStatusCode.Conflict:
+					var conflict = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return conflict is null
+						? CreateEventResult.Unknown()
+						: CreateEventResult.ReferenceChanged(conflict);
+
+				case HttpStatusCode.Unauthorized:
+					return CreateEventResult.Unauthorized();
+
+				default:
+					return CreateEventResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return CreateEventResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return CreateEventResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return CreateEventResult.Unknown();
 		}
 	}
 	#endregion

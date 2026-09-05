@@ -50,6 +50,24 @@ public sealed class MapCenterRequestedEventArgs : EventArgs
 }
 #endregion
 
+#region CreateEventRequestedEventArgs
+public sealed class CreateEventRequestedEventArgs : EventArgs
+{
+	#region Properties
+	public VenueResponse Venue { get; }
+	public int? ActiveSportId { get; }
+	#endregion
+
+	#region Constructors
+	public CreateEventRequestedEventArgs(VenueResponse venue, int? activeSportId)
+	{
+		Venue = venue;
+		ActiveSportId = activeSportId;
+	}
+	#endregion
+}
+#endregion
+
 public partial class MapViewModel : ViewModelBase
 {
 	#region Private static fields
@@ -135,6 +153,7 @@ public partial class MapViewModel : ViewModelBase
 	#region Events
 	public event EventHandler? LoggedOut;
 	public event EventHandler<MapCenterRequestedEventArgs>? MapCenterRequested;
+	public event EventHandler<CreateEventRequestedEventArgs>? CreateEventRequested;
 	#endregion
 
 	#region Public properties
@@ -168,6 +187,19 @@ public partial class MapViewModel : ViewModelBase
 		IsVenueSheetVisible = false;
 		SelectedVenue = null;
 		SelectedVenueSports = [];
+	}
+
+	[RelayCommand]
+	private void CreateEvent()
+	{
+		if (SelectedVenue is null)
+		{
+			return;
+		}
+
+		CreateEventRequested?.Invoke(
+			this,
+			new CreateEventRequestedEventArgs(SelectedVenue, SelectedSportId));
 	}
 
 	[RelayCommand]
@@ -277,6 +309,45 @@ public partial class MapViewModel : ViewModelBase
 	{
 		AddressQuery = suggestion.DisplayName;
 		RequestMapCenter(MapSpan.FromCenterAndRadius(suggestion.Location, InitialRadius));
+	}
+
+	public void ApplyRefreshedCatalog(bool dismissSelectedVenue)
+	{
+		_sportCodesById = _venueCatalog.Sports.ToDictionary(
+			sport => sport.Id,
+			sport => sport.Code);
+		_sportNamesById = _venueCatalog.Sports.ToDictionary(
+			sport => sport.Id,
+			sport => sport.Name);
+
+		if (dismissSelectedVenue)
+		{
+			DismissVenueSheet();
+		}
+		else if (SelectedVenue is not null)
+		{
+			VenueResponse? refreshedVenue = _venueCatalog.Venues.SingleOrDefault(
+				venue => venue.Id == SelectedVenue.Id);
+			if (refreshedVenue is null)
+			{
+				DismissVenueSheet();
+			}
+			else
+			{
+				SelectedVenue = refreshedVenue;
+				SelectedVenueSports = refreshedVenue.SportIds
+					.Select(sportId => new VenueSportViewData(ResolveSportName(sportId)))
+					.ToList();
+			}
+		}
+
+		BuildSportFilters();
+		BuildVisiblePins();
+	}
+
+	public Task ShowCreateFeedbackAsync(string message)
+	{
+		return _feedbackService.ShowSnackbarAsync(message);
 	}
 	#endregion
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using UraniumUI;
 using ChoNaBojo.App.Services;
 using ChoNaBojo.App.Services.Auth;
+using ChoNaBojo.App.Services.Events;
 using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Geocoding;
 using ChoNaBojo.App.Services.Navigation;
@@ -80,11 +81,13 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<RegisterPage>();
 			builder.Services.AddTransient<MapPage>();
 			builder.Services.AddTransient<AddressSearchPage>();
+			builder.Services.AddTransient<CreateEventPage>();
 
 			builder.Services.AddTransient<LoginViewModel>();
 			builder.Services.AddTransient<RegisterViewModel>();
 			builder.Services.AddTransient<MapViewModel>();
 			builder.Services.AddTransient<AddressSearchViewModel>();
+			builder.Services.AddTransient<CreateEventViewModel>();
 
 #if DEBUG
 			builder.Logging.AddDebug();

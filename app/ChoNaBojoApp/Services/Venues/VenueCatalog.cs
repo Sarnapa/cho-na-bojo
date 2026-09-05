@@ -5,6 +5,17 @@ namespace ChoNaBojo.App.Services.Venues;
 /// <inheritdoc cref="IVenueCatalog" />
 public sealed class VenueCatalog : IVenueCatalog
 {
+	#region Private types
+	private sealed record VenueCatalogSnapshot(
+		IReadOnlyList<VenueResponse> Venues,
+		IReadOnlyList<SportResponse> Sports,
+		bool IsLoaded,
+		int Version)
+	{
+		public static readonly VenueCatalogSnapshot Empty = new([], [], false, 0);
+	}
+	#endregion
+
 	#region Private fields
 	private readonly IApiService _apiService;
 
@@ -12,9 +23,7 @@ public sealed class VenueCatalog : IVenueCatalog
 	// await one in-flight fetch instead of issuing duplicate requests.
 	private readonly SemaphoreSlim _loadLock = new(1, 1);
 
-	private List<VenueResponse> _venues = [];
-	private List<SportResponse> _sports = [];
-	private volatile bool _isLoaded;
+	private volatile VenueCatalogSnapshot _snapshot = VenueCatalogSnapshot.Empty;
 	#endregion
 
 	#region Constructors
@@ -29,7 +38,7 @@ public sealed class VenueCatalog : IVenueCatalog
 	{
 		get
 		{
-			return _venues;
+			return _snapshot.Venues;
 		}
 	}
 
@@ -37,15 +46,30 @@ public sealed class VenueCatalog : IVenueCatalog
 	{
 		get
 		{
-			return _sports;
+			return _snapshot.Sports;
 		}
 	}
 	#endregion
 
 	#region Public methods
-	public async Task<VenueCatalogLoadResult> EnsureLoadedAsync(CancellationToken cancellationToken)
+	public Task<VenueCatalogLoadResult> EnsureLoadedAsync(CancellationToken cancellationToken)
 	{
-		if (_isLoaded)
+		return LoadAsync(forceRefresh: false, cancellationToken);
+	}
+
+	public Task<VenueCatalogLoadResult> RefreshAsync(CancellationToken cancellationToken)
+	{
+		return LoadAsync(forceRefresh: true, cancellationToken);
+	}
+	#endregion
+
+	#region Private methods
+	private async Task<VenueCatalogLoadResult> LoadAsync(
+		bool forceRefresh,
+		CancellationToken cancellationToken)
+	{
+		VenueCatalogSnapshot observedSnapshot = _snapshot;
+		if (!forceRefresh && observedSnapshot.IsLoaded)
 		{
 			return VenueCatalogLoadResult.Success;
 		}
@@ -53,8 +77,12 @@ public sealed class VenueCatalog : IVenueCatalog
 		await _loadLock.WaitAsync(cancellationToken);
 		try
 		{
-			// Another caller may have completed the load while we waited for the lock.
-			if (_isLoaded)
+			VenueCatalogSnapshot currentSnapshot = _snapshot;
+
+			// A successful load or refresh completed while this caller waited. Reuse that
+			// atomic snapshot instead of issuing a duplicate pair of requests.
+			if ((!forceRefresh && currentSnapshot.IsLoaded)
+				|| (forceRefresh && currentSnapshot.Version != observedSnapshot.Version))
 			{
 				return VenueCatalogLoadResult.Success;
 			}
@@ -86,9 +114,11 @@ public sealed class VenueCatalog : IVenueCatalog
 				return VenueCatalogLoadResult.Unknown;
 			}
 
-			_venues = [.. venuesResult.Venues];
-			_sports = [.. sportsResult.Sports];
-			_isLoaded = true;
+			_snapshot = new VenueCatalogSnapshot(
+				[.. venuesResult.Venues],
+				[.. sportsResult.Sports],
+				true,
+				currentSnapshot.Version + 1);
 
 			return VenueCatalogLoadResult.Success;
 		}
