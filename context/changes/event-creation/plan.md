@@ -506,19 +506,19 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 
 #### Automated
 
-- [x] 3.1 Server and solution build
-- [x] 3.2 API runs in the background on http://localhost:5100 and stays up for 3.3-3.8, which use a JWT from /auth/login
-- [x] 3.3 Unauthenticated POST /api/events returns 401 and creates no row
-- [x] 3.4 Valid authenticated request returns 201 with safe complete detail data
-- [x] 3.5 Repeating the request id returns 200 with the same event and only one row
-- [x] 3.6 Invalid and stale-reference requests return the agreed 400/409 outcomes without creating rows
-- [x] 3.7 Normal valid create call completes within five seconds
-- [x] 3.8 Sub-microsecond-precision timestamps round-trip consistently and replay returns the same event id
+- [x] 3.1 Server and solution build — e861f8c
+- [x] 3.2 API runs in the background on http://localhost:5100 and stays up for 3.3-3.8, which use a JWT from /auth/login — e861f8c
+- [x] 3.3 Unauthenticated POST /api/events returns 401 and creates no row — e861f8c
+- [x] 3.4 Valid authenticated request returns 201 with safe complete detail data — e861f8c
+- [x] 3.5 Repeating the request id returns 200 with the same event and only one row — e861f8c
+- [x] 3.6 Invalid and stale-reference requests return the agreed 400/409 outcomes without creating rows — e861f8c
+- [x] 3.7 Normal valid create call completes within five seconds — e861f8c
+- [x] 3.8 Sub-microsecond-precision timestamps round-trip consistently and replay returns the same event id — e861f8c
 
 #### Manual
 
-- [x] 3.9 Supabase row confirms JWT-derived organizer, normalized text, and UTC timestamps
-- [x] 3.10 First-create and replay serialized response bodies contain no login or contact data
+- [x] 3.9 Supabase row confirms JWT-derived organizer, normalized text, and UTC timestamps — e861f8c
+- [x] 3.10 First-create and replay serialized response bodies contain no login or contact data — e861f8c
 
 ### Phase 4: MAUI Create Form and Recovery Flow
 

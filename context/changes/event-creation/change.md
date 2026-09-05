@@ -3,7 +3,7 @@ change_id: event-creation
 title: Event creation
 status: implementing
 created: 2026-09-02
-updated: 2026-09-04
+updated: 2026-09-05
 archived_at: null
 ---
 
