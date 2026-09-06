@@ -83,6 +83,8 @@
   </Folder>
   <Folder Name="/context/changes/event-listing-and-join-request/">
     <File Path="../context/changes/event-listing-and-join-request/change.md" />
+    <File Path="../context/changes/event-listing-and-join-request/plan-brief.md" />
+    <File Path="../context/changes/event-listing-and-join-request/plan.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
