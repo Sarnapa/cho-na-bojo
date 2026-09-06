@@ -482,17 +482,17 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 
 #### Automated
 
-- [ ] 2.1 Solution builds with the persistence model
-- [ ] 2.2 EF resolves the context
-- [ ] 2.3 AddEventJoinRequests migration is listed
-- [ ] 2.4 Model and snapshot agree
-- [ ] 2.5 Idempotent migration SQL contains all required constraints and indexes
+- [x] 2.1 Solution builds with the persistence model
+- [x] 2.2 EF resolves the context
+- [x] 2.3 AddEventJoinRequests migration is listed
+- [x] 2.4 Model and snapshot agree
+- [x] 2.5 Idempotent migration SQL contains all required constraints and indexes
 
 #### Manual
 
-- [ ] 2.6 Migration is applied through session mode while runtime remains on transaction mode
-- [ ] 2.7 Undefined statuses and duplicate event/requester rows are rejected
-- [ ] 2.8 EventJoinRequests contains no copied contact data
+- [x] 2.6 Migration is applied through session mode while runtime remains on transaction mode
+- [x] 2.7 Undefined statuses and duplicate event/requester rows are rejected
+- [x] 2.8 EventJoinRequests contains no copied contact data
 
 ### Phase 3: Protected Event Listing and Join APIs
 

@@ -45,4 +45,7 @@ public class User
 
 	/// <summary>Events created by this user.</summary>
 	public ICollection<SportsEvent> OrganizedEvents { get; set; } = [];
+
+	/// <summary>Requests made by this user to join events.</summary>
+	public ICollection<EventJoinRequest> EventJoinRequests { get; set; } = [];
 }

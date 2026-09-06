@@ -35,4 +35,6 @@ public class SportsEvent
 	public User Organizer { get; set; } = null!;
 
 	public VenueSport VenueSport { get; set; } = null!;
+
+	public ICollection<EventJoinRequest> EventJoinRequests { get; set; } = [];
 }

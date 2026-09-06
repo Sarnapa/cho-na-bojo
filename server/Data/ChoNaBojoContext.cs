@@ -60,6 +60,14 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 			return Set<SportsEvent>();
 		}
 	}
+
+	public DbSet<EventJoinRequest> EventJoinRequests
+	{
+		get
+		{
+			return Set<EventJoinRequest>();
+		}
+	}
 	#endregion
 
 	#region Overrides
@@ -259,6 +267,11 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 					sportsEvent.ClientRequestId
 				})
 				.IsUnique();
+			entity.HasIndex(sportsEvent => new
+				{
+					sportsEvent.VenueId,
+					sportsEvent.EstimatedEndsAtUtc
+				});
 
 			entity.HasOne(sportsEvent => sportsEvent.Organizer)
 				.WithMany(user => user.OrganizedEvents)
@@ -272,6 +285,51 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 					sportsEvent.VenueId,
 					sportsEvent.SportId
 				})
+				.OnDelete(DeleteBehavior.Restrict);
+		});
+
+		modelBuilder.Entity<EventJoinRequest>(entity =>
+		{
+			entity.ToTable(tableBuilder =>
+			{
+				tableBuilder.HasCheckConstraint(
+					"CK_EventJoinRequests_Status",
+					"""
+					"Status" IN (1, 2, 3)
+					""");
+			});
+
+			entity.HasKey(request => request.Id);
+			entity.Property(request => request.Id)
+				.HasDefaultValueSql("gen_random_uuid()");
+			entity.Property(request => request.Status)
+				.IsRequired();
+			entity.Property(request => request.CreatedUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(request => request.UpdatedUtc)
+				.HasColumnType("timestamp with time zone");
+
+			entity.HasIndex(request => new
+				{
+					request.SportsEventId,
+					request.RequesterUserId
+				})
+				.IsUnique();
+			entity.HasIndex(request => new
+				{
+					request.SportsEventId,
+					request.Status
+				});
+
+			entity.HasOne(request => request.SportsEvent)
+				.WithMany(sportsEvent => sportsEvent.EventJoinRequests)
+				.HasForeignKey(request => request.SportsEventId)
+				.OnDelete(DeleteBehavior.Cascade);
+
+			entity.HasOne(request => request.Requester)
+				.WithMany(user => user.EventJoinRequests)
+				.HasForeignKey(request => request.RequesterUserId)
 				.OnDelete(DeleteBehavior.Restrict);
 		});
 	}
