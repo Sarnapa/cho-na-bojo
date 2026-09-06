@@ -27,4 +27,13 @@ public interface IApiService
   Task<CreateEventResult> CreateEventAsync(
 	  CreateEventRequest request,
 	  CancellationToken cancellationToken);
+
+  Task<VenueEventListResult> GetVenueEventsAsync(
+	  int venueId,
+	  EventListingQuery query,
+	  CancellationToken cancellationToken);
+
+  Task<JoinEventResult> RequestToJoinEventAsync(
+	  Guid eventId,
+	  CancellationToken cancellationToken);
 }

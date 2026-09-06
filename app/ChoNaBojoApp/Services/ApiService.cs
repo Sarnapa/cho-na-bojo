@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Globalization;
 using System.Text.Json;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Events;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.Contracts.DTOs;
+using ChoNaBojo.Contracts.Enums;
 
 namespace ChoNaBojo.App.Services;
 
@@ -212,9 +214,169 @@ public class ApiService: IApiService
 			return CreateEventResult.Unknown();
 		}
 	}
+
+	public async Task<VenueEventListResult> GetVenueEventsAsync(
+		int venueId,
+		EventListingQuery query,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			string path = BuildVenueEventsPath(venueId, query);
+			using HttpResponseMessage response = await _httpClient.GetAsync(
+				path,
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+					var events = await response.Content.ReadFromJsonAsync<List<EventListItemResponse>>(
+						JsonOptions,
+						cancellationToken);
+					return events is null || events.Any(IsInvalidEventItem)
+						? VenueEventListResult.Unknown()
+						: VenueEventListResult.Success(events);
+
+				case HttpStatusCode.BadRequest:
+					var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(
+						JsonOptions,
+						cancellationToken);
+					return problem?.Errors is not { } validationErrors
+						? VenueEventListResult.Unknown()
+						: VenueEventListResult.ValidationFailed(validationErrors);
+
+				case HttpStatusCode.Conflict:
+					var conflict = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return conflict is null
+						? VenueEventListResult.Unknown()
+						: VenueEventListResult.ReferenceChanged(conflict);
+
+				case HttpStatusCode.Unauthorized:
+					return VenueEventListResult.Unauthorized();
+
+				default:
+					return VenueEventListResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return VenueEventListResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return VenueEventListResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return VenueEventListResult.Unknown();
+		}
+	}
+
+	public async Task<JoinEventResult> RequestToJoinEventAsync(
+		Guid eventId,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.PostAsync(
+				$"/api/events/{eventId:D}/join-requests",
+				content: null,
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+				case HttpStatusCode.Created:
+					var joinRequest = await response.Content.ReadFromJsonAsync<JoinRequestResponse>(
+						JsonOptions,
+						cancellationToken);
+					return joinRequest is null
+						|| joinRequest.RequestId == Guid.Empty
+						|| !Enum.IsDefined(joinRequest.Status)
+						|| joinRequest.EventId != eventId
+						? JoinEventResult.Unknown()
+						: JoinEventResult.Success(
+							joinRequest,
+							response.StatusCode == HttpStatusCode.OK);
+
+				case HttpStatusCode.Conflict:
+					var conflict = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return conflict is null
+						? JoinEventResult.Unknown()
+						: JoinEventResult.Conflict(conflict);
+
+				case HttpStatusCode.Unauthorized:
+					return JoinEventResult.Unauthorized();
+
+				default:
+					return JoinEventResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return JoinEventResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return JoinEventResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return JoinEventResult.Unknown();
+		}
+	}
 	#endregion
 
 	#region Private methods
+	private static string BuildVenueEventsPath(int venueId, EventListingQuery query)
+	{
+		var values = new List<string>();
+		if (query.SportId.HasValue)
+		{
+			values.Add(
+				$"sportId={query.SportId.Value.ToString(CultureInfo.InvariantCulture)}");
+		}
+
+		AddUtcQueryValue(values, "availableFromUtc", query.AvailableFromUtc);
+		AddUtcQueryValue(values, "availableToUtc", query.AvailableToUtc);
+
+		string queryString = values.Count == 0
+			? string.Empty
+			: $"?{string.Join("&", values)}";
+		return $"/api/venues/{venueId.ToString(CultureInfo.InvariantCulture)}/events{queryString}";
+	}
+
+	private static void AddUtcQueryValue(
+		ICollection<string> values,
+		string name,
+		DateTimeOffset? value)
+	{
+		if (!value.HasValue)
+		{
+			return;
+		}
+
+		string serializedValue = value.Value
+			.ToUniversalTime()
+			.ToString("O", CultureInfo.InvariantCulture);
+		values.Add($"{name}={Uri.EscapeDataString(serializedValue)}");
+	}
+
+	private static bool IsInvalidEventItem(EventListItemResponse item)
+	{
+		return item.EventId == Guid.Empty
+			|| string.IsNullOrWhiteSpace(item.Title)
+			|| item.Sport is null
+			|| item.Sport.Id <= 0
+			|| string.IsNullOrWhiteSpace(item.Sport.Name)
+			|| item.CurrentUserRequestStatus is { } status
+				&& !Enum.IsDefined(status);
+	}
+
 	private async Task<AuthResult> PostAuthAsync<TRequest>(string path, TRequest request, CancellationToken cancellationToken)
 	{
 		try

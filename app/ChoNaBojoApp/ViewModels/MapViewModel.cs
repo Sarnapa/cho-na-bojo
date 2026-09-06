@@ -1,15 +1,21 @@
+using System.Globalization;
 using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Devices.Sensors;
 using Microsoft.Maui.Maps;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UraniumUI.Icons.MaterialSymbols;
+using ChoNaBojo.App.Services;
 using ChoNaBojo.App.Services.Auth;
+using ChoNaBojo.App.Services.Events;
 using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Geocoding;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.Views.Maps;
+using ChoNaBojo.Contracts.Consts;
 using ChoNaBojo.Contracts.DTOs;
+using ChoNaBojo.Contracts.Enums;
+using ChoNaBojo.Validation;
 
 namespace ChoNaBojo.App.ViewModels;
 
@@ -32,6 +38,105 @@ public sealed record SportFilterViewData(
 	string Name,
 	string IconGlyph,
 	string SemanticDescription);
+#endregion
+
+#region EventAvailabilityFilterViewData
+public sealed record EventAvailabilityFilterViewData(
+	EventAvailabilityPreset Preset,
+	string Name,
+	bool IsSelected);
+#endregion
+
+#region VenueEventsFailureKind
+public enum VenueEventsFailureKind
+{
+	None,
+	Validation,
+	ReferenceChanged,
+	Unauthorized,
+	Network,
+	Unknown
+}
+#endregion
+
+#region EventCardViewData
+public sealed record EventCardViewData(
+	Guid EventId,
+	string Title,
+	string? Description,
+	DateTimeOffset StartsAtUtc,
+	DateTimeOffset EstimatedEndsAtUtc,
+	int ParticipantLimit,
+	int ParticipantCount,
+	bool AutoAccept,
+	string SportName,
+	bool IsOrganizer,
+	EventJoinRequestStatus? CurrentUserRequestStatus,
+	bool IsJoinInFlight)
+{
+	public bool HasDescription => !string.IsNullOrEmpty(Description);
+	public bool IsFull => ParticipantCount >= ParticipantLimit;
+	public bool CanJoin => !IsOrganizer
+		&& CurrentUserRequestStatus is null
+		&& !IsFull
+		&& !IsJoinInFlight;
+	public string StartsAtDisplay => FormatLocalTime(StartsAtUtc);
+	public string EstimatedEndsAtDisplay => FormatLocalTime(EstimatedEndsAtUtc);
+	public string ParticipantDisplay => string.Create(
+		CultureInfo.CurrentCulture,
+		$"{ParticipantCount} / {ParticipantLimit}");
+	public string ActionLabel => IsJoinInFlight
+		? "Sending..."
+		: IsOrganizer
+			? "Your event"
+			: CurrentUserRequestStatus switch
+			{
+				EventJoinRequestStatus.Pending => "Request pending",
+				EventJoinRequestStatus.Accepted => "Joined",
+				EventJoinRequestStatus.Rejected => "Request rejected",
+				_ when IsFull => "Full",
+				_ => "Join"
+			};
+	public string ActionSemanticDescription => IsJoinInFlight
+		? $"Sending a join request for {Title}"
+		: IsOrganizer
+			? $"You organize {Title}"
+			: CurrentUserRequestStatus switch
+			{
+				EventJoinRequestStatus.Pending => $"Join request pending for {Title}",
+				EventJoinRequestStatus.Accepted => $"Joined {Title}",
+				EventJoinRequestStatus.Rejected => $"Join request rejected for {Title}",
+				_ when IsFull => $"{Title} is full",
+				_ => $"Request to join {Title}"
+			};
+
+	public static EventCardViewData FromResponse(EventListItemResponse response)
+	{
+		return new EventCardViewData(
+			response.EventId,
+			response.Title,
+			response.Description,
+			response.StartsAtUtc,
+			response.EstimatedEndsAtUtc,
+			response.ParticipantLimit,
+			response.ParticipantCount,
+			response.AutoAccept,
+			response.Sport.Name,
+			response.IsOrganizer,
+			response.CurrentUserRequestStatus,
+			false);
+	}
+
+	private static string FormatLocalTime(DateTimeOffset utcValue)
+	{
+		DateTimeOffset localValue = TimeZoneInfo.ConvertTime(
+			utcValue,
+			TimeZoneInfo.Local);
+		return localValue.ToString(
+			"ddd, d MMM yyyy, HH:mm",
+			CultureInfo.CurrentCulture);
+	}
+}
 #endregion
 
 #region MapCenterRequestedEventArgs
@@ -81,10 +186,14 @@ public partial class MapViewModel : ViewModelBase
 	private readonly IVenueCatalog _venueCatalog;
 	private readonly ISessionService _sessionService;
 	private readonly IFeedbackService _feedbackService;
+	private readonly IApiService _apiService;
 	private IReadOnlyDictionary<int, string> _sportCodesById = new Dictionary<int, string>();
 	private IReadOnlyDictionary<int, string> _sportNamesById = new Dictionary<int, string>();
 	private bool _hasLoadedMap;
 	private Location? _lastKnownCurrentLocation;
+	private EventAvailabilityWindow? _availabilityWindow;
+	private CancellationTokenSource? _venueEventsCancellation;
+	private CancellationTokenSource? _joinRequestCancellation;
 	#endregion
 
 	#region Observable properties
@@ -131,6 +240,33 @@ public partial class MapViewModel : ViewModelBase
 	private bool isVenueSheetVisible;
 
 	[ObservableProperty]
+	private IReadOnlyList<EventCardViewData> venueEvents = [];
+
+	[ObservableProperty]
+	private bool isVenueEventsLoading;
+
+	[ObservableProperty]
+	private bool hasNoVenueEvents;
+
+	[ObservableProperty]
+	private bool hasVenueEventsError;
+
+	[ObservableProperty]
+	private string venueEventsErrorMessage = string.Empty;
+
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(CanRetryVenueEvents))]
+	private VenueEventsFailureKind venueEventsFailure;
+
+	[ObservableProperty]
+	private EventAvailabilityPreset selectedAvailabilityPreset =
+		EventAvailabilityPreset.AnyTime;
+
+	[ObservableProperty]
+	private IReadOnlyList<EventAvailabilityFilterViewData> availabilityFilters =
+		BuildAvailabilityFilters(EventAvailabilityPreset.AnyTime);
+
+	[ObservableProperty]
 	[NotifyPropertyChangedFor(nameof(AddressSearchLabel))]
 	private string addressQuery = string.Empty;
 
@@ -142,11 +278,13 @@ public partial class MapViewModel : ViewModelBase
 	public MapViewModel(
 		IVenueCatalog venueCatalog,
 		ISessionService sessionService,
-		IFeedbackService feedbackService)
+		IFeedbackService feedbackService,
+		IApiService apiService)
 	{
 		_venueCatalog = venueCatalog;
 		_sessionService = sessionService;
 		_feedbackService = feedbackService;
+		_apiService = apiService;
 	}
 	#endregion
 
@@ -154,6 +292,7 @@ public partial class MapViewModel : ViewModelBase
 	public event EventHandler? LoggedOut;
 	public event EventHandler<MapCenterRequestedEventArgs>? MapCenterRequested;
 	public event EventHandler<CreateEventRequestedEventArgs>? CreateEventRequested;
+	public event EventHandler? CustomAvailabilityRequested;
 	#endregion
 
 	#region Public properties
@@ -164,6 +303,37 @@ public partial class MapViewModel : ViewModelBase
 			return string.IsNullOrWhiteSpace(AddressQuery)
 				? "Search for an address"
 				: AddressQuery;
+		}
+	}
+
+	public bool CanRetryVenueEvents => VenueEventsFailure is
+		VenueEventsFailureKind.Network or VenueEventsFailureKind.Unknown;
+
+	public bool HasCustomAvailability =>
+		SelectedAvailabilityPreset == EventAvailabilityPreset.Custom
+		&& _availabilityWindow is not null;
+
+	public EventAvailabilityWindow? CustomAvailabilityWindow =>
+		HasCustomAvailability ? _availabilityWindow : null;
+
+	public string ActiveAvailabilitySummary
+	{
+		get
+		{
+			if (!HasCustomAvailability)
+			{
+				return string.Empty;
+			}
+
+			DateTimeOffset localStart = TimeZoneInfo.ConvertTime(
+				_availabilityWindow!.AvailableFromUtc,
+				TimeZoneInfo.Local);
+			DateTimeOffset localEnd = TimeZoneInfo.ConvertTime(
+				_availabilityWindow.AvailableToUtc,
+				TimeZoneInfo.Local);
+			return string.Create(
+				CultureInfo.CurrentCulture,
+				$"{localStart:d MMM, HH:mm} - {localEnd:d MMM, HH:mm}");
 		}
 	}
 	#endregion
@@ -184,9 +354,11 @@ public partial class MapViewModel : ViewModelBase
 	[RelayCommand]
 	private void DismissVenueSheet()
 	{
+		CancelVenueScopedRequests();
 		IsVenueSheetVisible = false;
 		SelectedVenue = null;
 		SelectedVenueSports = [];
+		ClearVenueEventState();
 	}
 
 	[RelayCommand]
@@ -200,6 +372,157 @@ public partial class MapViewModel : ViewModelBase
 		CreateEventRequested?.Invoke(
 			this,
 			new CreateEventRequestedEventArgs(SelectedVenue, SelectedSportId));
+	}
+
+	[RelayCommand(AllowConcurrentExecutions = true)]
+	private async Task SelectAvailabilityFilterAsync(
+		EventAvailabilityFilterViewData? filter,
+		CancellationToken cancellationToken)
+	{
+		if (filter is null)
+		{
+			return;
+		}
+
+		if (filter.Preset == EventAvailabilityPreset.Custom)
+		{
+			CustomAvailabilityRequested?.Invoke(this, EventArgs.Empty);
+			return;
+		}
+
+		EventAvailabilityConversionResult conversion =
+			EventAvailabilityConversion.ForPreset(filter.Preset);
+		if (!conversion.IsValid)
+		{
+			SetVenueEventsFailure(
+				VenueEventsFailureKind.Validation,
+				FormatValidationErrors(conversion.Errors));
+			VenueEvents = [];
+			return;
+		}
+
+		_availabilityWindow = null;
+		SetSelectedAvailability(filter.Preset);
+		await ReloadSelectedVenueEventsAsync(cancellationToken);
+	}
+
+	[RelayCommand(CanExecute = nameof(CanRequestToJoinEvent))]
+	private async Task RequestToJoinEventAsync(
+		EventCardViewData? eventCard,
+		CancellationToken cancellationToken)
+	{
+		if (eventCard is null
+			|| SelectedVenue is null
+			|| _joinRequestCancellation is not null)
+		{
+			return;
+		}
+
+		EventCardViewData? currentCard = VenueEvents.SingleOrDefault(
+			item => item.EventId == eventCard.EventId);
+		if (currentCard is null || !currentCard.CanJoin)
+		{
+			return;
+		}
+
+		var joinCancellation =
+			CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		CancellationToken joinToken = joinCancellation.Token;
+		_joinRequestCancellation = joinCancellation;
+		int selectedVenueId = SelectedVenue.Id;
+		ReplaceEventCard(
+			currentCard.EventId,
+			card => card with { IsJoinInFlight = true });
+		RequestToJoinEventCommand.NotifyCanExecuteChanged();
+
+		try
+		{
+			JoinEventResult result = await _apiService.RequestToJoinEventAsync(
+				currentCard.EventId,
+				joinToken);
+			joinToken.ThrowIfCancellationRequested();
+			if (!IsCurrentVenue(selectedVenueId)
+				|| !ReferenceEquals(_joinRequestCancellation, joinCancellation))
+			{
+				return;
+			}
+
+			switch (result.Status)
+			{
+				case JoinEventResultStatus.Success:
+					bool listWasLoading = _venueEventsCancellation is not null;
+					CancelVenueEventsLoad();
+					ReplaceEventCard(
+						currentCard.EventId,
+						card => card with
+						{
+							CurrentUserRequestStatus = result.Response!.Status,
+							IsJoinInFlight = false
+						});
+					if (listWasLoading)
+					{
+						await ReloadSelectedVenueEventsAsync(joinToken);
+					}
+
+					await _feedbackService.ShowSnackbarAsync(
+						result.IsReplay
+							? "Your existing join request was restored."
+							: "Join request sent.",
+						joinToken);
+					break;
+
+				case JoinEventResultStatus.Conflict:
+					await _feedbackService.ShowSnackbarAsync(
+						result.ConflictResponse!.Message,
+						joinToken);
+					await ReloadSelectedVenueEventsAsync(joinToken);
+					break;
+
+				case JoinEventResultStatus.Unauthorized:
+					await _feedbackService.ShowSnackbarAsync(
+						"Your session has expired. Please sign in again.",
+						joinToken);
+					break;
+
+				case JoinEventResultStatus.Network:
+					await _feedbackService.ShowSnackbarAsync(
+						"The request result could not be confirmed. Check your connection and try Join again.",
+						joinToken);
+					break;
+
+				default:
+					await _feedbackService.ShowSnackbarAsync(
+						"The server response could not be confirmed. Try Join again.",
+						joinToken);
+					break;
+			}
+		}
+		catch (OperationCanceledException) when (joinToken.IsCancellationRequested)
+		{
+		}
+		finally
+		{
+			if (ReferenceEquals(_joinRequestCancellation, joinCancellation))
+			{
+				_joinRequestCancellation = null;
+				if (IsCurrentVenue(selectedVenueId))
+				{
+					ReplaceEventCard(
+						currentCard.EventId,
+						card => card with { IsJoinInFlight = false });
+				}
+
+				RequestToJoinEventCommand.NotifyCanExecuteChanged();
+			}
+
+			joinCancellation.Dispose();
+		}
+	}
+
+	[RelayCommand]
+	private Task RetryVenueEventsAsync(CancellationToken cancellationToken)
+	{
+		return ReloadSelectedVenueEventsAsync(cancellationToken);
 	}
 
 	[RelayCommand]
@@ -300,9 +623,12 @@ public partial class MapViewModel : ViewModelBase
 			.Select(sportId => new VenueSportViewData(ResolveSportName(sportId)))
 			.ToList();
 
+		CancelVenueScopedRequests();
+		ClearVenueEventState();
 		SelectedVenue = venue;
 		SelectedVenueSports = sports;
 		IsVenueSheetVisible = true;
+		_ = ReloadSelectedVenueEventsAsync();
 	}
 
 	public void CenterOnAddress(AddressSuggestion suggestion)
@@ -349,6 +675,48 @@ public partial class MapViewModel : ViewModelBase
 	{
 		return _feedbackService.ShowSnackbarAsync(message);
 	}
+
+	public Task ReloadSelectedVenueEventsAsync(
+		int expectedVenueId,
+		CancellationToken cancellationToken = default)
+	{
+		return !IsCurrentVenue(expectedVenueId)
+			? Task.CompletedTask
+			: ReloadSelectedVenueEventsAsync(cancellationToken);
+	}
+
+	public async Task ApplyCustomAvailabilityAsync(
+		EventAvailabilityWindow window,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(window);
+
+		var query = new EventListingQuery(
+			SelectedSportId,
+			window.AvailableFromUtc,
+			window.AvailableToUtc);
+		ValidationResult validation =
+			EventListingValidation.ValidateEventListingQuery(query);
+		if (!validation.IsValid)
+		{
+			SetVenueEventsFailure(
+				VenueEventsFailureKind.Validation,
+				FormatValidationErrors(validation.Errors));
+			VenueEvents = [];
+			return;
+		}
+
+		_availabilityWindow = window;
+		SetSelectedAvailability(EventAvailabilityPreset.Custom);
+		await ReloadSelectedVenueEventsAsync(cancellationToken);
+	}
+
+	public Task ClearAvailabilityAsync(CancellationToken cancellationToken = default)
+	{
+		_availabilityWindow = null;
+		SetSelectedAvailability(EventAvailabilityPreset.AnyTime);
+		return ReloadSelectedVenueEventsAsync(cancellationToken);
+	}
 	#endregion
 
 	#region Observable property handlers
@@ -360,11 +728,155 @@ public partial class MapViewModel : ViewModelBase
 	partial void OnSelectedSportIdChanged(int? value)
 	{
 		BuildVisiblePins();
+		if (SelectedVenue is not null)
+		{
+			_ = ReloadSelectedVenueEventsAsync();
+		}
 	}
 
 	#endregion
 
 	#region Private methods
+	private Task ReloadSelectedVenueEventsAsync(
+		CancellationToken cancellationToken = default)
+	{
+		if (SelectedVenue is null)
+		{
+			return Task.CompletedTask;
+		}
+
+		EventAvailabilityWindow? activeWindow = _availabilityWindow;
+		if (SelectedAvailabilityPreset != EventAvailabilityPreset.Custom)
+		{
+			EventAvailabilityConversionResult conversion =
+				EventAvailabilityConversion.ForPreset(SelectedAvailabilityPreset);
+			if (!conversion.IsValid)
+			{
+				VenueEvents = [];
+				SetVenueEventsFailure(
+					VenueEventsFailureKind.Validation,
+					FormatValidationErrors(conversion.Errors));
+				return Task.CompletedTask;
+			}
+
+			activeWindow = conversion.Window;
+		}
+
+		CancelVenueEventsLoad();
+		var venueEventsCancellation =
+			CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		_venueEventsCancellation = venueEventsCancellation;
+
+		int venueId = SelectedVenue.Id;
+		var query = new EventListingQuery(
+			SelectedSportId,
+			activeWindow?.AvailableFromUtc,
+			activeWindow?.AvailableToUtc);
+		return LoadVenueEventsAsync(
+			venueId,
+			query,
+			venueEventsCancellation);
+	}
+
+	private async Task LoadVenueEventsAsync(
+		int venueId,
+		EventListingQuery query,
+		CancellationTokenSource venueEventsCancellation)
+	{
+		CancellationToken venueEventsToken = venueEventsCancellation.Token;
+		if (!ReferenceEquals(_venueEventsCancellation, venueEventsCancellation))
+		{
+			return;
+		}
+
+		IsVenueEventsLoading = true;
+		HasNoVenueEvents = false;
+		ClearVenueEventsFailure();
+
+		try
+		{
+			ValidationResult validation =
+				EventListingValidation.ValidateEventListingQuery(query);
+			if (!validation.IsValid)
+			{
+				SetVenueEventsFailure(
+					VenueEventsFailureKind.Validation,
+					FormatValidationErrors(validation.Errors));
+				return;
+			}
+
+			VenueEventListResult result = await _apiService.GetVenueEventsAsync(
+				venueId,
+				query,
+				venueEventsToken);
+			venueEventsToken.ThrowIfCancellationRequested();
+			if (!ReferenceEquals(_venueEventsCancellation, venueEventsCancellation)
+				|| !IsCurrentVenue(venueId))
+			{
+				return;
+			}
+
+			switch (result.Status)
+			{
+				case VenueEventListResultStatus.Success:
+					VenueEvents = result.Events!
+						.Select(EventCardViewData.FromResponse)
+						.ToList();
+					HasNoVenueEvents = VenueEvents.Count == 0;
+					break;
+
+				case VenueEventListResultStatus.ValidationFailed:
+					VenueEvents = [];
+					SetVenueEventsFailure(
+						VenueEventsFailureKind.Validation,
+						FormatValidationErrors(result.ValidationErrors!));
+					break;
+
+				case VenueEventListResultStatus.ReferenceChanged:
+					VenueEvents = [];
+					await RecoverFromVenueEventsReferenceChangeAsync(
+						result.Conflict!,
+						venueEventsToken);
+					break;
+
+				case VenueEventListResultStatus.Unauthorized:
+					VenueEvents = [];
+					SetVenueEventsFailure(
+						VenueEventsFailureKind.Unauthorized,
+						"Your session has expired. Please sign in again.");
+					break;
+
+				case VenueEventListResultStatus.Network:
+					VenueEvents = [];
+					SetVenueEventsFailure(
+						VenueEventsFailureKind.Network,
+						"Can't load events. Check your connection and try again.");
+					break;
+
+				default:
+					VenueEvents = [];
+					SetVenueEventsFailure(
+						VenueEventsFailureKind.Unknown,
+						"The events couldn't be loaded. Please try again.");
+					break;
+			}
+		}
+		catch (OperationCanceledException)
+			when (venueEventsToken.IsCancellationRequested)
+		{
+		}
+		finally
+		{
+			if (ReferenceEquals(_venueEventsCancellation, venueEventsCancellation))
+			{
+				_venueEventsCancellation = null;
+				IsVenueEventsLoading = false;
+			}
+
+			venueEventsCancellation.Dispose();
+		}
+	}
+
 	private async Task LoadMapAsync(CancellationToken cancellationToken)
 	{
 		if (IsBusy || _hasLoadedMap)
@@ -568,6 +1080,170 @@ public partial class MapViewModel : ViewModelBase
 		{
 			DismissVenueSheet();
 		}
+	}
+
+	private static IReadOnlyList<EventAvailabilityFilterViewData>
+		BuildAvailabilityFilters(EventAvailabilityPreset selectedPreset)
+	{
+		return
+		[
+			new(
+				EventAvailabilityPreset.AnyTime,
+				"Any time",
+				selectedPreset == EventAvailabilityPreset.AnyTime),
+			new(
+				EventAvailabilityPreset.Today,
+				"Today",
+				selectedPreset == EventAvailabilityPreset.Today),
+			new(
+				EventAvailabilityPreset.Tomorrow,
+				"Tomorrow",
+				selectedPreset == EventAvailabilityPreset.Tomorrow),
+			new(
+				EventAvailabilityPreset.NextSevenDays,
+				"Next 7 days",
+				selectedPreset == EventAvailabilityPreset.NextSevenDays),
+			new(
+				EventAvailabilityPreset.Custom,
+				"Custom",
+				selectedPreset == EventAvailabilityPreset.Custom)
+		];
+	}
+
+	private async Task RecoverFromVenueEventsReferenceChangeAsync(
+		EventConflictResponse conflict,
+		CancellationToken cancellationToken)
+	{
+		VenueCatalogLoadResult refreshResult = await _venueCatalog.RefreshAsync(
+			cancellationToken);
+		cancellationToken.ThrowIfCancellationRequested();
+
+		if (refreshResult.Status == VenueCatalogLoadStatus.Success)
+		{
+			bool dismissSelectedVenue = string.Equals(
+				conflict.Code,
+				EventConflictCodes.VenueNotFound,
+				StringComparison.Ordinal);
+			ApplyRefreshedCatalog(dismissSelectedVenue);
+			await _feedbackService.ShowSnackbarAsync(
+				$"{conflict.Message} The map has been refreshed.",
+				CancellationToken.None);
+			return;
+		}
+
+		VenueEventsFailureKind failureKind = refreshResult.Status switch
+		{
+			VenueCatalogLoadStatus.Unauthorized => VenueEventsFailureKind.Unauthorized,
+			VenueCatalogLoadStatus.Network => VenueEventsFailureKind.Network,
+			_ => VenueEventsFailureKind.ReferenceChanged
+		};
+		string message = refreshResult.Status switch
+		{
+			VenueCatalogLoadStatus.Unauthorized =>
+				"Your session expired while refreshing the venue.",
+			VenueCatalogLoadStatus.Network =>
+				$"{conflict.Message} The venue catalog could not be refreshed. Check your connection and try again.",
+			_ => $"{conflict.Message} The venue catalog could not be refreshed."
+		};
+		SetVenueEventsFailure(failureKind, message);
+	}
+
+	private void SetSelectedAvailability(EventAvailabilityPreset preset)
+	{
+		SelectedAvailabilityPreset = preset;
+		AvailabilityFilters = BuildAvailabilityFilters(preset);
+		OnPropertyChanged(nameof(HasCustomAvailability));
+		OnPropertyChanged(nameof(CustomAvailabilityWindow));
+		OnPropertyChanged(nameof(ActiveAvailabilitySummary));
+	}
+
+	private void SetVenueEventsFailure(
+		VenueEventsFailureKind kind,
+		string message)
+	{
+		VenueEventsFailure = kind;
+		VenueEventsErrorMessage = message;
+		HasVenueEventsError = true;
+		HasNoVenueEvents = false;
+	}
+
+	private void ClearVenueEventsFailure()
+	{
+		VenueEventsFailure = VenueEventsFailureKind.None;
+		VenueEventsErrorMessage = string.Empty;
+		HasVenueEventsError = false;
+	}
+
+	private void ClearVenueEventState()
+	{
+		VenueEvents = [];
+		IsVenueEventsLoading = false;
+		HasNoVenueEvents = false;
+		ClearVenueEventsFailure();
+	}
+
+	private static string FormatValidationErrors(
+		IReadOnlyDictionary<string, string[]> errors)
+	{
+		string message = string.Join(
+			" ",
+			errors.SelectMany(error => error.Value));
+		return string.IsNullOrWhiteSpace(message)
+			? "The availability filter is invalid."
+			: message;
+	}
+
+	private void ReplaceEventCard(
+		Guid eventId,
+		Func<EventCardViewData, EventCardViewData> replace)
+	{
+		int index = VenueEvents
+			.Select((card, cardIndex) => (card, cardIndex))
+			.Where(item => item.card.EventId == eventId)
+			.Select(item => item.cardIndex)
+			.DefaultIfEmpty(-1)
+			.Single();
+		if (index < 0)
+		{
+			return;
+		}
+
+		var updated = VenueEvents.ToList();
+		updated[index] = replace(updated[index]);
+		VenueEvents = updated;
+	}
+
+	private bool CanRequestToJoinEvent(EventCardViewData? eventCard)
+	{
+		return eventCard is not null
+			&& eventCard.CanJoin
+			&& _joinRequestCancellation is null
+			&& IsVenueSheetVisible;
+	}
+
+	private bool IsCurrentVenue(int venueId)
+	{
+		return IsVenueSheetVisible && SelectedVenue?.Id == venueId;
+	}
+
+	private void CancelVenueScopedRequests()
+	{
+		CancelVenueEventsLoad();
+
+		CancellationTokenSource? joinCancellation =
+			Interlocked.Exchange(ref _joinRequestCancellation, null);
+		joinCancellation?.Cancel();
+		joinCancellation?.Dispose();
+		RequestToJoinEventCommand.NotifyCanExecuteChanged();
+	}
+
+	private void CancelVenueEventsLoad()
+	{
+		CancellationTokenSource? venueEventsCancellation =
+			Interlocked.Exchange(ref _venueEventsCancellation, null);
+		venueEventsCancellation?.Cancel();
+		venueEventsCancellation?.Dispose();
+		IsVenueEventsLoading = false;
 	}
 
 	private static string IconFor(string sportCode)

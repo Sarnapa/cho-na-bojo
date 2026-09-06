@@ -515,16 +515,16 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 
 #### Automated
 
-- [ ] 4.1 Whole solution builds
-- [ ] 4.2 Android head builds
-- [ ] 4.3 Client maps every documented list and join outcome
-- [ ] 4.4 Event client and state privacy scan is clean
+- [x] 4.1 Whole solution builds
+- [x] 4.2 Android head builds
+- [x] 4.3 Client maps every documented list and join outcome
+- [x] 4.4 Event client and state privacy scan is clean
 
 #### Manual
 
-- [ ] 4.5 Superseded venue and filter loads cannot overwrite current state
-- [ ] 4.6 Failure classes produce distinct actionable states
-- [ ] 4.7 Successful creation refreshes the selected venue without losing map context
+- [x] 4.5 Superseded venue and filter loads cannot overwrite current state
+- [x] 4.6 Failure classes produce distinct actionable states
+- [x] 4.7 Successful creation refreshes the selected venue without losing map context
 
 ### Phase 5: Venue-Sheet Event Discovery UX
 

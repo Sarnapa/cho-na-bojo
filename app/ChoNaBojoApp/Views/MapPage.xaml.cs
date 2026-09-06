@@ -181,9 +181,11 @@ public partial class MapPage : ContentPage
 					CreatedEvent: not null
 				})
 			{
+				int createdVenueId = result.CreatedEvent.Venue.Id;
 				EventDetailPage detailPage =
 					_serviceProvider.GetRequiredService<EventDetailPage>();
 				await detailPage.ShowAsync(Navigation, result.CreatedEvent);
+				await _viewModel.ReloadSelectedVenueEventsAsync(createdVenueId);
 			}
 		}
 		finally
