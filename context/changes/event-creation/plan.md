@@ -284,6 +284,8 @@ Enable event creation from the selected venue and add the typed client, local-ti
 
 **Contract**: Combine date/start/end as unspecified local wall times; roll end to the next day when its clock value is less than or equal to start; reject `TimeZoneInfo.Local` invalid or ambiguous times; convert through the device time zone to zero-offset UTC values; and enforce positive elapsed duration no greater than 24 hours before request creation. Return field-specific errors rather than throwing for expected invalid input.
 
+> **Superseded by Addendum A-1** — the end-day inference rule was replaced by an explicit end-date input. See `## Addendum` below.
+
 #### 5. Create event ViewModel
 
 **File**: `app/ChoNaBojoApp/ViewModels/CreateEventViewModel.cs` (new)
@@ -342,7 +344,7 @@ Every conflict code Phase 3 can emit must terminate in one of these two defined 
 
 - The form opens for the selected venue, lists only its supported sports, and applies the agreed preselection behavior
 - Required/optional text and participant boundaries show inline errors while valid boundary values 2 and 300 submit
-- Same-day, overnight, exactly-24-hour, past-start, spring DST-gap, and autumn ambiguous-time cases follow the agreed rules using the device time zone
+- Same-day, overnight, exactly-24-hour, past-start, spring DST-gap, and autumn ambiguous-time cases follow the agreed rules using the device time zone, with the end day chosen explicitly on the end-date picker (Addendum A-1)
 - Submit immediately disables fields and navigation, shows creating feedback, changes to a clear long-wait state after five seconds, and never double-submits
 - A network/timeout outcome preserves the exact request snapshot and allows a retry that resolves to one event
 - A stale sport conflict refreshes the catalog, marks the sport selection invalid, preserves all other draft values, and creates no event
@@ -469,6 +471,36 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 - Migration workflow: `context/archive/2026-07-12-data-layer-foundation/plan.md`
 - Prior protected-body retry finding: `context/archive/2026-07-18-account-and-session/reviews/impl-review.md`
 
+## Addendum
+
+Deviations discovered during implementation review and accepted as the shipped contract. Later work (S-04 onward) should treat these, not the superseded phase text, as ground truth.
+
+### A-1 — Explicit end date replaces end-day inference (Phase 4 §4)
+
+**Recorded**: 2026-09-06 · **Source**: implementation review F2 · **Files**: `app/ChoNaBojoApp/Services/Events/EventTimeConversion.cs:78-95`, `app/ChoNaBojoApp/Views/CreateEventPage.xaml:135-152`, `app/ChoNaBojoApp/ViewModels/CreateEventViewModel.cs:83-88, 295-308`
+
+The planned form was one date plus two times, with the end day inferred — roll end to the next day when its clock value is less than or equal to start, and treat equal clock values as exactly 24 hours. The shipped form instead takes an explicit `EndDate` via a second `DatePicker`, clamped by `EndDateMinimum`, and never rolls: `localEnd <= localStart` is a field error ("End date and time must be after start date and time.").
+
+**Consequences**:
+
+- An overnight event (start 20:00, end 06:00) requires selecting the following day on the end-date picker; it is no longer inferred.
+- The exactly-24-hour case is expressed as the same clock time on the next day, still bounded by `EventPolicy.MaximumDuration`.
+- No capability is lost — every case the roll rule covered remains reachable — but the user must set a second field for overnight events.
+
+**Rationale for keeping it**: an explicit date is less surprising than silent inference, the behavior is manually verified, and reverting would discard working code and require re-running the Phase 4 DST/overnight device matrix.
+
+**Unchanged from the plan**: DST-invalid and DST-ambiguous local times are still rejected with field-specific errors, output is still zero-offset UTC, and the duration bound is still enforced client-side before the request is built.
+
+### A-2 — Initial map region is applied at most once per page lifetime (Phase 5)
+
+**Recorded**: 2026-09-06 · **Source**: implementation review F10 · **Files**: `app/ChoNaBojoApp/Views/MapPage.xaml.cs:25, 57, 194`
+
+`MapPage` gained a `_hasAppliedMapRegion` guard: `OnAppearing` calls `ShowInitialRegion` only while the flag is unset, and `ShowInitialRegion` sets it. Because a modal dismissal re-raises `OnAppearing`, the previous behavior re-centered the map on `InitialCenter` every time the create form or the detail sheet closed, discarding whatever the user had panned or zoomed to.
+
+**Why it exists**: it is the mechanism that satisfies criterion 5.6 — "Back/Close returns to the same map and venue without resubmission". Without the guard, closing the detail sheet would visibly jump the map away from the venue the user just created an event at.
+
+**Scope note**: this is a behavior change to the pre-existing map feature, not just to the S-03 flow — any entry that returns to `MapPage` (address search, future S-04 screens) now preserves the user's viewport instead of re-centering. Re-centering remains available on demand through the existing `MapCenterRequested` path, which does not consult the guard.
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles. See `references/progress-format.md`.
@@ -533,7 +565,7 @@ Before S-04 or production data depends on the table, rollback can use the migrat
 
 - [x] 4.5 Form opens for the selected venue with only supported sports and correct preselection — d044a0f
 - [x] 4.6 Text and participant boundaries validate while values 2 and 300 submit — d044a0f
-- [x] 4.7 Same-day, overnight, 24-hour, past-start, and DST cases follow the agreed device-time rules — d044a0f
+- [x] 4.7 Same-day, overnight, 24-hour, past-start, and DST cases follow the agreed device-time rules, with the end day chosen explicitly (Addendum A-1) — d044a0f
 - [x] 4.8 Submit shows immediate and long-wait feedback and never double-submits — d044a0f
 - [x] 4.9 Network or timeout preserves the exact request snapshot for safe retry — d044a0f
 - [x] 4.10 Stale sport refreshes the catalog, marks the sport selection invalid, and preserves the draft — d044a0f

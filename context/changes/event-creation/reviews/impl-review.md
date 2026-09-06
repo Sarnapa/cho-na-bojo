@@ -6,6 +6,33 @@
 - **Date**: 2026-09-05
 - **Verdict**: NEEDS ATTENTION
 - **Findings**: 0 critical, 5 warnings, 5 observations
+- **Triage**: complete (2026-09-06) — 10 of 10 findings resolved, 0 skipped
+
+## Triage summary
+
+All ten findings were triaged on 2026-09-06. Eight were fixed in code; two (F2, F10) were plan-documentation deviations recorded as addenda. One deferred item (the Uranium UI field migration behind F4) is queued as **RF-1** in `context/foundation/review-fixes.md`.
+
+| Finding | Decision |
+|---------|----------|
+| F1 | Fixed (Fix A) — normalize-before-validate + terminal `DbUpdateException` guard |
+| F2 | Fixed (Fix A) — Addendum A-1 in `plan.md`; criterion 4.7 restated |
+| F3 | Fixed — CHECK interpolates `EventPolicy.MaximumDuration` |
+| F4 | Fixed (Fix A) — `HeightRequest="48"`; Uranium migration deferred to RF-1 |
+| F5 | Fixed — private helper replaced by shared `TextNormalization` |
+| F6 | Fixed — explicit 30 s `HttpClient.Timeout` |
+| F7 | Fixed — `ValidationProblemResponse` moved to Contracts (`ErrorDTOs.cs`) |
+| F8 | Fixed — default `EndTime` truncated to whole minutes |
+| F9 | Fixed — `EventDetailViewModel` derives from `ViewModelBase` |
+| F10 | Fixed — Addendum A-2 in `plan.md` |
+
+**Post-triage verification** (2026-09-06):
+
+- `dotnet build solutions\ChoNaBojo.slnx` — 0 errors, 71 warnings (unchanged baseline: pre-existing `MVVMTK0045` AOT advisories on `MapViewModel` plus `NU1903`)
+- `dotnet build app\ChoNaBojoApp -f net10.0-android` — 0 errors, 0 warnings
+- `dotnet ef migrations has-pending-model-changes --project server` — "No changes have been made to the model since the last migration" (the F3 interpolation renders identical SQL)
+- Privacy scan of `EventDetailPage.xaml`, `EventDetailViewModel.cs`, and the event/error Contracts DTOs for `phone|email|messenger|contact|passwordHash|token` — no match
+
+Manual re-verification still owed on device for the F4 touch-target change (picker layout inside the two-column `Grid`) and the F6 timeout behavior.
 
 ## Verdicts
 
@@ -51,7 +78,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
   - Tradeoff: Leaves the validator and the database disagreeing about what is valid — the user gets a confusing error for input the client considered acceptable.
   - Confidence: HIGH — the catch pattern already exists twice in the same method.
   - Blind spot: None significant.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `TruncateToMicrosecond` now runs before validation (`EventEndpoints.cs:48-62`), so the validator and `CK_SportsEvents_TimeRange` judge identical values; a terminal `catch (DbUpdateException)` (:120-134) maps any remaining constraint violation to a typed 400 `ValidationProblem` under the `event` key. 400 was chosen over 409 because the client's 409 path triggers a misleading catalog refresh, while the 400 path clears `_pendingRequest` and surfaces the message as `GeneralError`.
 
 ### F2 — End-day roll rule replaced by an unplanned explicit End-date picker
 
@@ -70,7 +97,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
   - Tradeoff: Discards working code, requires re-running the Phase 4 DST/overnight manual matrix on a device, and reintroduces inference that some users find opaque.
   - Confidence: MEDIUM — the roll rule interacts with the DST-ambiguity checks, and that combination was never exercised on hardware.
   - Blind spot: `EndDateMinimum`/`OnEndDateChanged` plumbing and the XAML would both need unwinding.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — recorded as Addendum A-1 in `plan.md`; the superseded Phase 4 §4 contract paragraph now carries a pointer, and criterion 4.7 was restated (both the Phase 4 manual bullet and the Progress line) in terms of the explicit end-date picker.
 
 ### F3 — Duration CHECK hardcodes 24 hours while sibling constraints interpolate `EventPolicy`
 
@@ -80,7 +107,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
 - **Location**: server/Data/ChoNaBojoContext.cs:232-236
 - **Detail**: `CK_SportsEvents_TimeRange` embeds the literal `INTERVAL '24 hours'`, while the neighbouring constraints interpolate the shared constants — `ParticipantLimit` at :226-229 uses `{EventPolicy.ParticipantLimitMinimum}`/`{EventPolicy.ParticipantLimitMaximum}`, and title/description lengths use `EventPolicy.TitleMaxLength`/`DescriptionMaxLength`. `EventPolicy.MaximumDuration` is the single source of truth for both `EventValidation.cs:80` and `EventTimeConversion.cs:120`, so changing it would silently leave the database enforcing the old bound — precisely the two-layer drift the recorded "guard at both layers" lesson exists to prevent.
 - **Fix**: Interpolate the bound: `$"""... + INTERVAL '{EventPolicy.MaximumDuration.TotalHours:0} hours'"""`. This renders the identical SQL string, so `has-pending-model-changes` stays clean and no new migration is needed.
-- **Decision**: PENDING
+- **Decision**: FIXED — `CK_SportsEvents_TimeRange` now interpolates `{EventPolicy.MaximumDuration.TotalHours:0}`. Verified: `dotnet ef migrations has-pending-model-changes --project server` still reports "No changes have been made to the model since the last migration".
 
 ### F4 — Native date/time pickers hand-wrapped in `Border` instead of Uranium UI fields
 
@@ -99,7 +126,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
   - Tradeoff: Requires new keyed styles, re-binding four controls, and re-running the Phase 4 device matrix for time entry.
   - Confidence: MEDIUM — the guidelines note at :59 that UraniumUI 3.0 dropped `MaterialButton`, so the exact availability of these field controls in the pinned version must be confirmed first.
   - Blind spot: The pinned UraniumUI version's control surface was not checked.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `HeightRequest="48"` added to all four `Border` wrappers (`CreateEventPage.xaml:92-180`); Android head rebuilds with 0 warnings. The Uranium field migration is queued as **RF-1** in `context/foundation/review-fixes.md` (kept in `foundation/` rather than the change folder so it survives archiving).
 
 ### F5 — Private copy of a shared `ChoNaBojo.Utils` helper
 
@@ -109,7 +136,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
 - **Location**: app/ChoNaBojoApp/ViewModels/CreateEventViewModel.cs:671 (used at :382)
 - **Detail**: `private static string? NormalizeOptionalText(string value)` duplicates `ChoNaBojo.Utils.Text.TextNormalization.NormalizeOptionalText` (`shared/ChoNaBojo.Utils/Text/TextNormalization.cs:16`), which the server already calls at `EventEndpoints.cs:82`. The recorded lesson places pure stateless cross-boundary helpers in `ChoNaBojo.Utils` "and nowhere else". Two copies can drift so client and server normalize the description differently, producing spurious blank-description CHECK failures.
 - **Fix**: Delete the private method and call `TextNormalization.NormalizeOptionalText(Description)`.
-- **Decision**: PENDING
+- **Decision**: FIXED — private copy removed; `CreateEventViewModel.cs:383` now calls the shared `TextNormalization.NormalizeOptionalText`, matching `EventEndpoints.cs`. Android head rebuilds with 0 warnings.
 
 ### F6 — No explicit HTTP timeout behind a modal the user cannot leave
 
@@ -119,7 +146,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
 - **Location**: app/ChoNaBojoApp/MauiProgram.cs:50-53; app/ChoNaBojoApp/ViewModels/CreateEventViewModel.cs:423, 490
 - **Detail**: The create call passes `CancellationToken.None`, and the `ChoNaBojoApi` client sets only `BaseAddress`, leaving `HttpClient.Timeout` at the 100 s default. Meanwhile `CreateEventPage.OnBackButtonPressed` correctly returns `true` while `IsRequestInFlight` and `MapPage._isOpeningCreateForm` stays set. On a black-holed connection the user is therefore locked on a spinner for up to 100 s with Back disabled and the map's Create button inert. This is consistent with the plan's rule that 5 s is a wait-copy change and not a client abort, so it is intentional — but 100 s is an accidental bound rather than a chosen one.
 - **Fix**: Set an explicit `client.Timeout` (e.g. 30 s) on the `ChoNaBojoApi` client; the `ClientRequestId` already makes the ensuing retry replay-safe.
-- **Decision**: PENDING
+- **Decision**: FIXED — `client.Timeout = TimeSpan.FromSeconds(30)` on the `ChoNaBojoApi` client (`MauiProgram.cs:50-59`). A timeout surfaces as `TaskCanceledException` with an unrequested token, which `ApiService.CreateEventAsync` already maps to `CreateEventResult.Network()` — i.e. the retry-safe pending state, not the stuck unknown branch. `ChoNaBojoAuth` was left alone (out of the finding's scope).
 
 ### F7 — 400 body DTO is app-local and lives in the Auth area
 
@@ -129,7 +156,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
 - **Location**: app/ChoNaBojoApp/Services/ApiService.cs:180; app/ChoNaBojoApp/Services/Auth/AuthResults.cs:130
 - **Detail**: The Events path deserializes `ValidationProblemResponse`, declared in the app's Auth area rather than in `ChoNaBojo.Contracts`. The 409 shape (`EventConflictResponse`) was correctly placed in Contracts. The recorded lesson requires each status code's body to be "named as a shared Contracts DTO", so the server has no compile-time tie to the shape it emits via `Results.ValidationProblem` (`EventEndpoints.cs:215`), and the Events feature now depends on an Auth-area client record.
 - **Fix**: Move `ValidationProblemResponse` to `shared/ChoNaBojo.Contracts/DTOs/` and have both the Auth and Events paths reference it.
-- **Decision**: PENDING
+- **Decision**: FIXED — moved to the new `shared/ChoNaBojo.Contracts/DTOs/ErrorDTOs.cs` and removed from `AuthResults.cs`. Both `ApiService` call sites (:180 Events, :233 Auth) now bind to the shared Contracts DTO. Android head rebuilds with 0 warnings.
 
 ### F8 — Default end time retains sub-minute noise
 
@@ -139,7 +166,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
 - **Location**: app/ChoNaBojoApp/ViewModels/CreateEventViewModel.cs:214
 - **Detail**: `StartTime` is truncated to whole minutes at :212 (`new TimeSpan(suggestedStart.Hour, suggestedStart.Minute, 0)`), but `EndTime = suggestedEnd.TimeOfDay;` keeps the seconds and milliseconds of `DateTime.Now.AddHours(2)`. The `Format="HH:mm"` picker never shows them, so an untouched default submits an `EstimatedEndsAtUtc` a few seconds off from what the user saw and from what `EventDetailPage` renders back.
 - **Fix**: `EndTime = new TimeSpan(suggestedEnd.Hour, suggestedEnd.Minute, 0);`.
-- **Decision**: PENDING
+- **Decision**: FIXED — default `EndTime` now truncated to whole minutes, matching `StartTime` at :212 and the `Format="HH:mm"` picker the user actually sees.
 
 ### F9 — `EventDetailViewModel` is the only ViewModel not deriving from `ViewModelBase`
 
@@ -149,7 +176,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
 - **Location**: app/ChoNaBojoApp/ViewModels/EventDetailViewModel.cs:8
 - **Detail**: Declared as `: ObservableObject`, whereas `MapViewModel`, `CreateEventViewModel`, `LoginViewModel`, `RegisterViewModel` and `AddressSearchViewModel` all derive from `ViewModelBase`. The page is read-only today, so nothing is broken — but the shared `IsBusy`/`IsNotBusy` contract that other pages' `IsEnabled` bindings rely on is absent, so the first load or refresh added here (S-04 onward) will re-invent it.
 - **Fix**: Derive from `ViewModelBase`.
-- **Decision**: PENDING
+- **Decision**: FIXED — `EventDetailViewModel` now derives from `ViewModelBase`, inheriting the shared `IsBusy`/`IsNotBusy` contract. Android head rebuilds with 0 warnings.
 
 ### F10 — Undocumented change to map re-centering behavior
 
@@ -159,7 +186,7 @@ Manual criteria 1.4-5.10 are all marked `[x]`. Every manual item has correspondi
 - **Location**: app/ChoNaBojoApp/Views/MapPage.xaml.cs:25, 57, 194
 - **Detail**: A new `_hasAppliedMapRegion` guard makes `ShowInitialRegion` apply at most once per page lifetime, so returning from the create/detail modals no longer re-centers the map. Phase 5 only required that map/venue selection be retained beneath the detail modal; this is a plausible implementation of that intent but is an unstated behavior change to an existing feature, so no verification step covers it.
 - **Fix**: Document it in the plan addendum alongside F2 (it is the mechanism that satisfies criterion 5.6).
-- **Decision**: PENDING
+- **Decision**: FIXED — recorded as Addendum A-2 in `plan.md`, including the scope note that the guard changes viewport behavior for every return to `MapPage`, not only the S-03 flow. Verified that `OnMapCenterRequested` (`MapPage.xaml.cs:113-119`) calls `ShowInitialRegion` unconditionally, so on-demand re-centering is unaffected.
 
 ## Explicitly not flagged
 

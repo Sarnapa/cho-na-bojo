@@ -47,8 +47,16 @@ public static class EventEndpoints
 			return Results.Ok(ToResponse(existingEvent));
 		}
 
+		// Validate the same values that will be persisted: truncating after validation would let a
+		// sub-microsecond duration pass the validator and then violate CK_SportsEvents_TimeRange.
+		CreateEventRequest normalizedRequest = request with
+		{
+			StartsAtUtc = TruncateToMicrosecond(request.StartsAtUtc),
+			EstimatedEndsAtUtc = TruncateToMicrosecond(request.EstimatedEndsAtUtc)
+		};
+
 		ValidationResult validation = EventValidation.ValidateCreateEventRequest(
-			request,
+			normalizedRequest,
 			DateTimeOffset.UtcNow);
 		if (!validation.IsValid)
 		{
@@ -80,8 +88,8 @@ public static class EventEndpoints
 			SportId = request.SportId,
 			Title = request.Title.Trim(),
 			Description = TextNormalization.NormalizeOptionalText(request.Description),
-			StartsAtUtc = NormalizeUtcTimestamp(request.StartsAtUtc),
-			EstimatedEndsAtUtc = NormalizeUtcTimestamp(request.EstimatedEndsAtUtc),
+			StartsAtUtc = NormalizeUtcTimestamp(normalizedRequest.StartsAtUtc),
+			EstimatedEndsAtUtc = NormalizeUtcTimestamp(normalizedRequest.EstimatedEndsAtUtc),
 			CreatedUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow),
 			ParticipantLimit = request.ParticipantLimit,
 			AutoAccept = request.AutoAccept,
@@ -122,6 +130,20 @@ public static class EventEndpoints
 				"reference_data_changed",
 				field,
 				"The venue or its supported sports changed. Refresh the venue catalog and try again."));
+		}
+		catch (DbUpdateException)
+		{
+			// Terminal guard: no database constraint may surface as a 500, which the client maps to
+			// its unknown branch and offers a Retry that resends the identical, always-failing snapshot.
+			dbContext.Entry(sportsEvent).State = EntityState.Detached;
+
+			return Results.ValidationProblem(new Dictionary<string, string[]>(StringComparer.Ordinal)
+			{
+				["event"] =
+				[
+					"The event details violate a stored data rule and could not be saved. Adjust the event and try again."
+				]
+			});
 		}
 
 		return Results.Json(
@@ -184,8 +206,21 @@ public static class EventEndpoints
 	private static DateTime NormalizeUtcTimestamp(DateTimeOffset value)
 	{
 		DateTime utcValue = value.UtcDateTime;
-		long normalizedTicks = utcValue.Ticks - (utcValue.Ticks % TimeSpan.TicksPerMicrosecond);
-		return new DateTime(normalizedTicks, DateTimeKind.Utc);
+		return new DateTime(TruncateToMicrosecond(utcValue.Ticks), DateTimeKind.Utc);
+	}
+
+	/// <summary>
+	/// Truncates to the resolution PostgreSQL stores, preserving the offset so the zero-offset
+	/// contract check still sees the value the caller sent.
+	/// </summary>
+	private static DateTimeOffset TruncateToMicrosecond(DateTimeOffset value)
+	{
+		return new DateTimeOffset(TruncateToMicrosecond(value.Ticks), value.Offset);
+	}
+
+	private static long TruncateToMicrosecond(long ticks)
+	{
+		return ticks - (ticks % TimeSpan.TicksPerMicrosecond);
 	}
 
 	private static CreatedEventResponse ToResponse(SportsEvent sportsEvent)

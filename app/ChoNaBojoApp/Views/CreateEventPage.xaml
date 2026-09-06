@@ -91,6 +91,7 @@
                         Text="Start date" />
                     <Border
                         Padding="8,0"
+                        HeightRequest="48"
                         BackgroundColor="{StaticResource SurfaceColor}"
                         Stroke="{StaticResource DividerColor}"
                         StrokeShape="RoundRectangle 8">
@@ -109,6 +110,7 @@
                         Text="Start time" />
                     <Border
                         Padding="8,0"
+                        HeightRequest="48"
                         BackgroundColor="{StaticResource SurfaceColor}"
                         Stroke="{StaticResource DividerColor}"
                         StrokeShape="RoundRectangle 8">
@@ -142,6 +144,7 @@
                         Text="End date" />
                     <Border
                         Padding="8,0"
+                        HeightRequest="48"
                         BackgroundColor="{StaticResource SurfaceColor}"
                         Stroke="{StaticResource DividerColor}"
                         StrokeShape="RoundRectangle 8">
@@ -160,6 +163,7 @@
                         Text="End time" />
                     <Border
                         Padding="8,0"
+                        HeightRequest="48"
                         BackgroundColor="{StaticResource SurfaceColor}"
                         Stroke="{StaticResource DividerColor}"
                         StrokeShape="RoundRectangle 8">

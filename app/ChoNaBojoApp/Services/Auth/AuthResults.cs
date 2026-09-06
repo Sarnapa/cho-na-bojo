@@ -124,8 +124,3 @@ public sealed record CurrentUserResult
 	#endregion
 }
 #endregion
-
-#region ValidationProblemResponse
-/// <summary>Lightweight shape for the server's RFC-7807 <c>ValidationProblem</c> body.</summary>
-public sealed record ValidationProblemResponse(Dictionary<string, string[]> Errors);
-#endregion

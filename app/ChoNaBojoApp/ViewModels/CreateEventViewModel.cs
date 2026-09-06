@@ -6,6 +6,7 @@ using ChoNaBojo.App.Services.Events;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.Contracts.Consts;
 using ChoNaBojo.Contracts.DTOs;
+using ChoNaBojo.Utils.Text;
 using ChoNaBojo.Validation;
 
 namespace ChoNaBojo.App.ViewModels;
@@ -211,7 +212,7 @@ public partial class CreateEventViewModel : ViewModelBase
 		StartDate = suggestedStart.Date;
 		StartTime = new TimeSpan(suggestedStart.Hour, suggestedStart.Minute, 0);
 		EndDate = suggestedEnd.Date;
-		EndTime = suggestedEnd.TimeOfDay;
+		EndTime = new TimeSpan(suggestedEnd.Hour, suggestedEnd.Minute, 0);
 
 		RebuildSupportedSports(activeSportId);
 		ClearErrors();
@@ -379,7 +380,7 @@ public partial class CreateEventViewModel : ViewModelBase
 			_venue.Id,
 			SelectedSport.Id,
 			Title.Trim(),
-			NormalizeOptionalText(Description),
+			TextNormalization.NormalizeOptionalText(Description),
 			timeResult.StartsAtUtc!.Value,
 			timeResult.EstimatedEndsAtUtc!.Value,
 			participantLimit,
@@ -666,11 +667,6 @@ public partial class CreateEventViewModel : ViewModelBase
 				destination.Add(message);
 			}
 		}
-	}
-
-	private static string? NormalizeOptionalText(string value)
-	{
-		return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 	}
 
 	private async Task ShowLongWaitAsync(CancellationToken cancellationToken)

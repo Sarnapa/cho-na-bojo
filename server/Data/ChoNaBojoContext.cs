@@ -229,9 +229,9 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 
 				tableBuilder.HasCheckConstraint(
 					"CK_SportsEvents_TimeRange",
-					"""
+					$"""
 					"EstimatedEndsAtUtc" > "StartsAtUtc"
-					AND "EstimatedEndsAtUtc" <= "StartsAtUtc" + INTERVAL '24 hours'
+					AND "EstimatedEndsAtUtc" <= "StartsAtUtc" + INTERVAL '{EventPolicy.MaximumDuration.TotalHours:0} hours'
 					""");
 			});
 

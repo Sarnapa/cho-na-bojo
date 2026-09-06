@@ -50,6 +50,11 @@ namespace ChoNaBojo.App
 			builder.Services.AddHttpClient("ChoNaBojoApi", client =>
 			{
 				client.BaseAddress = new Uri(GetApiBaseAddress());
+
+				// Chosen bound rather than the 100 s default: an in-flight create blocks Back and
+				// the map's Create button, so a black-holed connection must resolve to the typed
+				// network result (safe retry via ClientRequestId) in a tolerable time.
+				client.Timeout = TimeSpan.FromSeconds(30);
 			}).AddHttpMessageHandler<AuthenticatingHttpMessageHandler>();
 
 			// Un-handled client for /auth/refresh and /auth/logout: must never itself be

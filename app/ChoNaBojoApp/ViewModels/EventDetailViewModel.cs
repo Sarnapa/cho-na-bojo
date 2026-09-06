@@ -5,7 +5,7 @@ using ChoNaBojo.Contracts.DTOs;
 
 namespace ChoNaBojo.App.ViewModels;
 
-public partial class EventDetailViewModel : ObservableObject
+public partial class EventDetailViewModel : ViewModelBase
 {
 	#region Observable properties
 	[ObservableProperty]
