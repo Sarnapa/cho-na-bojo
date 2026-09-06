@@ -8,7 +8,7 @@ Implement roadmap slice S-04 as an authenticated end-to-end flow. A user selects
 
 S-03 provides the `SportsEvent` model, an authenticated create endpoint, shared event contracts and validation, typed MAUI API outcomes, and a map venue sheet with a working Create event action. An event currently reports participant count as the organizer only. There is no event-list endpoint, join-request persistence, participant relationship, availability-filter contract, or join UI.
 
-The venue sheet is embedded in `MapPage` and currently contains a static prompt above the Create event button. It is wrapped in a `ScrollView`, so adding a vertically scrolling event list requires restructuring the sheet rather than nesting a `CollectionView`. Existing client patterns provide cancellation-aware commands, typed transport outcomes, snackbar feedback, modal `ShowAsync` handoffs, and local-wall-time-to-UTC conversion.
+The venue sheet is embedded in `MapPage` and currently contains a static prompt above the Create event button. It is wrapped in a `ScrollView`, so adding a vertically scrolling event list requires restructuring the sheet rather than nesting a `CollectionView`. Existing client patterns provide cancellation-aware commands, typed transport outcomes, snackbar feedback, modal `ShowAsync` handoffs, and local-wall-time-to-UTC conversion. Generation-scoped supersession specifically lives in `AddressSearchViewModel` (`_sessionCancellation` / `_suggestionSearchCancellation` via `CreateLinkedTokenSource`), not in `MapViewModel`, whose cancellation today is only the `[RelayCommand]`-supplied token.
 
 ## Desired End State
 
@@ -158,7 +158,7 @@ Add durable join-request state, database-level enum and uniqueness protection, a
 
 **Intent**: Register the request aggregate and enforce its invariants at rest.
 
-**Contract**: Add `DbSet<EventJoinRequest>`. Configure database-generated id, required UTC timestamps, restrictive or cascading relationships consistent with event/account deletion semantics, unique `(SportsEventId, RequesterUserId)`, an `(SportsEventId, Status)` accepted-count index, and an enum check constrained to the three defined numeric values. Add a `SportsEvents` listing index beginning with `VenueId` and `EstimatedEndsAtUtc`; retain the existing `(VenueId, SportId)` foreign-key index so PostgreSQL can combine it for sport-filtered queries.
+**Contract**: Add `DbSet<EventJoinRequest>`. Configure database-generated id, required UTC timestamps, `DeleteBehavior.Cascade` on the `SportsEvent` relationship (a request is an owned child with no standalone meaning once its event is gone) and `DeleteBehavior.Restrict` on the `User` relationship (protects the accepted-membership history S-05 depends on), unique `(SportsEventId, RequesterUserId)`, an `(SportsEventId, Status)` accepted-count index, and an enum check constrained to the three defined numeric values. Add a `SportsEvents` listing index beginning with `VenueId` and `EstimatedEndsAtUtc`; the `(VenueId, SportId)` index already exists implicitly as the index backing the composite foreign key to `VenueSport` and needs no explicit declaration — if criterion 3.11's `EXPLAIN` shows a poor plan for the sport-filtered listing, add an explicit `(VenueId, SportId, EstimatedEndsAtUtc)` index rather than relying on PostgreSQL combining two indexes that share a leading column.
 
 #### 3. Generated migration
 
@@ -224,19 +224,24 @@ Expose authenticated event discovery and naturally idempotent pending-request cr
 
 #### Automated Verification:
 
+Probes P-01…P-07 are run against a locally started API (`dotnet run --project server`) using the PowerShell probe matrix in Testing Strategy → Integration Tests. No test project or checked-in probe file is added — automated tests arrive after roadmap implementation. If the API cannot be started against the development database in the executing environment, run the identical matrix in Postman and record the outcome at the phase's human gate instead.
+
 - Server and solution build: `dotnet build solutions\ChoNaBojo.slnx`
-- Unauthenticated list and join requests return 401 and do not expose event data
-- Listing returns only rows for the requested venue with `EstimatedEndsAtUtc > now`, in stable start/id order
-- Sport and availability probes prove strict interval-overlap behavior, including boundary-touching non-overlap
-- Full and organizer-owned events remain present with correct count/request state while expired events are absent
-- First valid join returns 201 Pending; repeating it returns 200 with the same request id and one database row
-- New joins after start but before estimated end succeed; ended, full, organizer-owned, missing-event, and stale venue/sport cases return the documented typed 409 codes
-- Serialized list, 201, 200 replay, 400, and 409 bodies contain no contact/login/credential data
+- Route/auth static scan confirms both new endpoints are mapped on the protected `/api` group and neither opts out of authorization: `rg "MapGet|MapPost|AllowAnonymous|RequireAuthorization" server\Events\EventEndpoints.cs`
+- Probe P-01: unauthenticated list and join requests return 401 and do not expose event data
+- Probe P-02: listing returns only rows for the requested venue with `EstimatedEndsAtUtc > now`, in stable start/id order
+- Probe P-03: sport and availability probes prove strict interval-overlap behavior, including boundary-touching non-overlap
+- Probe P-04: full and organizer-owned events remain present with correct count/request state while expired events are absent
+- Probe P-05: first valid join returns 201 Pending; repeating it returns 200 with the same request id and one database row
+- Probe P-06: new joins after start but before estimated end succeed; ended, full, organizer-owned, missing-event, and stale venue/sport cases return the documented typed 409 codes
+- Probe P-07: serialized list, 201, 200 replay, 400, and 409 bodies contain no contact/login/credential data
 
 #### Manual Verification:
 
 - Supabase inspection confirms JWT-derived requester ownership, UTC timestamps, and one row per event/requester
 - `EXPLAIN` on unfiltered and sport-filtered venue listings uses the intended event/request indexes at representative development data volume
+
+**Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation of request ownership, privacy, and query behavior before proceeding.
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation of request ownership, privacy, and query behavior before proceeding.
 
@@ -286,7 +291,7 @@ Add client transport outcomes, availability conversion, cancellation-safe event 
 
 **Intent**: Keep selected-venue event state coherent across venue changes, filter changes, creation, joining, refreshes, and dismissal.
 
-**Contract**: Add event-card view data, preset selection, custom-window state, list loading/empty/error properties, retry, filter, and join commands. Selecting a venue starts a load using the active map sport; changing venue/filter cancels the previous generation; dismissal cancels and clears venue-specific state. Derived card actions show `Join`, `Full`, `Your event`, `Request pending`, `Joined`, or `Request rejected` with exactly one in-flight join per card. Success or replay replaces the matching card's request state. Typed stale conflicts show feedback and reload; unauthorized state follows the existing session-expiry path; network/unknown errors remain retryable without assuming the request failed.
+**Contract**: Add event-card view data, preset selection, custom-window state, list loading/empty/error properties, retry, filter, and join commands. Selecting a venue starts a load using the active map sport; changing venue/filter cancels the previous generation; dismissal cancels and clears venue-specific state. `MapViewModel` currently has no `CancellationTokenSource` of its own — it relies solely on the `[RelayCommand]`-supplied token — so introduce the supersession pattern already proven in `app/ChoNaBojoApp/ViewModels/AddressSearchViewModel.cs:21-22,115-165`: a disposable `_venueEventsCancellation` field replaced under `CreateLinkedTokenSource` on each new generation, plus a `_joinRequestCancellation` scoped to the in-flight join, both cancelled and disposed on venue change and sheet dismissal. Derived card actions show `Join`, `Full`, `Your event`, `Request pending`, `Joined`, or `Request rejected` with exactly one in-flight join per card. Success or replay replaces the matching card's request state. Typed stale conflicts show feedback and reload; unauthorized state follows the existing session-expiry path; network/unknown errors remain retryable without assuming the request failed.
 
 #### 5. Create-to-list refresh
 
@@ -343,7 +348,7 @@ Replace the static venue prompt with an accessible, scrollable event list, avail
 
 **Intent**: Make event discovery the primary content of the selected-venue sheet while retaining venue context and event creation.
 
-**Contract**: Replace the outer sheet `ScrollView` with a bounded grid layout whose vertical `CollectionView` owns scrolling. Add a horizontal preset row, active custom-range summary, loading indicator, retryable error, and `No events here yet` empty state. Render each event as the MD3 card defined by `context/foundation/ui-guidelines.md`: title, sport, local times, people icon plus fill counter, optional description, and one state-specific Join button or disabled label. Full count uses `ErrorColor`; organizer, pending, accepted, and rejected states are explicit. Keep Create event available outside the scrolling list.
+**Contract**: Replace the outer sheet `ScrollView` with a bounded grid layout whose vertical `CollectionView` owns scrolling. Establish the bound explicitly rather than leaving it content-driven: the page's sheet row (`MapPage.xaml:225`, currently `RowDefinitions="*,Auto"`) becomes star-sized and the sheet `Border` is capped with a `MaximumHeightRequest`, and inside the sheet the `CollectionView` is the only star-sized row so it receives a finite available height. Confirm the dimming tap-to-dismiss overlay still covers the row above the sheet under the star-sized layout. Add a horizontal preset row, active custom-range summary, loading indicator, retryable error, and `No events here yet` empty state. Render each event as the MD3 card defined by `context/foundation/ui-guidelines.md`: title, sport, local times, people icon plus fill counter, optional description, and one state-specific Join button or disabled label. Full count uses `ErrorColor`; organizer, pending, accepted, and rejected states are explicit. Keep Create event available outside the scrolling list.
 
 #### 3. Page orchestration and dependency injection
 
@@ -365,14 +370,14 @@ Replace the static venue prompt with an accessible, scrollable event list, avail
 
 - Whole solution builds: `dotnet build solutions\ChoNaBojo.slnx`
 - Android head builds: `dotnet build app\ChoNaBojoApp -f net10.0-android`
-- XAML scan confirms the event `CollectionView` is not nested in the venue sheet's previous vertical `ScrollView`
+- XAML scan confirms the event `CollectionView` is not nested in the venue sheet's previous vertical `ScrollView` **and** that its height is bounded: the sheet row is star-sized, the sheet `Border` declares a `MaximumHeightRequest`, and the `CollectionView` occupies the only `*` row of the sheet's inner grid
 - UI privacy scan finds no contact binding: `rg "Contact|LoginEmail|Communicator|Password|Hash|Token" app\ChoNaBojoApp\Views\MapPage.xaml app\ChoNaBojoApp\Views\AvailabilityFilterPage.xaml` returns no match
 
 #### Manual Verification:
 
 - Selecting a venue shows ordered non-expired event cards, or the loading, empty, and retryable error states as appropriate
 - The active map sport narrows events; `Any time`, preset, custom, and cleared availability filters return the expected overlap results
-- Full, organizer-owned, pending, accepted, and rejected cards remain visible with the correct disabled state and accessibility description
+- Full, organizer-owned, pending, accepted, and rejected cards remain visible with the correct disabled state and accessibility description; accepted and rejected are unreachable through S-04 code paths and must be exercised by seeding `EventJoinRequests.Status` in Supabase (Manual Testing Step 9)
 - Join submits once, shows in-flight feedback, ends as Pending even for auto-accept events, and displays the same state after closing and reopening the venue
 - Duplicate/replayed join is treated as success; an ended/full/stale event explains the conflict and refreshes the list
 - Event cards and filter controls remain usable with large Android font scaling and meet 48-point touch targets
@@ -386,15 +391,34 @@ Replace the static venue prompt with an accessible, scrollable event list, avail
 
 ### Unit Tests:
 
-- No test project is added, per the approved scope.
+- No test project is added, per the approved scope; automated tests are introduced after roadmap implementation.
 - Shared availability validation remains pure and clock-independent so it can be covered without production refactoring when test infrastructure is introduced.
 - Joinability remains server-authoritative and is exercised through the API probe matrix rather than duplicated as client-only validation.
 
 ### Integration Tests:
 
-- Run the API against the configured development database and authenticate at least two users: one organizer and one requester.
-- Probe unauthenticated access, empty listings, stable ordering, sport filtering, every interval-overlap boundary, participant counts, first join, concurrent duplicate join, replay after expiry, organizer self-join, full event, ended event, stale references, and serialized privacy.
-- Verify migration/model state and inspect query plans for both unfiltered and sport-filtered venue lists.
+No harness exists yet, so Phase 3 is verified by an explicit probe matrix run against a locally started API. Every probe below is a single HTTP call and a stated expectation — runnable verbatim from PowerShell (`Invoke-RestMethod` / `Invoke-WebRequest`) by the implementer, or imported into Postman when the API cannot be started locally. Nothing is added to `server/server.http`; that file stays a minimal smoke artifact.
+
+**Setup**
+
+1. Start the API: `dotnet run --project server` (base URL `http://localhost:5100`).
+2. Register and log in **two** users via `POST /auth/register` then `POST /auth/login` with body `{ "loginEmail": "...", "password": "..." }`; capture `accessToken` from each `AuthResponse` as `$organizerToken` (event owner) and `$requesterToken` (joiner).
+3. Seed fixtures as the organizer via `POST /api/events`: one normal upcoming event, one `autoAccept` event, one event already started but not ended, one event whose `estimatedEndsAtUtc` is in the past, and one event whose participant limit is already reached. Record `$venueId`, `$sportId`, and each `$eventId`.
+4. Every `/api/**` call carries `Authorization: Bearer <token>`; `/auth/**` calls carry none.
+
+**Probe matrix**
+
+| Probe | Request | Expectation |
+|---|---|---|
+| P-01 | `GET /api/venues/{venueId}/events` and `POST /api/events/{eventId}/join-requests`, both with **no** `Authorization` header | `401`; body carries no event fields |
+| P-02 | `GET /api/venues/{venueId}/events` as requester | Only that venue's rows; every `estimatedEndsAtUtc > now`; expired fixture absent; order is `startsAtUtc` then event id |
+| P-03 | `GET /api/venues/{venueId}/events?sportId={sportId}`; then `?availableFromUtc=<A>&availableToUtc=<B>`; then a window whose `availableFromUtc` equals a fixture's `estimatedEndsAtUtc`; then only one bound supplied | Sport filter narrows correctly; overlap is strict so the boundary-touching fixture is **absent**; omitting both bounds means `Any time`; one-sided bounds return `400` with lower-camel validation keys |
+| P-04 | `GET /api/venues/{venueId}/events` as organizer, then as requester | Full and organizer-owned events still present; `participantCount` equals `1 + accepted`; `isOrganizer` true only for the organizer; `currentUserRequestStatus` reflects the calling token only |
+| P-05 | `POST /api/events/{normalEventId}/join-requests` as requester, then the identical call again; repeat both against the `autoAccept` event | First → `201` with `status: Pending`; replay → `200` with the same `requestId`; auto-accept event also yields `Pending`; Supabase shows exactly one row per `(eventId, requesterId)` |
+| P-06 | Join the started-but-not-ended event; the expired event; the full event; the organizer's own event as organizer; a random `Guid`; and a `venueId`/`sportId` pairing that does not exist | `201`; then `409` `event_ended`, `event_full`, `organizer_cannot_join`, `event_not_found`, and `venue_not_found` / `sport_not_supported_at_venue` respectively, each in the `EventConflictResponse` shape |
+| P-07 | Re-read the raw JSON of every response produced by P-01…P-06 | No `contact*`, `loginEmail`, `communicator*`, `password`, `hash`, or `token` field appears in any list, `201`, `200` replay, `400`, or `409` body |
+
+Additionally verify migration/model state and inspect query plans for both unfiltered and sport-filtered venue lists (criteria 3.10–3.11).
 
 ### Manual Testing Steps:
 
@@ -406,12 +430,13 @@ Replace the static venue prompt with an accessible, scrollable event list, avail
 6. Double-tap Join and simulate response loss; confirm one row and canonical replay success.
 7. Let an event end or make it full between list and join; confirm specific feedback followed by an authoritative refresh.
 8. Verify organizer-owned events remain visible as `Your event` and cannot be joined.
-9. Inspect all event-list and join responses/screens for absence of contact, login, communicator, credential, and token data.
-10. Create an event from the same sheet and confirm returning refreshes events without recentering the map.
+9. Directly set `EventJoinRequests.Status` in Supabase to `Accepted` and then `Rejected` for the requester's row, reopen the venue, and confirm the `Joined` and `Request rejected` card states render with the correct disabled state and accessibility description. S-04 has no code path that produces a non-`Pending` row, so this seeded check is the only S-04 exercise of those two states.
+10. Inspect all event-list and join responses/screens for absence of contact, login, communicator, credential, and token data.
+11. Create an event from the same sheet and confirm returning refreshes events without recentering the map.
 
 ## Performance Considerations
 
-The mandatory venue predicate, non-expiry predicate, and new listing index bound each read to one venue's current/future rows. The existing `(VenueId, SportId)` index supports the optional sport filter, and `(SportsEventId, Status)` supports accepted counts. The list projects directly to DTOs with `AsNoTracking()` and does not load organizer or requester entities. Pagination is deferred for the small Warsaw MVP dataset; query-plan verification is required before accepting the migration.
+The mandatory venue predicate, non-expiry predicate, and new listing index bound each read to one venue's current/future rows. The optional sport filter is served by the index PostgreSQL generates automatically behind the composite foreign key to `VenueSport` — it is not an explicitly declared index, and PostgreSQL will normally pick a single index rather than bitmap-combine two that share `VenueId` as a leading column. If criterion 3.11's `EXPLAIN` shows a poor plan for the sport-filtered listing, add an explicit `(VenueId, SportId, EstimatedEndsAtUtc)` index. `(SportsEventId, Status)` supports accepted counts. The list projects directly to DTOs with `AsNoTracking()` and does not load organizer or requester entities. Pagination is deferred for the small Warsaw MVP dataset; query-plan verification is required before accepting the migration.
 
 Client loads are generation/cancellation scoped so rapid marker or filter changes do not accumulate obsolete work or flash stale results. No cross-venue event cache is introduced; a selected venue is cheap to reload after create or stale join outcomes.
 
@@ -474,18 +499,19 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 #### Automated
 
 - [ ] 3.1 Server and solution build
-- [ ] 3.2 Unauthenticated list and join requests return 401
-- [ ] 3.3 Listing scope, expiry, and stable ordering probes pass
-- [ ] 3.4 Sport and interval-overlap probes pass
-- [ ] 3.5 Full and caller-related visibility and participant counts are correct
-- [ ] 3.6 First join and idempotent replay return one canonical request
-- [ ] 3.7 Join timing and typed conflict probes pass
-- [ ] 3.8 Serialized API bodies pass the privacy scan
+- [ ] 3.2 Route/auth static scan on EventEndpoints.cs is clean
+- [ ] 3.3 P-01 unauthenticated list and join requests return 401
+- [ ] 3.4 P-02 listing scope, expiry, and stable ordering probes pass
+- [ ] 3.5 P-03 sport and interval-overlap probes pass
+- [ ] 3.6 P-04 full and caller-related visibility and participant counts are correct
+- [ ] 3.7 P-05 first join and idempotent replay return one canonical request
+- [ ] 3.8 P-06 join timing and typed conflict probes pass
+- [ ] 3.9 P-07 serialized API bodies pass the privacy scan
 
 #### Manual
 
-- [ ] 3.9 Supabase confirms JWT ownership, UTC timestamps, and request uniqueness
-- [ ] 3.10 Representative listing queries use the intended indexes
+- [ ] 3.10 Supabase confirms JWT ownership, UTC timestamps, and request uniqueness
+- [ ] 3.11 Representative listing queries use the intended indexes
 
 ### Phase 4: Typed MAUI Event Data and State Flow
 
@@ -508,14 +534,14 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 
 - [ ] 5.1 Whole solution builds
 - [ ] 5.2 Android head builds
-- [ ] 5.3 Event CollectionView is not nested in the previous venue-sheet ScrollView
+- [ ] 5.3 Event CollectionView is not nested in the previous venue-sheet ScrollView and is height-bounded
 - [ ] 5.4 Event-list and availability XAML privacy scan is clean
 
 #### Manual
 
 - [ ] 5.5 Venue event loading, ordering, empty, and error states work on Android
 - [ ] 5.6 Sport, preset, custom, and cleared availability filters produce expected results
-- [ ] 5.7 Full and caller-related event cards show the correct disabled states
+- [ ] 5.7 Full and caller-related event cards show the correct disabled states, including Supabase-seeded accepted and rejected
 - [ ] 5.8 Normal and auto-accept joins persist as Pending
 - [ ] 5.9 Duplicate and stale join outcomes reconcile correctly
 - [ ] 5.10 Event controls remain accessible with large text and 48-point touch targets

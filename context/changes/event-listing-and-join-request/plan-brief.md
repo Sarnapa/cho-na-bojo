@@ -57,7 +57,7 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 | 2. Persistence | Request table, checks, uniqueness, counts, and listing indexes | Schema choices must remain usable by S-05 |
 | 3. APIs | Protected overlap-filtered listing and idempotent join | Dynamic state and duplicate races |
 | 4. MAUI state | Typed calls, time conversion, cancellation, refresh, and join outcomes | Stale responses overwriting current venue state |
-| 5. Venue-sheet UX | Accessible cards, filters, states, and Android flow | Scroll/layout pressure in the existing bottom sheet |
+| 5. Venue-sheet UX | Accessible cards, filters, states, and Android flow | Bounded sheet layout: the sheet row must be star-sized and height-capped so the `CollectionView` measures correctly once the outer `ScrollView` is removed |
 
 **Prerequisites:** S-03 is implemented and its `AddSportsEvents` migration is applied; development auth users and Supabase migration/runtime connections are available.
 **Estimated effort:** Approximately 4-6 implementation sessions across five phases, plus manual Android and database gates.
@@ -68,6 +68,8 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 - A rejected request is final for this MVP because `(EventId, RequesterUserId)` is unique; re-request policy can be added with an explicit S-05/S-07 state transition.
 - Auto-accept events visibly remain Pending until S-05 activates the shared acceptance path.
 - New custom-range controls use Uranium UI fields; the existing RF-1 create-form cleanup remains separate.
+- The `Joined` and `Request rejected` card states are built forward-compatibly for S-05 but no S-04 code path produces them; they are verified by seeding `EventJoinRequests.Status` directly in Supabase.
+- Phase 3 has no automated test harness; its behavioural criteria are a named probe matrix (P-01…P-07) run against a locally started API, or in Postman when the API cannot be started.
 
 ## Success Criteria (Summary)
 
