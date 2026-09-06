@@ -1,10 +1,10 @@
 ---
 change_id: event-creation
 title: Event creation
-status: impl_reviewed
+status: archived
 created: 2026-09-02
 updated: 2026-09-06
-archived_at: null
+archived_at: 2026-09-06T10:09:48Z
 ---
 
 ## Notes
