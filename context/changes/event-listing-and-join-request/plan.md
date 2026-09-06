@@ -496,20 +496,20 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 
 #### Automated
 
-- [x] 3.1 Server and solution build
-- [x] 3.2 Route/auth static scan on EventEndpoints.cs is clean
-- [x] 3.3 P-01 unauthenticated list and join requests return 401
-- [x] 3.4 P-02 listing scope, expiry, and stable ordering probes pass
-- [x] 3.5 P-03 sport and interval-overlap probes pass
-- [x] 3.6 P-04 full and caller-related visibility and participant counts are correct
-- [x] 3.7 P-05 first join and idempotent replay return one canonical request
-- [x] 3.8 P-06 join timing and typed conflict probes pass
-- [x] 3.9 P-07 serialized API bodies pass the privacy scan
+- [x] 3.1 Server and solution build — acaeb9f
+- [x] 3.2 Route/auth static scan on EventEndpoints.cs is clean — acaeb9f
+- [x] 3.3 P-01 unauthenticated list and join requests return 401 — acaeb9f
+- [x] 3.4 P-02 listing scope, expiry, and stable ordering probes pass — acaeb9f
+- [x] 3.5 P-03 sport and interval-overlap probes pass — acaeb9f
+- [x] 3.6 P-04 full and caller-related visibility and participant counts are correct — acaeb9f
+- [x] 3.7 P-05 first join and idempotent replay return one canonical request — acaeb9f
+- [x] 3.8 P-06 join timing and typed conflict probes pass — acaeb9f
+- [x] 3.9 P-07 serialized API bodies pass the privacy scan — acaeb9f
 
 #### Manual
 
-- [x] 3.10 Supabase confirms JWT ownership, UTC timestamps, and request uniqueness
-- [x] 3.11 Representative listing queries use the intended indexes
+- [x] 3.10 Supabase confirms JWT ownership, UTC timestamps, and request uniqueness — acaeb9f
+- [x] 3.11 Representative listing queries use the intended indexes — acaeb9f
 
 ### Phase 4: Typed MAUI Event Data and State Flow
 
