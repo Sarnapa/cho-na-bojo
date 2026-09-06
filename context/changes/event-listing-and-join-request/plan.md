@@ -243,8 +243,6 @@ Probes P-01…P-07 are run against a locally started API (`dotnet run --project 
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation of request ownership, privacy, and query behavior before proceeding.
 
-**Implementation Note**: After completing this phase and all automated verification passes, pause for human confirmation of request ownership, privacy, and query behavior before proceeding.
-
 ---
 
 ## Phase 4: Typed MAUI Event Data and State Flow
@@ -498,20 +496,20 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 
 #### Automated
 
-- [ ] 3.1 Server and solution build
-- [ ] 3.2 Route/auth static scan on EventEndpoints.cs is clean
-- [ ] 3.3 P-01 unauthenticated list and join requests return 401
-- [ ] 3.4 P-02 listing scope, expiry, and stable ordering probes pass
-- [ ] 3.5 P-03 sport and interval-overlap probes pass
-- [ ] 3.6 P-04 full and caller-related visibility and participant counts are correct
-- [ ] 3.7 P-05 first join and idempotent replay return one canonical request
-- [ ] 3.8 P-06 join timing and typed conflict probes pass
-- [ ] 3.9 P-07 serialized API bodies pass the privacy scan
+- [x] 3.1 Server and solution build
+- [x] 3.2 Route/auth static scan on EventEndpoints.cs is clean
+- [x] 3.3 P-01 unauthenticated list and join requests return 401
+- [x] 3.4 P-02 listing scope, expiry, and stable ordering probes pass
+- [x] 3.5 P-03 sport and interval-overlap probes pass
+- [x] 3.6 P-04 full and caller-related visibility and participant counts are correct
+- [x] 3.7 P-05 first join and idempotent replay return one canonical request
+- [x] 3.8 P-06 join timing and typed conflict probes pass
+- [x] 3.9 P-07 serialized API bodies pass the privacy scan
 
 #### Manual
 
-- [ ] 3.10 Supabase confirms JWT ownership, UTC timestamps, and request uniqueness
-- [ ] 3.11 Representative listing queries use the intended indexes
+- [x] 3.10 Supabase confirms JWT ownership, UTC timestamps, and request uniqueness
+- [x] 3.11 Representative listing queries use the intended indexes
 
 ### Phase 4: Typed MAUI Event Data and State Flow
 

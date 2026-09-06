@@ -1,4 +1,6 @@
+using ChoNaBojo.Contracts.Consts;
 using ChoNaBojo.Contracts.DTOs;
+using ChoNaBojo.Contracts.Enums;
 using ChoNaBojo.Server.Auth;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Entities;
@@ -16,6 +18,8 @@ public static class EventEndpoints
 		"IX_SportsEvents_OrganizerUserId_ClientRequestId";
 	private const string VenueSportForeignKeyConstraint =
 		"FK_SportsEvents_VenueSports_VenueId_SportId";
+	private const string UniqueJoinRequestConstraint =
+		"IX_EventJoinRequests_SportsEventId_RequesterUserId";
 	#endregion
 
 	#region Public methods
@@ -23,6 +27,12 @@ public static class EventEndpoints
 	{
 		endpoints.MapPost("/events", CreateEventAsync)
 			.WithName("EventsCreate");
+
+		endpoints.MapGet("/venues/{venueId:int}/events", GetVenueEventsAsync)
+			.WithName("VenueEventsList");
+
+		endpoints.MapPost("/events/{eventId:guid}/join-requests", RequestToJoinEventAsync)
+			.WithName("EventsJoinRequestsCreate");
 
 		return endpoints;
 	}
@@ -149,6 +159,252 @@ public static class EventEndpoints
 		return Results.Json(
 			ToResponse(sportsEvent),
 			statusCode: StatusCodes.Status201Created);
+	}
+
+	private static async Task<IResult> GetVenueEventsAsync(
+		int venueId,
+		[AsParameters] EventListingQuery query,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		ValidationResult validation = EventListingValidation.ValidateEventListingQuery(query);
+		if (!validation.IsValid)
+		{
+			return ToValidationProblem(validation);
+		}
+
+		IResult? referenceConflict = await ClassifyVenueSportReferenceAsync(
+			dbContext,
+			venueId,
+			query.SportId,
+			cancellationToken);
+		if (referenceConflict is not null)
+		{
+			return referenceConflict;
+		}
+
+		Guid callerUserId = httpContext.GetUserId();
+		// One captured instant so list inclusion and later join joinability never drift mid-request.
+		DateTime nowUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+		DateTime? availableFromUtc = query.AvailableFromUtc.HasValue
+			? NormalizeUtcTimestamp(query.AvailableFromUtc.Value)
+			: null;
+		DateTime? availableToUtc = query.AvailableToUtc.HasValue
+			? NormalizeUtcTimestamp(query.AvailableToUtc.Value)
+			: null;
+
+		var rows = await dbContext.SportsEvents
+			.AsNoTracking()
+			.Where(sportsEvent => sportsEvent.VenueId == venueId)
+			.Where(sportsEvent => sportsEvent.EstimatedEndsAtUtc > nowUtc)
+			.Where(sportsEvent => query.SportId == null || sportsEvent.SportId == query.SportId)
+			.Where(sportsEvent => availableFromUtc == null || availableToUtc == null
+				|| (sportsEvent.StartsAtUtc < availableToUtc.Value
+					&& sportsEvent.EstimatedEndsAtUtc > availableFromUtc.Value))
+			.OrderBy(sportsEvent => sportsEvent.StartsAtUtc)
+			.ThenBy(sportsEvent => sportsEvent.Id)
+			.Select(sportsEvent => new
+			{
+				sportsEvent.Id,
+				sportsEvent.Title,
+				sportsEvent.Description,
+				sportsEvent.StartsAtUtc,
+				sportsEvent.EstimatedEndsAtUtc,
+				sportsEvent.ParticipantLimit,
+				sportsEvent.AutoAccept,
+				sportsEvent.SportId,
+				SportCode = sportsEvent.VenueSport.Sport.Code,
+				SportName = sportsEvent.VenueSport.Sport.Name,
+				IsOrganizer = sportsEvent.OrganizerUserId == callerUserId,
+				AcceptedCount = sportsEvent.EventJoinRequests
+					.Count(request => request.Status == EventJoinRequestStatus.Accepted),
+				CurrentUserRequestStatus = sportsEvent.EventJoinRequests
+					.Where(request => request.RequesterUserId == callerUserId)
+					.Select(request => (EventJoinRequestStatus?)request.Status)
+					.FirstOrDefault()
+			})
+			.ToListAsync(cancellationToken);
+
+		var events = rows.Select(row => new EventListItemResponse(
+			row.Id,
+			row.Title,
+			row.Description,
+			new DateTimeOffset(row.StartsAtUtc, TimeSpan.Zero),
+			new DateTimeOffset(row.EstimatedEndsAtUtc, TimeSpan.Zero),
+			row.ParticipantLimit,
+			1 + row.AcceptedCount,
+			row.AutoAccept,
+			new EventSportSummary(row.SportId, row.SportCode, row.SportName),
+			row.IsOrganizer,
+			row.CurrentUserRequestStatus));
+
+		return Results.Ok(events);
+	}
+
+	private static async Task<IResult?> ClassifyVenueSportReferenceAsync(
+		ChoNaBojoContext dbContext,
+		int venueId,
+		int? sportId,
+		CancellationToken cancellationToken)
+	{
+		bool venueExists = await dbContext.Venues
+			.AsNoTracking()
+			.AnyAsync(entity => entity.Id == venueId, cancellationToken);
+		if (!venueExists)
+		{
+			return Results.Conflict(new EventConflictResponse(
+				EventConflictCodes.VenueNotFound,
+				"venueId",
+				"The selected venue no longer exists."));
+		}
+
+		if (sportId.HasValue)
+		{
+			bool venueSportExists = await dbContext.VenueSports
+				.AsNoTracking()
+				.AnyAsync(
+					entity => entity.VenueId == venueId && entity.SportId == sportId.Value,
+					cancellationToken);
+			if (!venueSportExists)
+			{
+				return Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.SportNotSupportedAtVenue,
+					"sportId",
+					"The selected sport is not supported at this venue."));
+			}
+		}
+
+		return null;
+	}
+
+	private static async Task<IResult> RequestToJoinEventAsync(
+		Guid eventId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		Guid requesterUserId = httpContext.GetUserId();
+
+		// Look up any existing request before applying dynamic expiry/capacity/organizer checks so an
+		// exact retry replays the stored outcome even if the event ended or filled meanwhile.
+		EventJoinRequest? existingRequest = await FindJoinRequestAsync(
+			dbContext,
+			eventId,
+			requesterUserId,
+			cancellationToken);
+		if (existingRequest is not null)
+		{
+			return Results.Ok(ToJoinResponse(existingRequest));
+		}
+
+		DateTime nowUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+
+		var eventState = await dbContext.SportsEvents
+			.AsNoTracking()
+			.Where(sportsEvent => sportsEvent.Id == eventId)
+			.Select(sportsEvent => new
+			{
+				sportsEvent.OrganizerUserId,
+				sportsEvent.EstimatedEndsAtUtc,
+				sportsEvent.ParticipantLimit,
+				AcceptedCount = sportsEvent.EventJoinRequests
+					.Count(request => request.Status == EventJoinRequestStatus.Accepted)
+			})
+			.SingleOrDefaultAsync(cancellationToken);
+
+		if (eventState is null)
+		{
+			return Results.Conflict(new EventConflictResponse(
+				EventConflictCodes.EventNotFound,
+				"eventId",
+				"The selected event no longer exists."));
+		}
+
+		if (eventState.EstimatedEndsAtUtc <= nowUtc)
+		{
+			return Results.Conflict(new EventConflictResponse(
+				EventConflictCodes.EventEnded,
+				"eventId",
+				"This event has already ended."));
+		}
+
+		if (eventState.OrganizerUserId == requesterUserId)
+		{
+			return Results.Conflict(new EventConflictResponse(
+				EventConflictCodes.OrganizerCannotJoin,
+				"eventId",
+				"You cannot join an event you are organizing."));
+		}
+
+		if (1 + eventState.AcceptedCount >= eventState.ParticipantLimit)
+		{
+			return Results.Conflict(new EventConflictResponse(
+				EventConflictCodes.EventFull,
+				"eventId",
+				"This event has reached its participant limit."));
+		}
+
+		var joinRequest = new EventJoinRequest
+		{
+			SportsEventId = eventId,
+			RequesterUserId = requesterUserId,
+			Status = EventJoinRequestStatus.Pending,
+			CreatedUtc = nowUtc
+		};
+
+		dbContext.EventJoinRequests.Add(joinRequest);
+
+		try
+		{
+			await dbContext.SaveChangesAsync(cancellationToken);
+		}
+		catch (DbUpdateException exception) when (HasConstraint(exception, UniqueJoinRequestConstraint))
+		{
+			dbContext.Entry(joinRequest).State = EntityState.Detached;
+			existingRequest = await FindJoinRequestAsync(
+				dbContext,
+				eventId,
+				requesterUserId,
+				cancellationToken);
+
+			if (existingRequest is null)
+			{
+				throw;
+			}
+
+			return Results.Ok(ToJoinResponse(existingRequest));
+		}
+
+		return Results.Json(
+			ToJoinResponse(joinRequest),
+			statusCode: StatusCodes.Status201Created);
+	}
+
+	private static async Task<EventJoinRequest?> FindJoinRequestAsync(
+		ChoNaBojoContext dbContext,
+		Guid eventId,
+		Guid requesterUserId,
+		CancellationToken cancellationToken)
+	{
+		return await dbContext.EventJoinRequests
+			.AsNoTracking()
+			.SingleOrDefaultAsync(
+				request => request.SportsEventId == eventId
+					&& request.RequesterUserId == requesterUserId,
+				cancellationToken);
+	}
+
+	private static JoinRequestResponse ToJoinResponse(EventJoinRequest joinRequest)
+	{
+		return new JoinRequestResponse(
+			joinRequest.Id,
+			joinRequest.SportsEventId,
+			joinRequest.Status,
+			new DateTimeOffset(joinRequest.CreatedUtc, TimeSpan.Zero),
+			joinRequest.UpdatedUtc.HasValue
+				? new DateTimeOffset(joinRequest.UpdatedUtc.Value, TimeSpan.Zero)
+				: null);
 	}
 
 	private static async Task<SportsEvent?> FindEventAsync(
