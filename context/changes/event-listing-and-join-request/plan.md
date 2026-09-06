@@ -469,14 +469,14 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 
 #### Automated
 
-- [ ] 1.1 Shared contracts and validation compile
-- [ ] 1.2 Whole solution compiles against the new contracts
-- [ ] 1.3 Contract privacy scan is clean
+- [x] 1.1 Shared contracts and validation compile
+- [x] 1.2 Whole solution compiles against the new contracts
+- [x] 1.3 Contract privacy scan is clean
 
 #### Manual
 
-- [ ] 1.4 DTO fields support every approved card state without private data
-- [ ] 1.5 Availability validation represents Any time and overlap filtering unambiguously
+- [x] 1.4 DTO fields support every approved card state without private data
+- [x] 1.5 Availability validation represents Any time and overlap filtering unambiguously
 
 ### Phase 2: Join Request Persistence and Listing Indexes
 
