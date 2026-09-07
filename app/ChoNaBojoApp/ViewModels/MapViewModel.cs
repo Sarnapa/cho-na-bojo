@@ -810,6 +810,9 @@ public partial class MapViewModel : ViewModelBase
 		EventAvailabilityWindow? activeWindow = _availabilityWindow;
 		if (SelectedAvailabilityPreset != EventAvailabilityPreset.Custom)
 		{
+			// Presets are deliberately recomputed per reload rather than pinned at selection time,
+			// so "Today" keeps meaning today across midnight. Only Custom stays frozen in
+			// _availabilityWindow.
 			EventAvailabilityConversionResult conversion =
 				EventAvailabilityConversion.ForPreset(SelectedAvailabilityPreset);
 			if (!conversion.IsValid)

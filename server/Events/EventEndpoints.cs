@@ -20,6 +20,8 @@ public static class EventEndpoints
 		"FK_SportsEvents_VenueSports_VenueId_SportId";
 	private const string UniqueJoinRequestConstraint =
 		"IX_EventJoinRequests_SportsEventId_RequesterUserId";
+	private const string JoinRequestEventForeignKeyConstraint =
+		"FK_EventJoinRequests_SportsEvents_SportsEventId";
 	#endregion
 
 	#region Public methods
@@ -375,6 +377,17 @@ public static class EventEndpoints
 
 			return Results.Ok(ToJoinResponse(existingRequest));
 		}
+		catch (DbUpdateException exception)
+			when (HasConstraint(exception, JoinRequestEventForeignKeyConstraint))
+		{
+			// The event was deleted between the state read above and this insert.
+			dbContext.Entry(joinRequest).State = EntityState.Detached;
+
+			return Results.Conflict(new EventConflictResponse(
+				EventConflictCodes.EventNotFound,
+				"eventId",
+				"The selected event no longer exists."));
+		}
 
 		return Results.Json(
 			ToJoinResponse(joinRequest),
@@ -437,7 +450,7 @@ public static class EventEndpoints
 		if (!venueExists)
 		{
 			return Results.Conflict(new EventConflictResponse(
-				"venue_not_found",
+				EventConflictCodes.VenueNotFound,
 				"venueId",
 				"The selected venue no longer exists."));
 		}
@@ -448,13 +461,13 @@ public static class EventEndpoints
 		if (!sportExists)
 		{
 			return Results.Conflict(new EventConflictResponse(
-				"sport_not_found",
+				EventConflictCodes.SportNotFound,
 				"sportId",
 				"The selected sport no longer exists."));
 		}
 
 		return Results.Conflict(new EventConflictResponse(
-			"sport_not_supported_at_venue",
+			EventConflictCodes.SportNotSupportedAtVenue,
 			"sportId",
 			"The selected sport is not supported at this venue."));
 	}

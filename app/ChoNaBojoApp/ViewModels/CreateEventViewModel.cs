@@ -493,7 +493,7 @@ public partial class CreateEventViewModel : ViewModelBase
 
 		bool venueConflict = string.Equals(
 				conflict.Code,
-				"venue_not_found",
+				EventConflictCodes.VenueNotFound,
 				StringComparison.Ordinal)
 			|| string.Equals(conflict.Field, "venueId", StringComparison.Ordinal);
 		if (venueConflict)

@@ -4,7 +4,7 @@
 - **Plan**: `context/changes/event-listing-and-join-request/plan.md`
 - **Scope**: Phases 1–5 of 5 (full plan)
 - **Date**: 2026-09-07
-- **Verdict**: NEEDS ATTENTION
+- **Verdict**: NEEDS ATTENTION (triaged 2026-09-07 — see `Decision` per finding)
 - **Findings**: 0 critical, 2 warnings, 3 observations
 - **Commit range**: `869b99e..HEAD` (`057eb95`, `62e196e`, `acaeb9f`, `62a937b`, `4f341af`)
 
@@ -53,7 +53,7 @@ Not re-runnable in this environment: probes P-01…P-07 (3.3–3.9) and all DB/d
   - Tradeoff: Pattern matching on free text is a false-positive magnet ("meet at hall 5, ext. 22"), and it edits the S-03 create path this plan explicitly kept out of scope.
   - Confidence: MEDIUM — the mechanism is easy; the heuristic is not.
   - Blind spot: No measurement of how often legitimate descriptions would trip the patterns.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A + ACCEPTED-AS-RULE — deferral recorded in `plan.md` ("What We're NOT Doing"); rule appended to `context/foundation/lessons.md` as "User-authored free text becomes a contact-leak channel the moment it is shown to other users". Enforcement (Fix B) remains owned by S-05.
 
 ### F2 — Deleted-event race on join insert surfaces as an untyped failure, not `event_not_found`
 
@@ -67,7 +67,7 @@ Not re-runnable in this environment: probes P-01…P-07 (3.3–3.9) and all DB/d
   - Tradeoff: Adds an unreachable branch until S-07 — dead code for now.
   - Confidence: HIGH — the constraint name is fixed by the migration at `server/Migrations/20260906143339_AddEventJoinRequests.cs:29-34`.
   - Blind spot: None significant.
-- **Decision**: PENDING
+- **Decision**: FIXED — added `JoinRequestEventForeignKeyConstraint` constant and a second `DbUpdateException` catch in `RequestToJoinEventAsync` returning `EventConflictCodes.EventNotFound`. `dotnet build server\server.csproj` — 0 errors.
 
 ### F3 — Availability presets are recomputed on every reload, not frozen at selection time
 
@@ -77,7 +77,7 @@ Not re-runnable in this environment: probes P-01…P-07 (3.3–3.9) and all DB/d
 - **Location**: `app/ChoNaBojoApp/ViewModels/MapViewModel.cs:452-466`, `app/ChoNaBojoApp/ViewModels/MapViewModel.cs:802-825`
 - **Detail**: The plan specified presets "defined from local calendar boundaries **at selection time**". `SelectAvailabilityFilterAsync` computes the window, then discards it (`_availabilityWindow = null` at `:462`), and `ReloadSelectedVenueEventsAsync` recalls `EventAvailabilityConversion.ForPreset(...)` on each reload at `:812-825`. So `Today` follows the wall clock across midnight instead of staying pinned. The implemented behavior is arguably better — the chip still says "Today" and now means today — but it differs from the written contract, and nothing in the code says the divergence is intentional.
 - **Fix**: Record the intent — add a one-line comment at `ReloadSelectedVenueEventsAsync` stating presets are deliberately dynamic per reload while `Custom` stays pinned in `_availabilityWindow`, and align the plan wording.
-- **Decision**: PENDING
+- **Decision**: FIXED — intent comment added at `MapViewModel.ReloadSelectedVenueEventsAsync`; `plan.md` Phase 4 contract reworded from "at selection time" to "recomputed on each list load".
 
 ### F4 — The create path's conflict codes still bypass the new `EventConflictCodes` vocabulary
 
@@ -87,7 +87,7 @@ Not re-runnable in this environment: probes P-01…P-07 (3.3–3.9) and all DB/d
 - **Location**: `server/Events/EventEndpoints.cs:428-459`
 - **Detail**: Phase 1 added `EventConflictCodes` specifically to "prevent string drift between endpoint classification and client recovery", and the new listing helper `ClassifyVenueSportReferenceAsync` (`:245-278`) uses the constants correctly. The sibling `ClassifyMissingReferenceAsync`, used by the S-03 create path in the same file, still emits `"venue_not_found"`, `"sport_not_found"`, and `"sport_not_supported_at_venue"` as literals — and `sport_not_found` has no constant at all, so a code the client must handle is absent from the shared vocabulary. The client already compares against `EventConflictCodes.VenueNotFound` (`app/ChoNaBojoApp/ViewModels/MapViewModel.cs:1201-1204`), so the two sides agree only by coincidence of matching string values. This is pre-existing code, but the new constants file makes it a live divergence inside the file this change edited.
 - **Fix**: Replace the three literals in `ClassifyMissingReferenceAsync` with `EventConflictCodes` constants and add a `SportNotFound = "sport_not_found"` constant.
-- **Decision**: PENDING
+- **Decision**: FIXED — added `EventConflictCodes.SportNotFound`; `ClassifyMissingReferenceAsync` now uses `VenueNotFound`/`SportNotFound`/`SportNotSupportedAtVenue` constants. The matching client literal in `CreateEventViewModel.RecoverFromReferenceChangeAsync` was switched to `EventConflictCodes.VenueNotFound` so both sides share the vocabulary. Solution build and `net10.0-android` build — 0 errors.
 
 ### F5 — Human-gated verification left no recorded evidence, including the only exercise of Accepted/Rejected
 
@@ -97,7 +97,7 @@ Not re-runnable in this environment: probes P-01…P-07 (3.3–3.9) and all DB/d
 - **Location**: `context/changes/event-listing-and-join-request/plan.md:465-549` (Progress)
 - **Detail**: Every manual and probe checkbox is `[x]` with a commit SHA, but the plan deliberately adds no test project, so probes P-01…P-07, the `EXPLAIN` plans (3.11), the Supabase constraint checks (2.7), and manual step 9 leave no artifact in the repo. Step 9 matters most: the plan states S-04 has **no code path** that produces a non-`Pending` row, so seeded Supabase rows are the only exercise of the `Joined` and `Request rejected` card states — and S-05 will build directly on that untested surface. Nothing here contradicts the diff; the point is that a future reviewer (or S-05's plan) cannot tell which checks were actually observed.
 - **Fix**: Append a short verification log (probe → observed status/body, `EXPLAIN` plan summary, step-9 screenshots or notes) under `context/changes/event-listing-and-join-request/reviews/` so S-05 can rely on it.
-- **Decision**: PENDING
+- **Decision**: SKIPPED — the `## Progress` checkboxes with their commit SHAs stand as the record for this change. A lesson entry was drafted during triage and deliberately not saved.
 
 ## Notes
 

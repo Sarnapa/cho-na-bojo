@@ -32,6 +32,7 @@ Each card shows sport, title, local start/end time, and `accepted participants /
 - No auto-accept activation. Even when `SportsEvent.AutoAccept` is true, S-04 records `Pending`; S-05 routes it through the same capacity-safe acceptance path.
 - No separate participant table. Accepted `EventJoinRequest` rows will be the participant source of truth, with the organizer counted implicitly as participant one.
 - No contact fields in event-list or join-request contracts, responses, logs, or UI; contact reveal remains S-05.
+- No contact-pattern screening of organizer-authored `Title`/`Description`. S-04 is what makes this free text visible to every authenticated user, but enforcement is deliberately deferred to S-05, which owns the contact-reveal boundary end to end (impl-review F1).
 - No push notifications; those belong to S-06.
 - No cancellation, removal, leaving, event status, or background auto-close behavior; those belong to S-07.
 - No event edit, event details fetched by id, user invitations, ratings, chat, iOS work, or dark theme.
@@ -283,7 +284,7 @@ Add client transport outcomes, availability conversion, cancellation-safe event 
 
 **Intent**: Produce unambiguous UTC windows for presets and custom device-local input.
 
-**Contract**: Define `Any time`, `Today`, `Tomorrow`, and `Next 7 days` from local calendar boundaries at selection time. Convert custom start/end values through `TimeZoneInfo.Local`, reject invalid or ambiguous DST wall times, require strict ordering, and return the same field keys used by shared validation.
+**Contract**: Define `Any time`, `Today`, `Tomorrow`, and `Next 7 days` from local calendar boundaries recomputed on each list load, so a preset keeps tracking the wall clock across midnight rather than staying pinned to the instant it was chosen. Convert custom start/end values through `TimeZoneInfo.Local`, reject invalid or ambiguous DST wall times, require strict ordering, and return the same field keys used by shared validation. Only a `Custom` range is frozen once entered.
 
 #### 4. Venue event state
 
