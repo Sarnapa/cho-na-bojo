@@ -92,6 +92,8 @@
   </Folder>
   <Folder Name="/context/changes/approval-and-contact-reveal/">
     <File Path="../context/changes/approval-and-contact-reveal/change.md" />
+    <File Path="../context/changes/approval-and-contact-reveal/plan-brief.md" />
+    <File Path="../context/changes/approval-and-contact-reveal/plan.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />

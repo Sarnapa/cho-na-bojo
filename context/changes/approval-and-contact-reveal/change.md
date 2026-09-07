@@ -1,7 +1,7 @@
 ---
 change_id: approval-and-contact-reveal
 title: Approval and contact reveal
-status: new
+status: planned
 created: 2026-09-07
 updated: 2026-09-07
 archived_at: null
