@@ -51,7 +51,7 @@ Server-side, a single private slot-claim helper owns every transition to `Accept
 | 4. Client: "My events" tab + accept/reject | Second Shell tab, organizer approval loop end to end | Adding a tab bar may disturb the map's bottom-sheet/modal lifecycle |
 | 5. Client: contact reveal | Locked/revealed component, brand icons, tap actions | Binding a raw contact field anywhere bypasses the gate |
 
-**Prerequisites:** S-04 done (join requests exist); local Supabase dev database reachable for `dotnet ef database update`; at least three test accounts with differing contact-method combinations; an Android emulator plus a second head (device or Windows) to exercise two accounts simultaneously.
+**Prerequisites:** S-04 done (join requests exist); local Supabase dev database reachable for `dotnet ef database update`; six seeded test accounts for the automated authorization matrix (using a dedicated event with participant limit ≥ 3), with at least three differing contact-method combinations; an Android emulator plus a second head (device or Windows) to exercise two accounts simultaneously.
 
 **Estimated effort:** ~5 sessions, one per phase; Phases 3 and 4 are the largest.
 

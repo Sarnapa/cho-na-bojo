@@ -166,7 +166,7 @@ Add the acceptance state machine. Accept and reject endpoints for the organizer,
 Both derive the caller from `httpContext.GetUserId()`. Both return `200` with the existing `JoinRequestResponse` on success — including the idempotent case where the request is already in the target status, so a double-tap replays rather than conflicts. Failure mapping:
 - **404** `EventConflictResponse` (`request_not_found`) when the event or request does not exist, the request does not belong to that event, **or the caller is not that event's organizer** — these three cases must be indistinguishable to the caller, including in response timing order (perform the organizer check as part of the same lookup, not as a later branch).
 - **409** `EventConflictResponse` when the request is in the *other* resolved status (`request_already_resolved`; e.g. accepting an already-rejected request — rejection is final per the scope decision), or, for accept only, when the event has ended (`event_ended`) or is full (`event_full`).
-Accept routes through the slot-claim helper; reject writes `Status`/`UpdatedUtc` directly and needs no lock (it frees nothing and claims nothing).
+Both accept and reject resolve through the same event-row lock used by the slot-claim path. After acquiring the lock, re-read the request and organizer relationship, then apply the authorization, idempotency, and state-transition checks before writing `Status`/`UpdatedUtc`. Accept additionally performs the event-ended and capacity checks; reject does not. This single lock order serializes accept, reject, and auto-accept so competing resolutions cannot both succeed.
 
 #### 4. Honor `AutoAccept` on request creation
 
@@ -174,7 +174,7 @@ Accept routes through the slot-claim helper; reject writes `Status`/`UpdatedUtc`
 
 **Intent**: Make the S-03 auto-accept toggle real: on an auto-accept event, a join request is accepted at creation, so the participant sees "Joined" and the contact reveal immediately rather than waiting on an organizer who opted out of approving.
 
-**Contract**: In `RequestToJoinEventAsync`, keep the existing replay-first ordering intact (the stored-request lookup returns before any claim). Read `AutoAccept` in the existing `eventState` projection. When it is set, create the request and resolve it to `Accepted` through the same slot-claim helper from change 2, within one transaction, so the insert and the claim cannot interleave with a competing accept. When the claim reports `event_full`, the request must not be left silently `Pending` on an auto-accept event — return the `event_full` conflict and persist nothing, matching the pre-existing capacity pre-check behavior. Preserve the existing unique-constraint and foreign-key `DbUpdateException` handlers; both must still function when the insert happens inside the new transaction.
+**Contract**: In `RequestToJoinEventAsync`, keep the existing replay-first ordering intact (the stored-request lookup returns before any claim). Read `AutoAccept` in the existing `eventState` projection. When it is set, the auto-accept helper owns the event-row lock, request insert, transition to `Accepted`, and commit within one transaction, so the insert and claim cannot interleave with a competing resolution. When the claim reports `event_full`, roll back and return the conflict without persisting a `Pending` request, matching the pre-existing capacity pre-check behavior. If `SaveChangesAsync` throws a unique-constraint or foreign-key `DbUpdateException`, roll back the transaction first and detach the failed `Added` request (or clear tracking) before leaving the helper; only then perform the existing unique replay query or foreign-key error mapping outside the aborted transaction. This preserves the current idempotent replay contract without issuing commands against a failed PostgreSQL transaction.
 
 #### 5. Status transition guard at the data layer
 
@@ -219,7 +219,62 @@ Give the client the data behind the new surface: the caller's organized and requ
 
 **Intent**: Carry a user's opted-in contact methods across the boundary, mirroring the shape the user chose at registration, without exposing any credential or identity field.
 
-**Contract**: `ContactInfoResponse(string? Phone, string? Email, CommunicatorPlatform? CommunicatorPlatform, string? CommunicatorHandle)` plus a wrapper pairing a contact block with the person it belongs to and the event relationship (organizer vs. accepted participant) and their request id where applicable. Reuses the existing cross-boundary `CommunicatorPlatform` enum — **no new enum**. The DTO must never carry `LoginEmail`, `NormalizedLoginEmail`, `PasswordHash`, or `UserId` beyond what the client needs to key rows; per `lessons.md`, secrets never enter Contracts. `CK_Users_ContactMethod` guarantees at least one method is non-null, but the client still renders defensively.
+**Contract**: Add these exact records:
+
+```csharp
+public sealed record ContactInfoResponse(
+	string? Phone,
+	string? Email,
+	CommunicatorPlatform? CommunicatorPlatform,
+	string? CommunicatorHandle);
+
+public sealed record EventContactResponse(
+	Guid UserId,
+	Guid? JoinRequestId,
+	bool IsOrganizer,
+	ContactInfoResponse Contact);
+
+public sealed record EventContactsResponse(
+	IReadOnlyList<EventContactResponse> Contacts);
+```
+
+`IsOrganizer` is the wire representation of the event relationship, avoiding another cross-boundary enum. `JoinRequestId` is null only on an organizer row and is required on every accepted-participant row. The organizer receives zero or more accepted-participant rows; an accepted participant receives exactly one organizer row; unauthorized callers receive 404 rather than an empty collection. Example organizer payload:
+
+```json
+{
+  "contacts": [{
+    "userId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    "joinRequestId": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    "isOrganizer": false,
+    "contact": {
+      "phone": "+48123123123",
+      "email": null,
+      "communicatorPlatform": 3,
+      "communicatorHandle": "48123123123"
+    }
+  }]
+}
+```
+
+Example accepted-participant payload:
+
+```json
+{
+  "contacts": [{
+    "userId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    "joinRequestId": null,
+    "isOrganizer": true,
+    "contact": {
+      "phone": null,
+      "email": "organizer@example.com",
+      "communicatorPlatform": null,
+      "communicatorHandle": null
+    }
+  }]
+}
+```
+
+Reuse the existing cross-boundary `CommunicatorPlatform` enum — **no new enum**. The DTO must never carry `LoginEmail`, `NormalizedLoginEmail`, or `PasswordHash`; `UserId` exists only to key a rendered contact row. Per `lessons.md`, secrets never enter Contracts. `CK_Users_ContactMethod` guarantees at least one method is non-null, but the client still renders defensively.
 
 #### 2. My-events and request-queue DTOs
 
@@ -262,7 +317,7 @@ The entitlement must be computed from the database in the same query that fetche
 
 - Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
 - API starts and all three new routes appear in the OpenAPI document: `dotnet run --project server` then fetch `/openapi/v1.json`
-- Authorization matrix verified by authenticated HTTP calls against a running API, with three accounts (organizer A, accepted participant B, uninvolved C) on one event:
+- Authorization matrix verified by authenticated HTTP calls against a running API, with six seeded accounts (organizer A, accepted participant B, uninvolved C, pending requester D, rejected requester E, second accepted participant F) on a dedicated event whose participant limit is at least 3:
   - `GET /api/events/{id}/contacts` as A returns B's contact block
   - as B returns A's contact block and **not** any other participant's
   - as C returns 404
@@ -320,17 +375,17 @@ Add the app's second navigation surface: a tab listing the events the user organ
 
 **Intent**: Own the tab's state: load both sections, drill into an organized event's request queue, and run accept/reject with in-flight and conflict handling.
 
-**Contract**: Derives from `ViewModelBase`. Immutable view-data records per row (organized event, requested event, queue row) mirroring `EventCardViewData`'s style — computed display properties (`ActionLabel`, `CanAccept`, `IsActionInFlight`, `SemanticDescription`) live on the record, and rows are replaced wholesale via a `ReplaceRow`-style helper rather than mutated. Commands for refresh, open-requests, accept, reject, each guarded by a `CanExecute` that blocks re-entry while in flight and calls `NotifyCanExecuteChanged` in a `finally`. Reuse `IFeedbackService` for snackbars and the existing `SessionExpiryCoordinator` path on `Unauthorized`. On conflict, map the `EventConflictResponse.Code` to user-facing copy and refresh the affected event so the UI converges on server truth: `event_full` → the queue stays but accepts are disabled; `request_already_resolved` → refresh the row; `event_ended` → mark the event ended; `request_not_found` → drop the row.
+**Contract**: Derives from `ViewModelBase`. Immutable view-data records per row (organized event, requested event, queue row) mirroring `EventCardViewData`'s style — computed display properties (`ActionLabel`, `CanAccept`, `IsActionInFlight`, `SemanticDescription`) live on the record, and rows are replaced wholesale via a `ReplaceRow`-style helper rather than mutated. Commands for refresh, open-requests, accept, reject, each guarded by a `CanExecute` that blocks re-entry while in flight and calls `NotifyCanExecuteChanged` in a `finally`. `OpenRequestsCommand` selects an organized event and populates an in-page request-detail state on this same view model; no detail page or Shell route is added. Reuse `IFeedbackService` for snackbars and the existing `SessionExpiryCoordinator` path on `Unauthorized`. On conflict, map the `EventConflictResponse.Code` to user-facing copy and refresh the affected event so the UI converges on server truth: `event_full` → the queue stays but accepts are disabled; `request_already_resolved` → refresh the row; `event_ended` → mark the event ended; `request_not_found` → drop the row.
 
 Expose a `HasRevealedContact`-style gate property on the accepted-participant rows that is **hard-wired false in this phase** and becomes real in Phase 5 — per `ui-guidelines.md` §1 and §8, contact values must bind through such a flag and never directly.
 
 #### 5. My-events page
 
-**File**: `app/ChoNaBojoApp/Views/MyEventsPage.xaml`, `MyEventsPage.xaml.cs` (new), and a requests view (either a second page or an in-page detail section)
+**File**: `app/ChoNaBojoApp/Views/MyEventsPage.xaml`, `MyEventsPage.xaml.cs` (new)
 
 **Intent**: Render both sections and the request queue using the project's established card/state vocabulary.
 
-**Contract**: Follows `ui-guidelines.md` strictly — no hardcoded colors, spacing only from the 8pt set, `{StaticResource}` for every token, Uranium Material controls, `PrimaryButtonStyle`/`SecondaryButtonStyle` for actions, `CardShadow` on cards, `48` minimum touch targets, and `SemanticProperties.Description` on every interactive control. Card states per §6C: joinable/full/past (past = `Opacity="0.6"` + "Ended" chip, since own-events lists include past events). All three screen states from §10 (loading spinner tinted `PrimaryColor`, empty state with icon + `TitleStyle` message, error state with `ErrorColor` icon + Retry). Reject is a destructive action and therefore uses the §9 MD3 confirmation dialog with an `ErrorColor` confirm button — reuse `Views/Popups/ConfirmDialog`. Contact rows render only their **locked** state in this phase ("Contact shared after acceptance" with a lock symbol, per §8).
+**Contract**: Follows `ui-guidelines.md` strictly — no hardcoded colors, spacing only from the 8pt set, `{StaticResource}` for every token, Uranium Material controls, `PrimaryButtonStyle`/`SecondaryButtonStyle` for actions, `CardShadow` on cards, `48` minimum touch targets, and `SemanticProperties.Description` on every interactive control. Card states per §6C: joinable/full/past (past = `Opacity="0.6"` + "Ended" chip, since own-events lists include past events). All three screen states from §10 (loading spinner tinted `PrimaryColor`, empty state with icon + `TitleStyle` message, error state with `ErrorColor` icon + Retry). Render the selected organized event's request queue as an in-page detail section beneath/in place of the list; closing it returns to the list without Shell navigation. Reject is a destructive action and therefore uses the §9 MD3 confirmation dialog with an `ErrorColor` confirm button — reuse `Views/Popups/ConfirmDialog`. Contact rows render only their **locked** state in this phase ("Contact shared after acceptance" with a lock symbol, per §8). `MyEventsPage.OnAppearing` refreshes list, selected-event, and request status so the tab converges after backgrounding or tab switches. `MyEventsPage.OnDisappearing` invokes a view-model cleanup method that clears selected-event contact DTOs and gated contact rows before returning; the same cleanup runs before `OpenRequestsCommand` changes the selected event.
 
 ### Success Criteria:
 
@@ -376,7 +431,16 @@ Wire the reveal endpoint into both sides and build the contact component with it
 
 **Intent**: Turn the nullable-field DTO into renderable rows and enforce the reveal gate in exactly one place.
 
-**Contract**: Make the Phase 4 gate property real: it is true only when the underlying request status is `Accepted` **and** a contact payload was fetched for that event. Project `ContactInfoResponse` into an ordered row collection, skipping null/blank methods — a user who supplied only a phone yields one row. Each row carries its kind, display value, action URI (`tel:` / `mailto:` / platform handle), and icon key. Contacts are fetched lazily when an accepted event's card is opened, and cleared from memory when the tab is left, so contact values do not linger in a long-lived collection. Never persist contacts to `TokenStore` or any other on-device storage.
+**Contract**: Make the Phase 4 gate property real: it is true only when the underlying request status is `Accepted` **and** a contact payload was fetched for that event. Project `ContactInfoResponse` into an ordered row collection, skipping null/blank methods — a user who supplied only a phone yields one row. Each row carries its kind, display value, nullable launch URI, `CanLaunch`, and icon key; separate `OpenContactCommand` and `CopyContactCommand` give each gesture exactly one outcome.
+
+URI construction is conservative and centralized in the view model:
+- Phone: trim the value, accept only a leading `+` plus digits, spaces, parentheses, or hyphens, normalize to the leading `+` and digits, and emit `tel:{normalized}`; otherwise copy-only.
+- Email: require `MailAddress.TryCreate` success and emit `mailto:{Uri.EscapeDataString(address)}`; otherwise copy-only.
+- Messenger / Instagram: trim whitespace and one optional leading `@`; only `[A-Za-z0-9._]+` usernames produce `https://m.me/{escaped}` or `https://www.instagram.com/{escaped}/`.
+- WhatsApp: remove a leading `+` and phone separators; only 7–15 digits produce `https://wa.me/{digits}`.
+- Any unmapped platform or handle that fails its platform validation has no launch URI and remains copy-only.
+
+`OpenContactCommand` calls `Launcher.Default.OpenAsync` only when `CanLaunch`; `CopyContactCommand` always copies the displayed value through `Clipboard.Default.SetTextAsync`. Contacts are fetched lazily when an accepted event's card is opened. The cleanup method called by `MyEventsPage.OnDisappearing` and before changing the selected event clears both the raw contact DTO reference and every projected/gated row; `OnAppearing` refreshes status before contacts can be fetched again. Never persist contacts to `TokenStore` or any other on-device storage.
 
 #### 3. Messenger brand icons
 
@@ -388,11 +452,11 @@ Wire the reveal endpoint into both sides and build the contact component with it
 
 #### 4. Contact component
 
-**File**: `app/ChoNaBojoApp/Views/` (new reusable view) + consumption in `MyEventsPage`
+**File**: `app/ChoNaBojoApp/Views/ContactRevealView.xaml`, `ContactRevealView.xaml.cs` (new) + consumption in `MyEventsPage`
 
 **Intent**: A single component with the two states from `ui-guidelines.md` §8, used identically by the organizer and participant sides so the reveal rule cannot diverge between them.
 
-**Contract**: **Locked** (default): a disabled row with a lock Material Symbol and "Contact shared after acceptance" in `SecondaryTextColor`; the raw value is not merely hidden but **never bound** — the binding source must be the gated collection, which is empty when locked. **Revealed**: rows on a `SurfaceColor` card in `BodyStyle`, each tappable to launch its action URI, with tap-to-copy, plus the brand icon for messenger rows. Every row sets `SemanticProperties.Description`. Visibility binds to the view-model gate flag from change 2 — never to a raw contact field, per §1's hard rule.
+**Contract**: Name the reusable component `ContactRevealView`. **Locked** (default): a disabled row with a lock Material Symbol and "Contact shared after acceptance" in `SecondaryTextColor`; the raw value is not merely hidden but **never bound** — the binding source must be the gated collection, which is empty when locked. **Revealed**: rows on a `SurfaceColor` card in `BodyStyle`, with the display value, a dedicated copy button, a distinct open button visible only when `CanLaunch`, and the brand icon for messenger rows. The row itself has no tap gesture. Every button sets an action-specific `SemanticProperties.Description`. Visibility binds to the view-model gate flag from change 2 — never to a raw contact field, per §1's hard rule.
 
 #### 5. Roadmap status
 
@@ -414,11 +478,11 @@ Wire the reveal endpoint into both sides and build the contact component with it
 #### Manual Verification:
 
 - **North star, end to end:** account B requests to join A's event, A accepts, and B sees A's contact details while A sees B's — on two real accounts
-- An account with only a messenger handle shows exactly one row, with the correct brand icon; an unmapped platform falls back to the generic icon rather than crashing
-- Tapping a phone row opens the dialer, an email row opens the mail composer, and tap-to-copy puts the value on the clipboard
+- An account with only a messenger handle shows exactly one row with the correct brand icon; valid handles expose the mapped Open action, while invalid or unmapped handles use the generic icon and remain copy-only
+- The phone and email Open buttons launch the dialer and mail composer; each separate Copy button puts only that row's value on the clipboard
 - A pending requester and a rejected requester both see the locked state, never a value
 - On an auto-accept event, contact details appear to both sides immediately after the join request, with no organizer action
-- Backgrounding and reopening the app does not surface a stale contact for a request that was rejected in the meantime
+- Leaving the tab or changing the selected event clears raw and projected contacts immediately; returning refreshes authorization before refetch and never flashes a prior event's value. Revocation-cache verification is deferred to S-07, when participant removal introduces an accepted-to-unentitled transition.
 - Contact rows are legible at large system font sizes (no clipped fixed-height containers)
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human that the manual testing was successful.
@@ -434,7 +498,7 @@ No test projects are added in this slice (see "What We're NOT Doing"). Verificat
 - `dotnet build solutions/ChoNaBojo.slnx` and `dotnet build app/ChoNaBojoApp -f net10.0-android` after every phase
 - `dotnet ef database update --project server` and `dotnet ef migrations has-pending-model-changes --project server` after Phase 2
 - OpenAPI document inspection for route presence after Phases 2 and 3
-- **The Phase 3 authorization matrix run as authenticated HTTP calls** against a locally running API with three or more seeded accounts — this is the highest-value automatable check in the slice and must not be downgraded to manual
+- **The Phase 3 authorization matrix run as authenticated HTTP calls** against a locally running API with six seeded accounts and a dedicated event whose participant limit is at least 3 — this is the highest-value automatable check in the slice and must not be downgraded to manual. This fixture is separate from the three-account, limit-2 manual walkthrough below.
 - Raw-JSON grep of `GET /api/me/events` and `GET /api/events/{id}/join-requests` responses for contact-field key names
 - Source greps: hardcoded colors / off-grid spacing in new XAML; raw contact bindings in XAML; persistent-storage writes in the contact path
 
@@ -550,9 +614,9 @@ One new migration in Phase 2 adds the `UpdatedUtc`/`Status` transition check con
 #### Manual
 
 - [ ] 5.5 North star: request → accept → mutual contact reveal on two real accounts
-- [ ] 5.6 Single-method and unmapped-platform users render correctly with the right icons
-- [ ] 5.7 Phone, email, and tap-to-copy actions all launch correctly
+- [ ] 5.6 Single-method users render correctly; valid communicator handles open, while invalid/unmapped handles are copy-only
+- [ ] 5.7 Separate phone/email Open and Copy actions work correctly
 - [ ] 5.8 Pending and rejected requesters both see the locked state
 - [ ] 5.9 Auto-accept event reveals contacts immediately to both sides
-- [ ] 5.10 Backgrounding and reopening does not surface a stale contact for a since-rejected request
+- [ ] 5.10 Leaving the tab or changing events clears contacts; returning refetches without flashing prior values
 - [ ] 5.11 Contact rows stay legible at large system font sizes

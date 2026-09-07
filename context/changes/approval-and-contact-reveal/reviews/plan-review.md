@@ -4,7 +4,7 @@
 - **Plan**: `context/changes/approval-and-contact-reveal/plan.md`
 - **Mode**: Deep
 - **Date**: 2026-09-07
-- **Verdict**: REVISE
+- **Verdict**: SOUND (after triage; original verdict: REVISE)
 - **Findings**: 1 critical, 6 warnings, 0 observations
 
 ## Verdicts
@@ -13,9 +13,9 @@
 |-----------|---------|
 | End-State Alignment | PASS |
 | Lean Execution | PASS |
-| Architectural Fitness | FAIL |
-| Blind Spots | WARNING |
-| Plan Completeness | WARNING |
+| Architectural Fitness | PASS |
+| Blind Spots | PASS |
+| Plan Completeness | PASS |
 
 ## Grounding
 
@@ -35,7 +35,7 @@ Grounding: 16/16 paths ✓, 10/10 symbols ✓, brief↔plan ✓
   - Tradeoff: Rejects serialize with accepts for the same event, which is negligible at the stated MVP scale.
   - Confidence: HIGH — without a concurrency token or conditional update, direct competing EF updates are last-writer-wins.
   - Blind spot: The plan's Supabase transaction-pooler assumption remains to be verified during implementation.
-- **Decision**: PENDING
+- **Decision**: FIXED — serialized reject through the event-row lock and required a locked re-read before transition checks
 
 ### F2 — Auto-accept exception recovery lacks a rollback contract
 
@@ -49,7 +49,7 @@ Grounding: 16/16 paths ✓, 10/10 symbols ✓, brief↔plan ✓
   - Tradeoff: The helper owns more of request creation and exception mapping.
   - Confidence: HIGH — PostgreSQL rejects subsequent commands in an aborted transaction until rollback.
   - Blind spot: Exact Npgsql constraint metadata used by current handlers was not exercised against the local database.
-- **Decision**: PENDING
+- **Decision**: FIXED — assigned transaction ownership to the auto-accept helper and required rollback plus detachment before replay/error mapping
 
 ### F3 — Contact reveal response is not an exact API contract
 
@@ -63,7 +63,7 @@ Grounding: 16/16 paths ✓, 10/10 symbols ✓, brief↔plan ✓
   - Tradeoff: Commits now to a wire shape that later roster work must evolve.
   - Confidence: HIGH — the shared Contracts project already treats DTO records as the authoritative wire contract.
   - Blind spot: No external consumers exist yet, so migration compatibility is not currently a concern.
-- **Decision**: PENDING
+- **Decision**: FIXED — defined exact contact response records, relationship and request-id semantics, cardinality, and caller-specific payload examples
 
 ### F4 — Request-detail navigation and contact cleanup are undecided
 
@@ -82,7 +82,7 @@ Grounding: 16/16 paths ✓, 10/10 symbols ✓, brief↔plan ✓
   - Tradeoff: Adds routing/back-stack behavior while the Shell is also being converted to tabs.
   - Confidence: MEDIUM — no existing Shell detail-route pattern is present.
   - Blind spot: Tab reselection and modal interaction require extra testing.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — selected an in-page detail state, named `ContactRevealView`, and assigned refresh/cleanup lifecycle hooks
 
 ### F5 — Contact launch and copy gestures are not implementable as written
 
@@ -96,7 +96,7 @@ Grounding: 16/16 paths ✓, 10/10 symbols ✓, brief↔plan ✓
   - Tradeoff: Some messenger rows may be copy-only rather than one-tap open.
   - Confidence: HIGH — the current enum has three platforms but the registration contract provides only an unconstrained handle.
   - Blind spot: Desired Android deep-link behavior for each installed app has not been product-tested.
-- **Decision**: PENDING
+- **Decision**: FIXED — separated open/copy controls and defined validated URI mappings with copy-only fallback
 
 ### F6 — The authorization-matrix prerequisites are undercounted
 
@@ -106,7 +106,7 @@ Grounding: 16/16 paths ✓, 10/10 symbols ✓, brief↔plan ✓
 - **Location**: Prerequisites / Phase 3 automated verification
 - **Detail**: The brief requires at least three accounts, but the one-event matrix names six distinct roles/accounts (A–F), including two accepted participants plus pending, rejected, and uninvolved callers. The manual setup also uses a participant limit of 2, which cannot admit the second accepted participant.
 - **Fix**: Require six seeded accounts and a limit of at least 3 for the automated matrix, or rewrite the matrix as an explicit four-account transition sequence; update both `plan.md` and `plan-brief.md` consistently.
-- **Decision**: PENDING
+- **Decision**: FIXED — required six seeded accounts and a dedicated limit-3-or-higher event consistently in the plan and brief
 
 ### F7 — The stale-contact criterion describes an impossible transition
 
@@ -116,4 +116,4 @@ Grounding: 16/16 paths ✓, 10/10 symbols ✓, brief↔plan ✓
 - **Location**: Phase 5 manual verification / Progress 5.10
 - **Detail**: "A stale contact for a request that was rejected in the meantime" cannot occur under this plan: pending/rejected requests never reveal contacts, and an accepted request cannot transition to `Rejected`. Remove-participant—the first real accepted-to-unentitled transition—is explicitly deferred to S-07.
 - **Fix**: Replace both the criterion and Progress 5.10 with a tab-switch clear-and-refetch/no-value-flash check, and defer revocation-cache verification to S-07 when participant removal exists.
-- **Decision**: PENDING
+- **Decision**: FIXED — replaced the impossible transition with clear/refetch/no-value-flash verification and deferred revocation-cache testing to S-07
