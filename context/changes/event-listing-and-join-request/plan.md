@@ -533,17 +533,17 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 
 #### Automated
 
-- [x] 5.1 Whole solution builds
-- [x] 5.2 Android head builds
-- [x] 5.3 Event CollectionView is not nested in the previous venue-sheet ScrollView and is height-bounded
-- [x] 5.4 Event-list and availability XAML privacy scan is clean
+- [x] 5.1 Whole solution builds — 4f341af
+- [x] 5.2 Android head builds — 4f341af
+- [x] 5.3 Event CollectionView is not nested in the previous venue-sheet ScrollView and is height-bounded — 4f341af
+- [x] 5.4 Event-list and availability XAML privacy scan is clean — 4f341af
 
 #### Manual
 
-- [x] 5.5 Venue event loading, ordering, empty, and error states work on Android
-- [x] 5.6 Sport, preset, custom, and cleared availability filters produce expected results
-- [x] 5.7 Full and caller-related event cards show the correct disabled states, including Supabase-seeded accepted and rejected
-- [x] 5.8 Normal and auto-accept joins persist as Pending
-- [x] 5.9 Duplicate and stale join outcomes reconcile correctly
-- [x] 5.10 Event controls remain accessible with large text and 48-point touch targets
-- [x] 5.11 Create and filter modal returns preserve the map viewport and selected venue
+- [x] 5.5 Venue event loading, ordering, empty, and error states work on Android — 4f341af
+- [x] 5.6 Sport, preset, custom, and cleared availability filters produce expected results — 4f341af
+- [x] 5.7 Full and caller-related event cards show the correct disabled states, including Supabase-seeded accepted and rejected — 4f341af
+- [x] 5.8 Normal and auto-accept joins persist as Pending — 4f341af
+- [x] 5.9 Duplicate and stale join outcomes reconcile correctly — 4f341af
+- [x] 5.10 Event controls remain accessible with large text and 48-point touch targets — 4f341af
+- [x] 5.11 Create and filter modal returns preserve the map viewport and selected venue — 4f341af
