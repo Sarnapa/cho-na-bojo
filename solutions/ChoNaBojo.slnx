@@ -87,6 +87,7 @@
     <File Path="../context/changes/event-listing-and-join-request/plan.md" />
   </Folder>
   <Folder Name="/context/changes/event-listing-and-join-request/reviews/">
+    <File Path="../context/changes/event-listing-and-join-request/reviews/impl-review.md" />
     <File Path="../context/changes/event-listing-and-join-request/reviews/plan-review.md" />
   </Folder>
   <Folder Name="/context/foundation/">
