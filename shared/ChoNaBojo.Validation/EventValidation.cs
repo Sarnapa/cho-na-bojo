@@ -47,12 +47,28 @@ public static class EventValidation
 				$"Title must not exceed {EventPolicy.TitleMaxLength} characters.");
 		}
 
+		if (ContactPatternGuard.ContainsContactPattern(title))
+		{
+			AddValidationError(
+				errors,
+				"title",
+				"Don't put contact details here - they're shared automatically once you accept someone.");
+		}
+
 		if (description?.Length > EventPolicy.DescriptionMaxLength)
 		{
 			AddValidationError(
 				errors,
 				"description",
 				$"Description must not exceed {EventPolicy.DescriptionMaxLength} characters.");
+		}
+
+		if (ContactPatternGuard.ContainsContactPattern(description))
+		{
+			AddValidationError(
+				errors,
+				"description",
+				"Don't put contact details here - they're shared automatically once you accept someone.");
 		}
 
 		if (request.StartsAtUtc.Offset != TimeSpan.Zero)

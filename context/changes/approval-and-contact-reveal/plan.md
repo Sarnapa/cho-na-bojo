@@ -541,15 +541,15 @@ One new migration in Phase 2 adds the `UpdatedUtc`/`Status` transition check con
 
 #### Automated
 
-- [ ] 1.1 Solution builds
-- [ ] 1.2 ChoNaBojo.Validation has no new package references
-- [ ] 1.3 POST /api/events with an email in the description returns 400 with a description key
+- [x] 1.1 Solution builds
+- [x] 1.2 ChoNaBojo.Validation has no new package references
+- [x] 1.3 POST /api/events with an email in the description returns 400 with a description key
 
 #### Manual
 
-- [ ] 1.4 Phone number in description shows an inline field error, not a generic banner
-- [ ] 1.5 "5v5 football, court #2, 18:00-19:30" succeeds — no false positive
-- [ ] 1.6 Error message explains contacts are shared automatically after acceptance
+- [x] 1.4 Phone number in description shows an inline field error, not a generic banner
+- [x] 1.5 "5v5 football, court #2, 18:00-19:30" succeeds — no false positive
+- [x] 1.6 Error message explains contacts are shared automatically after acceptance
 
 ### Phase 2: Server — transactional accept/reject and auto-accept
 
