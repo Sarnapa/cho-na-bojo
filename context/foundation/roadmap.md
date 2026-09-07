@@ -34,7 +34,7 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 | S-01 | account-and-session | register an account with email, password, and at least one contact; log in and stay logged in across app restarts | F-02 | FR-001, FR-002, FR-011 (contact collection), US-01, US-02 | done |
 | S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | done |
 | S-03 | event-creation | create an event at a selected venue with date, estimated end time, participant limit (≥ 2, ≤ 300), and optional auto-accept | S-02 | FR-005, US-02 | done |
-| S-04 | event-listing-and-join-request | view the available events at a selected venue (with fill state, not past end time), optionally filter by time availability, and send a join request | S-03 | FR-006, FR-007, US-01 | proposed |
+| S-04 | event-listing-and-join-request | view the available events at a selected venue (with fill state, not past end time), optionally filter by time availability, and send a join request | S-03 | FR-006, FR-007, US-01 | done |
 | S-05 | approval-and-contact-reveal | (as organizer) accept or reject a join request; on acceptance both parties see each other's contact info — **north star** | S-04 | FR-009, FR-011, US-01, US-02 | proposed |
 | S-06 | push-notifications | receive a push notification when someone requests to join my event, and when my own request is accepted or rejected | S-05 | FR-008, FR-010, NFR (push < 30s) | proposed |
 | S-07 | event-lifecycle-ops | cancel my own event (participants get a push), remove a participant (participant gets a push), leave an event as a participant (organizer gets a push); past-end events are auto-closed | S-06 | FR-012, FR-013, FR-014 | proposed |
@@ -139,7 +139,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** FR-007 enforcement on read is sufficient for the MVP (the auto-close background job arrives in S-07 and only tidies DB state). Race: two users send a request for the last spot — under auto-accept, one of them should get "no spots". That's resolved in S-05 (transactional accept); the request itself does not allocate a slot.
-- **Status:** proposed
+- **Status:** done
 
 ### S-05: Accepting a join request and revealing contact info — the loop closes (north star)
 
@@ -203,6 +203,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **S-01: register an account with email, password, and at least one contact; log in and stay logged in across app restarts** — Archived 2026-08-24 → `context/archive/2026-07-18-account-and-session/`. Lesson: —.
 - **S-02: A logged-in user opens the map screen centered on their location (with a manual-address fallback when permissions are denied), sees venues from the database within the current viewport, pans/zooms (the viewport is the proximity boundary per Business Logic), and optionally enables a sport filter populated from the `Sports` lookup — by default, all sports are visible.** — Archived 2026-09-02 → `context/archive/2026-08-24-map-venue-discovery/`. Lesson: —.
 - **S-03: A logged-in user opens "Create event" from the map/venue list: picks a sport from those that the chosen venue supports (read from `VenueSports`), date, estimated end time, participant limit (≥ 2, ≤ 300 per Polish gathering rules), and optionally toggles auto-accept; the event is saved (with a foreign key to `Sports`) and visible at the venue.** — Archived 2026-09-06 → `context/archive/2026-09-02-event-creation/`. Lesson: —.
+- **S-04: The user picks a venue on the map and sees a list of current/upcoming events (only non-expired per FR-007 — past estimated end times are hidden on read), with a fill counter (taken vs. limit), optionally filtered by time availability; they can send a request to join a chosen event.** — Archived 2026-09-07 → `context/archive/2026-09-06-event-listing-and-join-request/`. Lesson: —.
 
 ## Parked
 
