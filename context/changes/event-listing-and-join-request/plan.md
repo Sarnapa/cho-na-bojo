@@ -45,7 +45,7 @@ Use one `EventJoinRequest` aggregate with a persisted `Pending`, `Accepted`, or 
 
 Add `GET /api/venues/{venueId:int}/events` with optional `sportId`, `availableFromUtc`, and `availableToUtc` query values. Both availability bounds are absent for `Any time` or present together for a bounded search. The server validates zero UTC offsets and a strictly increasing range, always filters `EstimatedEndsAtUtc > now`, applies interval overlap as `StartsAtUtc < availableToUtc && EstimatedEndsAtUtc > availableFromUtc`, and projects safe DTOs directly from `AsNoTracking()` queries. Full and caller-related rows remain visible; expired rows never leave the API.
 
-Extend the inline venue sheet rather than adding a second event-list page. `MapViewModel` remains the owner of the selected venue, event list, availability choice, loading/error state, and join commands. It cancels obsolete event-list loads when the venue or filter changes. A small modal page collects a custom local range and reuses the existing DST-safe conversion rules. The sheet is changed to a grid whose event `CollectionView` owns vertical scrolling, avoiding a list nested inside the current `ScrollView`.
+Replace the compact inline venue sheet with a dedicated modal `VenueEventsPage` so event discovery, filtering, and large-text layouts have the full screen available while the map remains preserved underneath. `MapViewModel` remains the owner of the selected venue, event list, availability choice, loading/error state, and join commands. It cancels obsolete event-list loads when the venue or filter changes. A toolbar `Filter` action reveals sport and availability controls, and a custom local-range editor reuses the existing DST-safe conversion rules inline on the page. The page uses one star-sized `CollectionView` row plus a sticky Create event row so the event list owns vertical scrolling without nested vertical scroll containers.
 
 ## Critical Implementation Details
 
@@ -60,6 +60,8 @@ Preset and custom windows are created in device-local time, reject invalid or am
 ### User experience spec
 
 An event-list load is scoped to the selected venue and filter generation. Results from a canceled or superseded load must not overwrite a newer venue/filter selection. A stale join conflict first produces specific feedback and then reloads the authoritative list; a successful or replayed join updates the matching card to the returned request status and prevents another submission.
+
+The dedicated venue-events modal keeps the map viewport and selection state alive beneath it. Its toolbar `Filter` action reveals wrapped sport and availability buttons only when needed. Filter button labels must autosize on Android and may use two lines so translated or system-scaled text remains within each button's border without reducing the 48-point touch target.
 
 ## Phase 1: Shared Discovery and Join Contracts
 
@@ -318,49 +320,49 @@ Add client transport outcomes, availability conversion, cancellation-safe event 
 
 ---
 
-## Phase 5: Venue-Sheet Event Discovery UX
+## Phase 5: Dedicated Venue Event Discovery UX
 
 ### Overview
 
-Replace the static venue prompt with an accessible, scrollable event list, availability controls, complete screen states, and join feedback.
+Replace the static venue prompt with a dedicated, accessible event-discovery modal containing a scrollable event list, on-demand availability controls, complete screen states, and join feedback.
 
 ### Changes Required:
 
-#### 1. Custom availability modal
+#### 1. Custom availability editor
 
 **File**: `app/ChoNaBojoApp/ViewModels/AvailabilityFilterViewModel.cs` (new)
 
-**Intent**: Own a custom local start/end draft and field-level conversion errors without bloating the map page's visual state.
+**Intent**: Own a custom local start/end draft and field-level conversion errors without bloating `MapViewModel` or the map page's visual state.
 
 **Contract**: Prepare from the current custom range or sensible local defaults, expose editable local start/end date/time values, validate and return a UTC range, and support Apply/Clear/Cancel. Apply is disabled while invalid; Cancel does not change the active filter.
 
-**File**: `app/ChoNaBojoApp/Views/AvailabilityFilterPage.xaml`, `app/ChoNaBojoApp/Views/AvailabilityFilterPage.xaml.cs` (new)
+#### 2. Event cards and dedicated venue-events layout
 
-**Intent**: Collect four date/time values in a focused modal while preserving the map and venue below it.
+**File**: `app/ChoNaBojoApp/Views/VenueEventsPage.xaml`, `app/ChoNaBojoApp/Views/VenueEventsPage.xaml.cs` (new)
 
-**Contract**: Follow the existing modal `ShowAsync`/`TaskCompletionSource` handoff. Use Uranium UI date/time field controls and existing design tokens, 48-point touch targets, inline errors, and accessible Apply/Clear/Cancel actions. Do not reuse the noncompliant wrapped native inputs recorded in RF-1.
+**Intent**: Give event discovery a focused full-screen modal that is easier to browse and filter than the compact map sheet while preserving the map underneath.
 
-#### 2. Event cards and venue-sheet layout
+**Contract**: Follow the existing modal `ShowAsync`/`TaskCompletionSource` handoff and dismiss venue-scoped state when the modal closes. Use a page grid with one `*` row for the vertical event `CollectionView` and one `Auto` row for the sticky Create event action, so the list receives a finite height and owns vertical scrolling. Put venue context and optional filters in the collection header. A toolbar `Filter` action reveals wrapped sport and availability buttons plus the inline custom date/time editor with field-level errors and accessible Apply/Clear/Cancel actions. On Android, filter buttons support two lines and uniform autosizing so large or long labels fit within their borders while retaining 48-point touch targets. Add an active custom-range summary, loading indicator, retryable error, and `No events here yet` empty state. Render each event as the MD3 card defined by `context/foundation/ui-guidelines.md`: title, sport, local times, people icon plus fill counter, optional description, and one state-specific Join button or disabled label. Full count uses `ErrorColor`; organizer, pending, accepted, and rejected states are explicit.
 
-**File**: `app/ChoNaBojoApp/Views/MapPage.xaml`
+#### 3. Map handoff and child-modal orchestration
 
-**Intent**: Make event discovery the primary content of the selected-venue sheet while retaining venue context and event creation.
+**File**: `app/ChoNaBojoApp/Views/MapPage.xaml`, `app/ChoNaBojoApp/Views/MapPage.xaml.cs`
 
-**Contract**: Replace the outer sheet `ScrollView` with a bounded grid layout whose vertical `CollectionView` owns scrolling. Establish the bound explicitly rather than leaving it content-driven: the page's sheet row (`MapPage.xaml:225`, currently `RowDefinitions="*,Auto"`) becomes star-sized and the sheet `Border` is capped with a `MaximumHeightRequest`, and inside the sheet the `CollectionView` is the only star-sized row so it receives a finite available height. Confirm the dimming tap-to-dismiss overlay still covers the row above the sheet under the star-sized layout. Add a horizontal preset row, active custom-range summary, loading indicator, retryable error, and `No events here yet` empty state. Render each event as the MD3 card defined by `context/foundation/ui-guidelines.md`: title, sport, local times, people icon plus fill counter, optional description, and one state-specific Join button or disabled label. Full count uses `ErrorColor`; organizer, pending, accepted, and rejected states are explicit. Keep Create event available outside the scrolling list.
+**Intent**: Open the dedicated venue-events modal from a map marker while keeping navigation out of `MapViewModel` and preserving the current map viewport.
 
-#### 3. Page orchestration and dependency injection
+**Contract**: Remove the compact inline venue sheet, resolve and await `VenueEventsPage` when a marker is selected, and guard against duplicate modal opens. Keep `_hasAppliedMapRegion` unchanged so returning from venue, create, detail, and filter interactions never recenters the map.
 
-**File**: `app/ChoNaBojoApp/Views/MapPage.xaml.cs`
+**File**: `app/ChoNaBojoApp/Views/VenueEventsPage.xaml.cs`
 
-**Intent**: Open the custom availability modal and connect its typed result to the map ViewModel without moving navigation into the ViewModel.
+**Intent**: Coordinate create-event and event-detail child modals without losing the selected venue or active event filters.
 
-**Contract**: Resolve and await `AvailabilityFilterPage`, ignore cancellation, and apply or clear the returned window through `MapViewModel`. Guard against opening duplicate modals.
+**Contract**: Subscribe to the existing `MapViewModel` create and custom-availability events while the page is active. After successful creation and detail dismissal, reload the same selected venue. Preserve the parent modal while child modals are open, close it if the selected venue is invalidated, and prevent duplicate child-modal opens.
 
 **File**: `app/ChoNaBojoApp/MauiProgram.cs`
 
-**Intent**: Make the custom filter page and ViewModel resolvable using existing transient page/ViewModel lifetimes.
+**Intent**: Make the dedicated venue-events page and custom-filter ViewModel resolvable using existing transient page/ViewModel lifetimes.
 
-**Contract**: Add only the two new transient registrations; retain singleton API and venue catalog lifetimes and add no packages.
+**Contract**: Register `VenueEventsPage` and `AvailabilityFilterViewModel` as transient services; retain singleton API and venue catalog lifetimes and add no packages.
 
 ### Success Criteria:
 
@@ -368,18 +370,18 @@ Replace the static venue prompt with an accessible, scrollable event list, avail
 
 - Whole solution builds: `dotnet build solutions\ChoNaBojo.slnx`
 - Android head builds: `dotnet build app\ChoNaBojoApp -f net10.0-android`
-- XAML scan confirms the event `CollectionView` is not nested in the venue sheet's previous vertical `ScrollView` **and** that its height is bounded: the sheet row is star-sized, the sheet `Border` declares a `MaximumHeightRequest`, and the `CollectionView` occupies the only `*` row of the sheet's inner grid
-- UI privacy scan finds no contact binding: `rg "Contact|LoginEmail|Communicator|Password|Hash|Token" app\ChoNaBojoApp\Views\MapPage.xaml app\ChoNaBojoApp\Views\AvailabilityFilterPage.xaml` returns no match
+- XAML scan confirms the event `CollectionView` is not nested in a vertical `ScrollView` and is height-bounded by occupying the dedicated page grid's only `*` row, with Create event in the separate `Auto` row
+- UI privacy scan finds no contact binding: `rg "Contact|LoginEmail|Communicator|Password|Hash|Token" app\ChoNaBojoApp\Views\MapPage.xaml app\ChoNaBojoApp\Views\VenueEventsPage.xaml` returns no match
 
 #### Manual Verification:
 
-- Selecting a venue shows ordered non-expired event cards, or the loading, empty, and retryable error states as appropriate
+- Selecting a venue opens the dedicated venue-events modal and shows ordered non-expired event cards, or the loading, empty, and retryable error states as appropriate
 - The active map sport narrows events; `Any time`, preset, custom, and cleared availability filters return the expected overlap results
 - Full, organizer-owned, pending, accepted, and rejected cards remain visible with the correct disabled state and accessibility description; accepted and rejected are unreachable through S-04 code paths and must be exercised by seeding `EventJoinRequests.Status` in Supabase (Manual Testing Step 9)
 - Join submits once, shows in-flight feedback, ends as Pending even for auto-accept events, and displays the same state after closing and reopening the venue
 - Duplicate/replayed join is treated as success; an ended/full/stale event explains the conflict and refreshes the list
-- Event cards and filter controls remain usable with large Android font scaling and meet 48-point touch targets
-- Create event still opens from the same sheet, and returning from create/filter modals preserves the map viewport and selected venue
+- Event cards and filter controls remain usable with large Android font scaling and meet 48-point touch targets; filter labels autosize or wrap within their button borders instead of clipping
+- Create event still opens from the dedicated venue-events modal, and returning from venue/create/detail/filter interactions preserves the map viewport and selected venue
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for final human confirmation of the Android event-discovery and join-request flow.
 
@@ -422,7 +424,7 @@ Additionally verify migration/model state and inspect query plans for both unfil
 
 1. Apply `AddEventJoinRequests` through the Supabase session-mode connection and inspect constraints/indexes.
 2. Create multiple events at one venue across sports, times, ownership, and capacity states.
-3. Open the venue on Android and verify stable ordering plus loading, empty, error, and full-card presentation.
+3. Open the dedicated venue-events modal on Android and verify stable ordering plus loading, empty, error, and full-card presentation.
 4. Exercise `Any time`, Today, Tomorrow, Next 7 days, and custom overlap windows, including DST-invalid and DST-ambiguous local input.
 5. Join a normal and auto-accept event; both become Pending and persist after reopening the venue.
 6. Double-tap Join and simulate response loss; confirm one row and canonical replay success.
@@ -430,7 +432,8 @@ Additionally verify migration/model state and inspect query plans for both unfil
 8. Verify organizer-owned events remain visible as `Your event` and cannot be joined.
 9. Directly set `EventJoinRequests.Status` in Supabase to `Accepted` and then `Rejected` for the requester's row, reopen the venue, and confirm the `Joined` and `Request rejected` card states render with the correct disabled state and accessibility description. S-04 has no code path that produces a non-`Pending` row, so this seeded check is the only S-04 exercise of those two states.
 10. Inspect all event-list and join responses/screens for absence of contact, login, communicator, credential, and token data.
-11. Create an event from the same sheet and confirm returning refreshes events without recentering the map.
+11. Increase Android font size and display size, then confirm event controls retain 48-point touch targets and every sport/availability filter label autosizes or wraps within its button border without clipping.
+12. Create an event from the venue-events modal and confirm returning refreshes events without recentering the map.
 
 ## Performance Considerations
 
@@ -453,7 +456,7 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 - Prior event foundation: `context/archive/2026-09-02-event-creation/plan.md`
 - Existing event entity/configuration: `server/Data/Entities/SportsEvent.cs`, `server/Data/ChoNaBojoContext.cs:181-271`
 - Existing authenticated event endpoint: `server/Events/EventEndpoints.cs`
-- Existing venue sheet and state: `app/ChoNaBojoApp/Views/MapPage.xaml:225-323`, `app/ChoNaBojoApp/ViewModels/MapViewModel.cs`
+- Existing map marker handoff and event state: `app/ChoNaBojoApp/Views/MapPage.xaml.cs`, `app/ChoNaBojoApp/Views/VenueEventsPage.xaml`, `app/ChoNaBojoApp/Views/VenueEventsPage.xaml.cs`, `app/ChoNaBojoApp/ViewModels/MapViewModel.cs`
 - Existing typed client pattern: `app/ChoNaBojoApp/Services/Events/EventResults.cs`, `app/ChoNaBojoApp/Services/ApiService.cs`
 - Existing local-time conversion: `app/ChoNaBojoApp/Services/Events/EventTimeConversion.cs`
 - Existing modal handoff: `app/ChoNaBojoApp/Views/CreateEventPage.xaml.cs`
@@ -526,21 +529,21 @@ Before S-05 stores accepted/rejected states, rollback may drop `EventJoinRequest
 - [x] 4.6 Failure classes produce distinct actionable states — 62a937b
 - [x] 4.7 Successful creation refreshes the selected venue without losing map context — 62a937b
 
-### Phase 5: Venue-Sheet Event Discovery UX
+### Phase 5: Dedicated Venue Event Discovery UX
 
 #### Automated
 
-- [ ] 5.1 Whole solution builds
-- [ ] 5.2 Android head builds
-- [ ] 5.3 Event CollectionView is not nested in the previous venue-sheet ScrollView and is height-bounded
-- [ ] 5.4 Event-list and availability XAML privacy scan is clean
+- [x] 5.1 Whole solution builds
+- [x] 5.2 Android head builds
+- [x] 5.3 Event CollectionView is not nested in the previous venue-sheet ScrollView and is height-bounded
+- [x] 5.4 Event-list and availability XAML privacy scan is clean
 
 #### Manual
 
-- [ ] 5.5 Venue event loading, ordering, empty, and error states work on Android
-- [ ] 5.6 Sport, preset, custom, and cleared availability filters produce expected results
-- [ ] 5.7 Full and caller-related event cards show the correct disabled states, including Supabase-seeded accepted and rejected
-- [ ] 5.8 Normal and auto-accept joins persist as Pending
-- [ ] 5.9 Duplicate and stale join outcomes reconcile correctly
-- [ ] 5.10 Event controls remain accessible with large text and 48-point touch targets
-- [ ] 5.11 Create and filter modal returns preserve the map viewport and selected venue
+- [x] 5.5 Venue event loading, ordering, empty, and error states work on Android
+- [x] 5.6 Sport, preset, custom, and cleared availability filters produce expected results
+- [x] 5.7 Full and caller-related event cards show the correct disabled states, including Supabase-seeded accepted and rejected
+- [x] 5.8 Normal and auto-accept joins persist as Pending
+- [x] 5.9 Duplicate and stale join outcomes reconcile correctly
+- [x] 5.10 Event controls remain accessible with large text and 48-point touch targets
+- [x] 5.11 Create and filter modal returns preserve the map viewport and selected venue

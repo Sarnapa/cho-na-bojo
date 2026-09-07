@@ -23,7 +23,7 @@ public partial class MapPage : ContentPage
 	private readonly MapViewModel _viewModel;
 	private bool _isAppeared;
 	private bool _hasAppliedMapRegion;
-	private bool _isOpeningCreateForm;
+	private bool _isOpeningVenueEvents;
 #if ANDROID
 	private readonly CurrentLocationSource _currentLocationSource = new();
 #endif
@@ -50,7 +50,6 @@ public partial class MapPage : ContentPage
 		_isAppeared = true;
 		_viewModel.LoggedOut += OnLoggedOut;
 		_viewModel.MapCenterRequested += OnMapCenterRequested;
-		_viewModel.CreateEventRequested += OnCreateEventRequested;
 		_viewModel.PropertyChanged += OnViewModelPropertyChanged;
 		ReplaceVisiblePins();
 
@@ -70,14 +69,13 @@ public partial class MapPage : ContentPage
 		DisableUserLocationLayer();
 		_viewModel.LoggedOut -= OnLoggedOut;
 		_viewModel.MapCenterRequested -= OnMapCenterRequested;
-		_viewModel.CreateEventRequested -= OnCreateEventRequested;
 		_viewModel.PropertyChanged -= OnViewModelPropertyChanged;
 		base.OnDisappearing();
 	}
 	#endregion
 
 	#region Events handlers
-	private void OnPinClicked(object? sender, PinClickedEventArgs e)
+	private async void OnPinClicked(object? sender, PinClickedEventArgs e)
 	{
 		e.HideInfoWindow = true;
 
@@ -87,7 +85,25 @@ public partial class MapPage : ContentPage
 				$"Expected the event sender to be a {nameof(VenuePin)}.");
 		}
 
-		_viewModel.SelectVenue(venuePin.VenueId);
+		if (_isOpeningVenueEvents)
+		{
+			return;
+		}
+
+		_isOpeningVenueEvents = true;
+		try
+		{
+			VenueEventsPage venueEventsPage =
+				_serviceProvider.GetRequiredService<VenueEventsPage>();
+			await venueEventsPage.ShowAsync(
+				Navigation,
+				_viewModel,
+				venuePin.VenueId);
+		}
+		finally
+		{
+			_isOpeningVenueEvents = false;
+		}
 	}
 
 	private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -145,54 +161,6 @@ public partial class MapPage : ContentPage
 		}
 	}
 
-	private async void OnCreateEventRequested(
-		object? sender,
-		CreateEventRequestedEventArgs e)
-	{
-		if (_isOpeningCreateForm)
-		{
-			return;
-		}
-
-		_isOpeningCreateForm = true;
-		try
-		{
-			CreateEventPage createPage =
-				_serviceProvider.GetRequiredService<CreateEventPage>();
-			CreateEventPageResult result = await createPage.ShowAsync(
-				Navigation,
-				e.Venue,
-				e.ActiveSportId);
-
-			if (result.CatalogWasRefreshed
-				|| result.Status == CreateEventPageResultStatus.VenueInvalidated)
-			{
-				_viewModel.ApplyRefreshedCatalog(
-					result.Status == CreateEventPageResultStatus.VenueInvalidated);
-			}
-
-			if (!string.IsNullOrEmpty(result.Message))
-			{
-				await _viewModel.ShowCreateFeedbackAsync(result.Message);
-			}
-			else if (result is
-				{
-					Status: CreateEventPageResultStatus.Created,
-					CreatedEvent: not null
-				})
-			{
-				int createdVenueId = result.CreatedEvent.Venue.Id;
-				EventDetailPage detailPage =
-					_serviceProvider.GetRequiredService<EventDetailPage>();
-				await detailPage.ShowAsync(Navigation, result.CreatedEvent);
-				await _viewModel.ReloadSelectedVenueEventsAsync(createdVenueId);
-			}
-		}
-		finally
-		{
-			_isOpeningCreateForm = false;
-		}
-	}
 	#endregion
 
 	#region Private methods

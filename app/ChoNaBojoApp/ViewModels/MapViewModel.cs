@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Devices.Sensors;
@@ -28,8 +29,16 @@ public sealed record VenuePinViewData(
 	string Address);
 #endregion
 
-#region VenueSportViewData
-public sealed record VenueSportViewData(string Name);
+#region VenueEventSportFilterViewData
+public sealed record VenueEventSportFilterViewData(
+	int? SportId,
+	string Name,
+	bool IsSelected)
+{
+	public string SemanticDescription => SportId.HasValue
+		? $"Filter venue events by {Name}"
+		: "Show events for all sports at this venue";
+}
 #endregion
 
 #region SportFilterViewData
@@ -44,7 +53,10 @@ public sealed record SportFilterViewData(
 public sealed record EventAvailabilityFilterViewData(
 	EventAvailabilityPreset Preset,
 	string Name,
-	bool IsSelected);
+	bool IsSelected)
+{
+	public string SemanticDescription => $"Filter events by {Name}";
+}
 #endregion
 
 #region VenueEventsFailureKind
@@ -80,6 +92,8 @@ public sealed record EventCardViewData(
 		&& CurrentUserRequestStatus is null
 		&& !IsFull
 		&& !IsJoinInFlight;
+	public bool IsJoinButtonVisible => CanJoin || IsJoinInFlight;
+	public bool IsStatusLabelVisible => !IsJoinButtonVisible;
 	public string StartsAtDisplay => FormatLocalTime(StartsAtUtc);
 	public string EstimatedEndsAtDisplay => FormatLocalTime(EstimatedEndsAtUtc);
 	public string ParticipantDisplay => string.Create(
@@ -234,13 +248,16 @@ public partial class MapViewModel : ViewModelBase
 	private VenueResponse? selectedVenue;
 
 	[ObservableProperty]
-	private IReadOnlyList<VenueSportViewData> selectedVenueSports = [];
+	private int? selectedVenueEventSportId;
+
+	[ObservableProperty]
+	private IReadOnlyList<VenueEventSportFilterViewData> venueEventSportFilters = [];
 
 	[ObservableProperty]
 	private bool isVenueSheetVisible;
 
 	[ObservableProperty]
-	private IReadOnlyList<EventCardViewData> venueEvents = [];
+	private ObservableCollection<EventCardViewData> venueEvents = [];
 
 	[ObservableProperty]
 	private bool isVenueEventsLoading;
@@ -265,6 +282,13 @@ public partial class MapViewModel : ViewModelBase
 	[ObservableProperty]
 	private IReadOnlyList<EventAvailabilityFilterViewData> availabilityFilters =
 		BuildAvailabilityFilters(EventAvailabilityPreset.AnyTime);
+
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(FilterActionLabel))]
+	private bool areVenueEventFiltersVisible;
+
+	[ObservableProperty]
+	private bool isCustomAvailabilityEditorVisible;
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor(nameof(AddressSearchLabel))]
@@ -308,6 +332,10 @@ public partial class MapViewModel : ViewModelBase
 
 	public bool CanRetryVenueEvents => VenueEventsFailure is
 		VenueEventsFailureKind.Network or VenueEventsFailureKind.Unknown;
+
+	public string FilterActionLabel => AreVenueEventFiltersVisible
+		? "Hide filters"
+		: "Filter";
 
 	public bool HasCustomAvailability =>
 		SelectedAvailabilityPreset == EventAvailabilityPreset.Custom
@@ -357,7 +385,10 @@ public partial class MapViewModel : ViewModelBase
 		CancelVenueScopedRequests();
 		IsVenueSheetVisible = false;
 		SelectedVenue = null;
-		SelectedVenueSports = [];
+		SelectedVenueEventSportId = null;
+		VenueEventSportFilters = [];
+		AreVenueEventFiltersVisible = false;
+		IsCustomAvailabilityEditorVisible = false;
 		ClearVenueEventState();
 	}
 
@@ -371,7 +402,34 @@ public partial class MapViewModel : ViewModelBase
 
 		CreateEventRequested?.Invoke(
 			this,
-			new CreateEventRequestedEventArgs(SelectedVenue, SelectedSportId));
+			new CreateEventRequestedEventArgs(
+				SelectedVenue,
+				SelectedVenueEventSportId));
+	}
+
+	[RelayCommand]
+	private void ToggleVenueEventFilters()
+	{
+		AreVenueEventFiltersVisible = !AreVenueEventFiltersVisible;
+		if (!AreVenueEventFiltersVisible)
+		{
+			IsCustomAvailabilityEditorVisible = false;
+		}
+	}
+
+	[RelayCommand(AllowConcurrentExecutions = true)]
+	private async Task SelectVenueEventSportFilterAsync(
+		VenueEventSportFilterViewData? filter,
+		CancellationToken cancellationToken)
+	{
+		if (filter is null
+			|| VenueEventSportFilters.All(item => item.SportId != filter.SportId))
+		{
+			return;
+		}
+
+		SetSelectedVenueEventSport(filter.SportId);
+		await ReloadSelectedVenueEventsAsync(cancellationToken);
 	}
 
 	[RelayCommand(AllowConcurrentExecutions = true)]
@@ -386,6 +444,7 @@ public partial class MapViewModel : ViewModelBase
 
 		if (filter.Preset == EventAvailabilityPreset.Custom)
 		{
+			IsCustomAvailabilityEditorVisible = true;
 			CustomAvailabilityRequested?.Invoke(this, EventArgs.Empty);
 			return;
 		}
@@ -397,11 +456,12 @@ public partial class MapViewModel : ViewModelBase
 			SetVenueEventsFailure(
 				VenueEventsFailureKind.Validation,
 				FormatValidationErrors(conversion.Errors));
-			VenueEvents = [];
+			VenueEvents.Clear();
 			return;
 		}
 
 		_availabilityWindow = null;
+		IsCustomAvailabilityEditorVisible = false;
 		SetSelectedAvailability(filter.Preset);
 		await ReloadSelectedVenueEventsAsync(cancellationToken);
 	}
@@ -619,14 +679,16 @@ public partial class MapViewModel : ViewModelBase
 			?? throw new InvalidOperationException(
 				$"The selected venue with ID {venueId} is not present in the loaded catalog.");
 
-		IReadOnlyList<VenueSportViewData> sports = venue.SportIds
-			.Select(sportId => new VenueSportViewData(ResolveSportName(sportId)))
-			.ToList();
-
 		CancelVenueScopedRequests();
 		ClearVenueEventState();
 		SelectedVenue = venue;
-		SelectedVenueSports = sports;
+		int? initialEventSportId = SelectedSportId.HasValue
+			&& venue.SportIds.Contains(SelectedSportId.Value)
+				? SelectedSportId
+				: null;
+		SetSelectedVenueEventSport(initialEventSportId);
+		AreVenueEventFiltersVisible = false;
+		IsCustomAvailabilityEditorVisible = false;
 		IsVenueSheetVisible = true;
 		_ = ReloadSelectedVenueEventsAsync();
 	}
@@ -661,9 +723,11 @@ public partial class MapViewModel : ViewModelBase
 			else
 			{
 				SelectedVenue = refreshedVenue;
-				SelectedVenueSports = refreshedVenue.SportIds
-					.Select(sportId => new VenueSportViewData(ResolveSportName(sportId)))
-					.ToList();
+				int? retainedEventSportId = SelectedVenueEventSportId.HasValue
+					&& refreshedVenue.SportIds.Contains(SelectedVenueEventSportId.Value)
+						? SelectedVenueEventSportId
+						: null;
+				SetSelectedVenueEventSport(retainedEventSportId);
 			}
 		}
 
@@ -692,7 +756,7 @@ public partial class MapViewModel : ViewModelBase
 		ArgumentNullException.ThrowIfNull(window);
 
 		var query = new EventListingQuery(
-			SelectedSportId,
+			SelectedVenueEventSportId,
 			window.AvailableFromUtc,
 			window.AvailableToUtc);
 		ValidationResult validation =
@@ -702,11 +766,12 @@ public partial class MapViewModel : ViewModelBase
 			SetVenueEventsFailure(
 				VenueEventsFailureKind.Validation,
 				FormatValidationErrors(validation.Errors));
-			VenueEvents = [];
+			VenueEvents.Clear();
 			return;
 		}
 
 		_availabilityWindow = window;
+		IsCustomAvailabilityEditorVisible = false;
 		SetSelectedAvailability(EventAvailabilityPreset.Custom);
 		await ReloadSelectedVenueEventsAsync(cancellationToken);
 	}
@@ -714,6 +779,7 @@ public partial class MapViewModel : ViewModelBase
 	public Task ClearAvailabilityAsync(CancellationToken cancellationToken = default)
 	{
 		_availabilityWindow = null;
+		IsCustomAvailabilityEditorVisible = false;
 		SetSelectedAvailability(EventAvailabilityPreset.AnyTime);
 		return ReloadSelectedVenueEventsAsync(cancellationToken);
 	}
@@ -728,10 +794,6 @@ public partial class MapViewModel : ViewModelBase
 	partial void OnSelectedSportIdChanged(int? value)
 	{
 		BuildVisiblePins();
-		if (SelectedVenue is not null)
-		{
-			_ = ReloadSelectedVenueEventsAsync();
-		}
 	}
 
 	#endregion
@@ -752,7 +814,7 @@ public partial class MapViewModel : ViewModelBase
 				EventAvailabilityConversion.ForPreset(SelectedAvailabilityPreset);
 			if (!conversion.IsValid)
 			{
-				VenueEvents = [];
+				VenueEvents.Clear();
 				SetVenueEventsFailure(
 					VenueEventsFailureKind.Validation,
 					FormatValidationErrors(conversion.Errors));
@@ -769,7 +831,7 @@ public partial class MapViewModel : ViewModelBase
 
 		int venueId = SelectedVenue.Id;
 		var query = new EventListingQuery(
-			SelectedSportId,
+			SelectedVenueEventSportId,
 			activeWindow?.AvailableFromUtc,
 			activeWindow?.AvailableToUtc);
 		return LoadVenueEventsAsync(
@@ -788,7 +850,7 @@ public partial class MapViewModel : ViewModelBase
 		{
 			return;
 		}
-
+		IsVenueEventsLoading = true;
 		IsVenueEventsLoading = true;
 		HasNoVenueEvents = false;
 		ClearVenueEventsFailure();
@@ -819,42 +881,41 @@ public partial class MapViewModel : ViewModelBase
 			switch (result.Status)
 			{
 				case VenueEventListResultStatus.Success:
-					VenueEvents = result.Events!
-						.Select(EventCardViewData.FromResponse)
-						.ToList();
+					UpdateVenueEvents(
+						result.Events!.Select(EventCardViewData.FromResponse));
 					HasNoVenueEvents = VenueEvents.Count == 0;
 					break;
 
 				case VenueEventListResultStatus.ValidationFailed:
-					VenueEvents = [];
+					VenueEvents.Clear();
 					SetVenueEventsFailure(
 						VenueEventsFailureKind.Validation,
 						FormatValidationErrors(result.ValidationErrors!));
 					break;
 
 				case VenueEventListResultStatus.ReferenceChanged:
-					VenueEvents = [];
+					VenueEvents.Clear();
 					await RecoverFromVenueEventsReferenceChangeAsync(
 						result.Conflict!,
 						venueEventsToken);
 					break;
 
 				case VenueEventListResultStatus.Unauthorized:
-					VenueEvents = [];
+					VenueEvents.Clear();
 					SetVenueEventsFailure(
 						VenueEventsFailureKind.Unauthorized,
 						"Your session has expired. Please sign in again.");
 					break;
 
 				case VenueEventListResultStatus.Network:
-					VenueEvents = [];
+					VenueEvents.Clear();
 					SetVenueEventsFailure(
 						VenueEventsFailureKind.Network,
 						"Can't load events. Check your connection and try again.");
 					break;
 
 				default:
-					VenueEvents = [];
+					VenueEvents.Clear();
 					SetVenueEventsFailure(
 						VenueEventsFailureKind.Unknown,
 						"The events couldn't be loaded. Please try again.");
@@ -1110,6 +1171,23 @@ public partial class MapViewModel : ViewModelBase
 		];
 	}
 
+	private void SetSelectedVenueEventSport(int? sportId)
+	{
+		SelectedVenueEventSportId = sportId;
+		VenueEventSportFilters =
+		[
+			new VenueEventSportFilterViewData(
+				null,
+				"All sports",
+				sportId is null),
+			.. (SelectedVenue?.SportIds ?? [])
+				.Select(id => new VenueEventSportFilterViewData(
+					id,
+					ResolveSportName(id),
+					id == sportId))
+		];
+	}
+
 	private async Task RecoverFromVenueEventsReferenceChangeAsync(
 		EventConflictResponse conflict,
 		CancellationToken cancellationToken)
@@ -1176,7 +1254,7 @@ public partial class MapViewModel : ViewModelBase
 
 	private void ClearVenueEventState()
 	{
-		VenueEvents = [];
+		VenueEvents.Clear();
 		IsVenueEventsLoading = false;
 		HasNoVenueEvents = false;
 		ClearVenueEventsFailure();
@@ -1208,9 +1286,28 @@ public partial class MapViewModel : ViewModelBase
 			return;
 		}
 
-		var updated = VenueEvents.ToList();
-		updated[index] = replace(updated[index]);
-		VenueEvents = updated;
+		VenueEvents[index] = replace(VenueEvents[index]);
+	}
+
+	private void UpdateVenueEvents(IEnumerable<EventCardViewData> events)
+	{
+		IReadOnlyList<EventCardViewData> updated = events.ToList();
+		int sharedCount = Math.Min(VenueEvents.Count, updated.Count);
+
+		for (int index = 0; index < sharedCount; index++)
+		{
+			VenueEvents[index] = updated[index];
+		}
+
+		while (VenueEvents.Count > updated.Count)
+		{
+			VenueEvents.RemoveAt(VenueEvents.Count - 1);
+		}
+
+		for (int index = sharedCount; index < updated.Count; index++)
+		{
+			VenueEvents.Add(updated[index]);
+		}
 	}
 
 	private bool CanRequestToJoinEvent(EventCardViewData? eventCard)

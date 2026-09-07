@@ -1,0 +1,463 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.VenueEventsPage"
+    x:Name="VenueEventsPageRoot"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:materialSymbols="clr-namespace:UraniumUI.Icons.MaterialSymbols;assembly=UraniumUI.Icons.MaterialSymbols"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:MapViewModel"
+    Title="Venue events"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <ContentPage.Resources>
+        <Style
+            x:Key="FilterButtonStyle"
+            TargetType="Button"
+            BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="MinimumHeightRequest" Value="48" />
+            <Setter Property="MaximumWidthRequest" Value="240" />
+            <Setter Property="LineBreakMode" Value="WordWrap" />
+        </Style>
+    </ContentPage.Resources>
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem
+            Text="{Binding FilterActionLabel}"
+            Command="{Binding ToggleVenueEventFiltersCommand}"
+            SemanticProperties.Description="Show or hide event filters" />
+        <ToolbarItem
+            Text="Close"
+            Clicked="OnCloseClicked"
+            SemanticProperties.Description="Close venue events" />
+    </ContentPage.ToolbarItems>
+
+    <Grid
+        Margin="16"
+        RowDefinitions="*,Auto"
+        RowSpacing="8">
+        <CollectionView
+            Grid.Row="0"
+            ItemsUpdatingScrollMode="KeepScrollOffset"
+            ItemsSource="{Binding VenueEvents}"
+            SelectionMode="None"
+            VerticalScrollBarVisibility="Default"
+            SemanticProperties.Description="Venue details, filters, and events">
+            <CollectionView.Header>
+                <VerticalStackLayout Padding="4,4,4,16" Spacing="8">
+                    <Label
+                        Style="{StaticResource HeadlineStyle}"
+                        Text="{Binding SelectedVenue.Name}" />
+
+                    <Label
+                        Style="{StaticResource LabelStyle}"
+                        Text="{Binding SelectedVenue.Address}" />
+
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        Text="{Binding SelectedVenue.Description}" />
+
+                    <Border
+                        Margin="0,8,0,8"
+                        Padding="16"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Stroke="{StaticResource DividerColor}"
+                        StrokeShape="RoundRectangle 16"
+                        IsVisible="{Binding AreVenueEventFiltersVisible}">
+                        <VerticalStackLayout Spacing="8">
+                            <Label
+                                Style="{StaticResource TitleStyle}"
+                                Text="Sport" />
+
+                            <FlexLayout
+                                AlignItems="Start"
+                                BindableLayout.ItemsSource="{Binding VenueEventSportFilters}"
+                                Direction="Row"
+                                JustifyContent="Start"
+                                Wrap="Wrap">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate
+                                        x:DataType="viewModels:VenueEventSportFilterViewData">
+                                        <Button
+                                            Margin="0,0,8,8"
+                                            Style="{StaticResource FilterButtonStyle}"
+                                            Text="{Binding Name}"
+                                            Loaded="OnFilterButtonLoaded"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MapViewModel}}, Path=SelectVenueEventSportFilterCommand}"
+                                            CommandParameter="{Binding .}"
+                                            SemanticProperties.Description="{Binding SemanticDescription}">
+                                            <Button.Triggers>
+                                                <DataTrigger
+                                                    TargetType="Button"
+                                                    Binding="{Binding IsSelected}"
+                                                    Value="True">
+                                                    <Setter
+                                                        Property="BackgroundColor"
+                                                        Value="{StaticResource PrimaryColor}" />
+                                                    <Setter
+                                                        Property="BorderColor"
+                                                        Value="{StaticResource PrimaryColor}" />
+                                                    <Setter
+                                                        Property="TextColor"
+                                                        Value="{StaticResource OnPrimaryColor}" />
+                                                </DataTrigger>
+                                            </Button.Triggers>
+                                        </Button>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </FlexLayout>
+
+                            <Label
+                                Margin="0,8,0,0"
+                                Style="{StaticResource TitleStyle}"
+                                Text="Time" />
+
+                            <FlexLayout
+                                AlignItems="Start"
+                                BindableLayout.ItemsSource="{Binding AvailabilityFilters}"
+                                Direction="Row"
+                                JustifyContent="Start"
+                                Wrap="Wrap">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate
+                                        x:DataType="viewModels:EventAvailabilityFilterViewData">
+                                        <Button
+                                            Margin="0,0,8,8"
+                                            Style="{StaticResource FilterButtonStyle}"
+                                            Text="{Binding Name}"
+                                            Loaded="OnFilterButtonLoaded"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MapViewModel}}, Path=SelectAvailabilityFilterCommand}"
+                                            CommandParameter="{Binding .}"
+                                            SemanticProperties.Description="{Binding SemanticDescription}">
+                                            <Button.Triggers>
+                                                <DataTrigger
+                                                    TargetType="Button"
+                                                    Binding="{Binding IsSelected}"
+                                                    Value="True">
+                                                    <Setter
+                                                        Property="BackgroundColor"
+                                                        Value="{StaticResource PrimaryColor}" />
+                                                    <Setter
+                                                        Property="BorderColor"
+                                                        Value="{StaticResource PrimaryColor}" />
+                                                    <Setter
+                                                        Property="TextColor"
+                                                        Value="{StaticResource OnPrimaryColor}" />
+                                                </DataTrigger>
+                                            </Button.Triggers>
+                                        </Button>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </FlexLayout>
+
+                            <VerticalStackLayout
+                                BindingContext="{Binding AvailabilityFilterViewModel, Source={x:Reference VenueEventsPageRoot}}"
+                                IsVisible="{Binding BindingContext.IsCustomAvailabilityEditorVisible, Source={x:Reference VenueEventsPageRoot}}"
+                                Spacing="8"
+                                x:DataType="viewModels:AvailabilityFilterViewModel">
+                                <Label
+                                    Margin="0,8,0,0"
+                                    Style="{StaticResource TitleStyle}"
+                                    Text="Custom time window" />
+
+                                <Grid
+                                    ColumnDefinitions="*,*"
+                                    ColumnSpacing="8">
+                                    <VerticalStackLayout Grid.Column="0" Spacing="8">
+                                        <Label
+                                            Style="{StaticResource LabelStyle}"
+                                            Text="Start date" />
+                                        <Border
+                                            Padding="8,0"
+                                            HeightRequest="48"
+                                            BackgroundColor="{StaticResource SurfaceColor}"
+                                            Stroke="{StaticResource DividerColor}"
+                                            StrokeShape="RoundRectangle 8">
+                                            <DatePicker
+                                                Date="{Binding StartDate}"
+                                                Format="dd MMM yyyy"
+                                                SemanticProperties.Description="Availability start date" />
+                                        </Border>
+                                    </VerticalStackLayout>
+
+                                    <VerticalStackLayout Grid.Column="1" Spacing="8">
+                                        <Label
+                                            Style="{StaticResource LabelStyle}"
+                                            Text="Start time" />
+                                        <Border
+                                            Padding="8,0"
+                                            HeightRequest="48"
+                                            BackgroundColor="{StaticResource SurfaceColor}"
+                                            Stroke="{StaticResource DividerColor}"
+                                            StrokeShape="RoundRectangle 8">
+                                            <TimePicker
+                                                Time="{Binding StartTime}"
+                                                Format="HH:mm"
+                                                SemanticProperties.Description="Availability start time" />
+                                        </Border>
+                                    </VerticalStackLayout>
+                                </Grid>
+
+                                <Label
+                                    Style="{StaticResource LabelStyle}"
+                                    Text="{Binding AvailableFromError}"
+                                    TextColor="{StaticResource ErrorColor}"
+                                    IsVisible="{Binding HasAvailableFromError}" />
+
+                                <Grid
+                                    Margin="0,8,0,0"
+                                    ColumnDefinitions="*,*"
+                                    ColumnSpacing="8">
+                                    <VerticalStackLayout Grid.Column="0" Spacing="8">
+                                        <Label
+                                            Style="{StaticResource LabelStyle}"
+                                            Text="End date" />
+                                        <Border
+                                            Padding="8,0"
+                                            HeightRequest="48"
+                                            BackgroundColor="{StaticResource SurfaceColor}"
+                                            Stroke="{StaticResource DividerColor}"
+                                            StrokeShape="RoundRectangle 8">
+                                            <DatePicker
+                                                Date="{Binding EndDate}"
+                                                Format="dd MMM yyyy"
+                                                SemanticProperties.Description="Availability end date" />
+                                        </Border>
+                                    </VerticalStackLayout>
+
+                                    <VerticalStackLayout Grid.Column="1" Spacing="8">
+                                        <Label
+                                            Style="{StaticResource LabelStyle}"
+                                            Text="End time" />
+                                        <Border
+                                            Padding="8,0"
+                                            HeightRequest="48"
+                                            BackgroundColor="{StaticResource SurfaceColor}"
+                                            Stroke="{StaticResource DividerColor}"
+                                            StrokeShape="RoundRectangle 8">
+                                            <TimePicker
+                                                Time="{Binding EndTime}"
+                                                Format="HH:mm"
+                                                SemanticProperties.Description="Availability end time" />
+                                        </Border>
+                                    </VerticalStackLayout>
+                                </Grid>
+
+                                <Label
+                                    Style="{StaticResource LabelStyle}"
+                                    Text="{Binding AvailableToError}"
+                                    TextColor="{StaticResource ErrorColor}"
+                                    IsVisible="{Binding HasAvailableToError}" />
+
+                                <FlexLayout
+                                    AlignItems="Start"
+                                    Direction="Row"
+                                    JustifyContent="Start"
+                                    Wrap="Wrap">
+                                    <Button
+                                        Margin="0,8,8,0"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Text="Apply"
+                                        Command="{Binding ApplyCommand}"
+                                        SemanticProperties.Description="Apply custom availability" />
+                                    <Button
+                                        Margin="0,8,8,0"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Text="Clear time"
+                                        Command="{Binding ClearCommand}"
+                                        SemanticProperties.Description="Clear the availability filter" />
+                                    <Button
+                                        Margin="0,8,0,0"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Text="Cancel"
+                                        Command="{Binding CancelCommand}"
+                                        SemanticProperties.Description="Cancel custom availability" />
+                                </FlexLayout>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border
+                        Padding="16,8"
+                        MinimumHeightRequest="48"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Stroke="{StaticResource PrimaryColor}"
+                        StrokeShape="RoundRectangle 16"
+                        IsVisible="{Binding HasCustomAvailability}">
+                        <Label
+                            Style="{StaticResource LabelStyle}"
+                            Text="{Binding ActiveAvailabilitySummary, StringFormat='Custom: {0}'}"
+                            VerticalOptions="Center"
+                            SemanticProperties.Description="{Binding ActiveAvailabilitySummary, StringFormat='Custom availability from {0}'}" />
+                    </Border>
+
+                    <Label
+                        Margin="0,8,0,0"
+                        Style="{StaticResource TitleStyle}"
+                        Text="Events" />
+                </VerticalStackLayout>
+            </CollectionView.Header>
+
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:EventCardViewData">
+                    <Border
+                        Margin="4,4,4,16"
+                        Padding="16"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Shadow="{StaticResource CardShadow}"
+                        Stroke="{StaticResource DividerColor}"
+                        StrokeShape="RoundRectangle 16">
+                        <VerticalStackLayout Spacing="8">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <Label
+                                    Grid.Column="0"
+                                    Style="{StaticResource TitleStyle}"
+                                    Text="{Binding Title}" />
+                                <Label
+                                    Grid.Column="1"
+                                    Style="{StaticResource LabelStyle}"
+                                    Text="{Binding SportName}"
+                                    VerticalOptions="Center" />
+                            </Grid>
+
+                            <Label
+                                Style="{StaticResource LabelStyle}"
+                                Text="{Binding StartsAtDisplay, StringFormat='Starts {0}'}" />
+
+                            <Label
+                                Style="{StaticResource LabelStyle}"
+                                Text="{Binding EstimatedEndsAtDisplay, StringFormat='Ends {0}'}" />
+
+                            <Label
+                                Style="{StaticResource BodyStyle}"
+                                Text="{Binding Description}"
+                                IsVisible="{Binding HasDescription}" />
+
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                                <Label
+                                    Grid.Column="0"
+                                    FontFamily="MaterialOutlined"
+                                    FontSize="24"
+                                    Text="{x:Static materialSymbols:MaterialOutlined.Group}"
+                                    TextColor="{StaticResource SecondaryTextColor}"
+                                    VerticalOptions="Center"
+                                    AutomationProperties.IsInAccessibleTree="False" />
+                                <Label
+                                    Grid.Column="1"
+                                    Style="{StaticResource LabelStyle}"
+                                    Text="{Binding ParticipantDisplay}"
+                                    VerticalOptions="Center">
+                                    <Label.Triggers>
+                                        <DataTrigger
+                                            TargetType="Label"
+                                            Binding="{Binding IsFull}"
+                                            Value="True">
+                                            <Setter
+                                                Property="TextColor"
+                                                Value="{StaticResource ErrorColor}" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                                <Label
+                                    Grid.Column="2"
+                                    Style="{StaticResource LabelStyle}"
+                                    HorizontalOptions="End"
+                                    Text="Auto-accept enabled"
+                                    IsVisible="{Binding AutoAccept}"
+                                    VerticalOptions="Center" />
+                            </Grid>
+
+                            <Button
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Text="{Binding ActionLabel}"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MapViewModel}}, Path=RequestToJoinEventCommand}"
+                                CommandParameter="{Binding .}"
+                                IsEnabled="{Binding CanJoin}"
+                                IsVisible="{Binding IsJoinButtonVisible}"
+                                SemanticProperties.Description="{Binding ActionSemanticDescription}" />
+
+                            <Border
+                                Padding="16,8"
+                                MinimumHeightRequest="48"
+                                BackgroundColor="{StaticResource SurfaceColor}"
+                                Stroke="{StaticResource DividerColor}"
+                                StrokeShape="RoundRectangle 24"
+                                IsVisible="{Binding IsStatusLabelVisible}"
+                                SemanticProperties.Description="{Binding ActionSemanticDescription}">
+                                <Label
+                                    Style="{StaticResource BodyStyle}"
+                                    HorizontalTextAlignment="Center"
+                                    Text="{Binding ActionLabel}"
+                                    VerticalOptions="Center" />
+                            </Border>
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+
+            <CollectionView.EmptyView>
+                <Grid>
+                    <VerticalStackLayout
+                        Spacing="16"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center"
+                        IsVisible="{Binding IsVenueEventsLoading}">
+                        <ActivityIndicator
+                            IsRunning="{Binding IsVenueEventsLoading}"
+                            SemanticProperties.Description="Loading events" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            Text="Loading events..." />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        Spacing="16"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center"
+                        IsVisible="{Binding HasNoVenueEvents}">
+                        <Label
+                            Style="{StaticResource TitleStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="No events here yet" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="Create one or try another filter." />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        Spacing="16"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center"
+                        IsVisible="{Binding HasVenueEventsError}">
+                        <Label
+                            Style="{StaticResource HeadlineStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="!"
+                            TextColor="{StaticResource ErrorColor}"
+                            SemanticProperties.Description="Error loading events" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="{Binding VenueEventsErrorMessage}" />
+                        <Button
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Text="Retry"
+                            Command="{Binding RetryVenueEventsCommand}"
+                            IsVisible="{Binding CanRetryVenueEvents}"
+                            SemanticProperties.Description="Retry loading venue events" />
+                    </VerticalStackLayout>
+                </Grid>
+            </CollectionView.EmptyView>
+        </CollectionView>
+
+        <Button
+            Grid.Row="1"
+            Style="{StaticResource PrimaryButtonStyle}"
+            Text="Create event"
+            Command="{Binding CreateEventCommand}"
+            IsEnabled="{Binding IsNotBusy}"
+            SemanticProperties.Description="Create an event at this venue" />
+    </Grid>
+
+</ContentPage>

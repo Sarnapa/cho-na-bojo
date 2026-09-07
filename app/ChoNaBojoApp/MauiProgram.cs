@@ -88,6 +88,7 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<AddressSearchPage>();
 			builder.Services.AddTransient<CreateEventPage>();
 			builder.Services.AddTransient<EventDetailPage>();
+			builder.Services.AddTransient<VenueEventsPage>();
 
 			builder.Services.AddTransient<LoginViewModel>();
 			builder.Services.AddTransient<RegisterViewModel>();
@@ -95,6 +96,7 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<AddressSearchViewModel>();
 			builder.Services.AddTransient<CreateEventViewModel>();
 			builder.Services.AddTransient<EventDetailViewModel>();
+			builder.Services.AddTransient<AvailabilityFilterViewModel>();
 
 #if DEBUG
 			builder.Logging.AddDebug();

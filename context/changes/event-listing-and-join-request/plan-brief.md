@@ -12,7 +12,7 @@ S-03 already stores events and supports authenticated creation from the map, but
 
 ## Desired End State
 
-The venue sheet displays ordered, contact-free event cards with complete loading, empty, error, full, ownership, and request states. A user can filter by overlapping availability and submit one idempotent request that remains Pending until S-05; stale server state is explained and refreshed.
+A dedicated venue-events modal displays ordered, contact-free event cards with complete loading, empty, error, full, ownership, and request states while preserving the map underneath. A user can reveal sport and availability controls from the toolbar, filter by overlapping availability, and submit one idempotent request that remains Pending until S-05; stale server state is explained and refreshed.
 
 ## Key Decisions Made
 
@@ -25,6 +25,8 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 | Duplicate submission | Return canonical request as success | Makes response-loss retry safe and prevents duplicate rows |
 | Persisted status | Pending, Accepted, Rejected | Avoids a schema rewrite when S-05 adds approval |
 | Filter UX | Presets plus custom range | Fast common choices with precise fallback |
+| Discovery surface | Dedicated `VenueEventsPage` modal | A full-screen list and on-demand toolbar Filter action are easier to browse than a compact map sheet |
+| Filter accessibility | Android autosizing with two-line fallback | Keeps large or long labels inside 48-point filter buttons |
 | Stale join | Explain, then refresh | Reconciles the card with authoritative server state |
 | Verification | Builds, EF checks, and API probes | Matches repository practice without adding first-time test infrastructure |
 | Data model | One `EventJoinRequest` table | Accepted requests can become participant membership; no parallel table is needed |
@@ -37,7 +39,7 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 - Non-expired filtering, accepted count, caller relationship state, and stable ordering
 - Pending/accepted/rejected join-request persistence with database constraints and indexes
 - Naturally idempotent join submission and typed stale-state conflicts
-- Inline venue-sheet event cards, presets, custom range modal, refresh, and retry states
+- Dedicated venue-events modal with toolbar filters, inline custom range editing, event cards, refresh, and retry states
 
 **Out of scope:**
 
@@ -47,7 +49,7 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 
 ## Architecture / Approach
 
-`MapPage` requests `GET /api/venues/{venueId}/events` through the typed API service. The server validates filters, queries indexed `SportsEvents`, counts accepted `EventJoinRequests`, and projects safe DTOs. `POST /api/events/{eventId}/join-requests` derives the requester from JWT claims, replays an existing event/requester row, or inserts one Pending row. The venue sheet owns list/filter state; a separate modal owns custom local time input and converts it safely to UTC.
+`MapPage` opens `VenueEventsPage` for the selected marker while retaining the map viewport. `MapViewModel` requests `GET /api/venues/{venueId}/events` through the typed API service and owns list/filter state; the dedicated page reveals filters on demand and hosts a validated inline custom-range editor. The server validates filters, queries indexed `SportsEvents`, counts accepted `EventJoinRequests`, and projects safe DTOs. `POST /api/events/{eventId}/join-requests` derives the requester from JWT claims, replays an existing event/requester row, or inserts one Pending row.
 
 ## Phases at a Glance
 
@@ -57,7 +59,7 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 | 2. Persistence | Request table, checks, uniqueness, counts, and listing indexes | Schema choices must remain usable by S-05 |
 | 3. APIs | Protected overlap-filtered listing and idempotent join | Dynamic state and duplicate races |
 | 4. MAUI state | Typed calls, time conversion, cancellation, refresh, and join outcomes | Stale responses overwriting current venue state |
-| 5. Venue-sheet UX | Accessible cards, filters, states, and Android flow | Bounded sheet layout: the sheet row must be star-sized and height-capped so the `CollectionView` measures correctly once the outer `ScrollView` is removed |
+| 5. Dedicated venue UX | Accessible modal cards, on-demand filters, states, and Android flow | Large-text filter labels must autosize or wrap while the page's star-sized `CollectionView` remains the only vertical scroller |
 
 **Prerequisites:** S-03 is implemented and its `AddSportsEvents` migration is applied; development auth users and Supabase migration/runtime connections are available.
 **Estimated effort:** Approximately 4-6 implementation sessions across five phases, plus manual Android and database gates.
@@ -67,7 +69,7 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 - Venue-level event volume remains small enough for an ordered, unpaginated MVP response; query plans are verified before acceptance.
 - A rejected request is final for this MVP because `(EventId, RequesterUserId)` is unique; re-request policy can be added with an explicit S-05/S-07 state transition.
 - Auto-accept events visibly remain Pending until S-05 activates the shared acceptance path.
-- New custom-range controls use Uranium UI fields; the existing RF-1 create-form cleanup remains separate.
+- The dedicated venue-events modal preserves map context while child create/detail flows are open; its inline custom editor remains scoped to event filtering and does not expand RF-1.
 - The `Joined` and `Request rejected` card states are built forward-compatibly for S-05 but no S-04 code path produces them; they are verified by seeding `EventJoinRequests.Status` directly in Supabase.
 - Phase 3 has no automated test harness; its behavioural criteria are a named probe matrix (P-01…P-07) run against a locally started API, or in Postman when the API cannot be started.
 
@@ -75,4 +77,4 @@ The venue sheet displays ordered, contact-free event cards with complete loading
 
 - Authenticated users see correct non-expired venue events, fill state, caller state, and overlap-filter results without any contact data.
 - A valid join creates exactly one Pending request, and duplicate or uncertain retries return that same request.
-- Full/owned/stale states cannot create requests, and the Android venue sheet explains and refreshes changed server state.
+- Full/owned/stale states cannot create requests, and the Android venue-events modal explains and refreshes changed server state.
