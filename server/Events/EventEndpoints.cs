@@ -46,6 +46,17 @@ public static class EventEndpoints
 				RejectJoinRequestAsync)
 			.WithName("EventsJoinRequestsReject");
 
+		endpoints.MapGet("/me/events", GetMyEventsAsync)
+			.WithName("MeEventsList");
+
+		endpoints.MapGet(
+				"/events/{eventId:guid}/join-requests",
+				GetEventJoinRequestsAsync)
+			.WithName("EventsJoinRequestsList");
+
+		endpoints.MapGet("/events/{eventId:guid}/contacts", GetEventContactsAsync)
+			.WithName("EventContactsList");
+
 		return endpoints;
 	}
 	#endregion
@@ -352,6 +363,230 @@ public static class EventEndpoints
 			httpContext.GetUserId(),
 			EventJoinRequestStatus.Rejected,
 			cancellationToken);
+	}
+
+	private static async Task<IResult> GetMyEventsAsync(
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		Guid callerUserId = httpContext.GetUserId();
+
+		var organizedRows = await dbContext.SportsEvents
+			.AsNoTracking()
+			.Where(sportsEvent => sportsEvent.OrganizerUserId == callerUserId)
+			.OrderBy(sportsEvent => sportsEvent.StartsAtUtc)
+			.ThenBy(sportsEvent => sportsEvent.Id)
+			.Select(sportsEvent => new
+			{
+				sportsEvent.Id,
+				sportsEvent.Title,
+				sportsEvent.StartsAtUtc,
+				sportsEvent.EstimatedEndsAtUtc,
+				sportsEvent.ParticipantLimit,
+				sportsEvent.AutoAccept,
+				sportsEvent.VenueId,
+				VenueName = sportsEvent.VenueSport.Venue.Name,
+				VenueAddress = sportsEvent.VenueSport.Venue.Address,
+				sportsEvent.SportId,
+				SportCode = sportsEvent.VenueSport.Sport.Code,
+				SportName = sportsEvent.VenueSport.Sport.Name,
+				AcceptedCount = sportsEvent.EventJoinRequests
+					.Count(request => request.Status == EventJoinRequestStatus.Accepted),
+				PendingRequestCount = sportsEvent.EventJoinRequests
+					.Count(request => request.Status == EventJoinRequestStatus.Pending)
+			})
+			.ToListAsync(cancellationToken);
+
+		var requestedRows = await dbContext.EventJoinRequests
+			.AsNoTracking()
+			.Where(request => request.RequesterUserId == callerUserId)
+			.OrderBy(request => request.SportsEvent.StartsAtUtc)
+			.ThenBy(request => request.SportsEventId)
+			.Select(request => new
+			{
+				request.SportsEventId,
+				RequestId = request.Id,
+				request.SportsEvent.Title,
+				request.SportsEvent.StartsAtUtc,
+				request.SportsEvent.EstimatedEndsAtUtc,
+				request.SportsEvent.ParticipantLimit,
+				request.SportsEvent.AutoAccept,
+				request.SportsEvent.VenueId,
+				VenueName = request.SportsEvent.VenueSport.Venue.Name,
+				VenueAddress = request.SportsEvent.VenueSport.Venue.Address,
+				request.SportsEvent.SportId,
+				SportCode = request.SportsEvent.VenueSport.Sport.Code,
+				SportName = request.SportsEvent.VenueSport.Sport.Name,
+				request.Status,
+				request.UpdatedUtc,
+				AcceptedCount = request.SportsEvent.EventJoinRequests
+					.Count(joinRequest =>
+						joinRequest.Status == EventJoinRequestStatus.Accepted)
+			})
+			.ToListAsync(cancellationToken);
+
+		var organizedEvents = organizedRows
+			.Select(row => new OrganizedEventResponse(
+				row.Id,
+				row.Title,
+				new DateTimeOffset(row.StartsAtUtc, TimeSpan.Zero),
+				new DateTimeOffset(row.EstimatedEndsAtUtc, TimeSpan.Zero),
+				row.ParticipantLimit,
+				1 + row.AcceptedCount,
+				row.AutoAccept,
+				new EventVenueSummary(row.VenueId, row.VenueName, row.VenueAddress),
+				new EventSportSummary(row.SportId, row.SportCode, row.SportName),
+				row.PendingRequestCount))
+			.ToList();
+
+		var requestedEvents = requestedRows
+			.Select(row => new RequestedEventResponse(
+				row.SportsEventId,
+				row.RequestId,
+				row.Title,
+				new DateTimeOffset(row.StartsAtUtc, TimeSpan.Zero),
+				new DateTimeOffset(row.EstimatedEndsAtUtc, TimeSpan.Zero),
+				row.ParticipantLimit,
+				1 + row.AcceptedCount,
+				row.AutoAccept,
+				new EventVenueSummary(row.VenueId, row.VenueName, row.VenueAddress),
+				new EventSportSummary(row.SportId, row.SportCode, row.SportName),
+				row.Status,
+				row.UpdatedUtc.HasValue
+					? new DateTimeOffset(row.UpdatedUtc.Value, TimeSpan.Zero)
+					: null))
+			.ToList();
+
+		return Results.Ok(new MyEventsResponse(organizedEvents, requestedEvents));
+	}
+
+	private static async Task<IResult> GetEventJoinRequestsAsync(
+		Guid eventId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		Guid callerUserId = httpContext.GetUserId();
+		var eventQueue = await dbContext.SportsEvents
+			.AsNoTracking()
+			.Where(sportsEvent => sportsEvent.Id == eventId
+				&& sportsEvent.OrganizerUserId == callerUserId)
+			.Select(sportsEvent => new
+			{
+				Requests = sportsEvent.EventJoinRequests
+					.OrderBy(request => request.CreatedUtc)
+					.ThenBy(request => request.Id)
+					.Select(request => new
+					{
+						request.Id,
+						request.Status,
+						request.CreatedUtc,
+						request.UpdatedUtc
+					})
+					.ToList()
+			})
+			.SingleOrDefaultAsync(cancellationToken);
+
+		if (eventQueue is null)
+		{
+			return RequestNotFound();
+		}
+
+		var queue = eventQueue.Requests
+			.Select((request, index) => new EventJoinRequestQueueItemResponse(
+				request.Id,
+				$"Requester {index + 1}",
+				request.Status,
+				new DateTimeOffset(request.CreatedUtc, TimeSpan.Zero),
+				request.UpdatedUtc.HasValue
+					? new DateTimeOffset(request.UpdatedUtc.Value, TimeSpan.Zero)
+					: null))
+			.OrderBy(request => request.Status == EventJoinRequestStatus.Pending ? 0 : 1)
+			.ThenBy(request => request.CreatedUtc)
+			.ThenBy(request => request.RequestId)
+			.ToList();
+
+		return Results.Ok(queue);
+	}
+
+	// This is the only endpoint permitted to read shareable User contact columns.
+	private static async Task<IResult> GetEventContactsAsync(
+		Guid eventId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		Guid callerUserId = httpContext.GetUserId();
+		var entitlement = await dbContext.SportsEvents
+			.AsNoTracking()
+			.Where(sportsEvent => sportsEvent.Id == eventId)
+			.Select(sportsEvent => new
+			{
+				IsOrganizer = sportsEvent.OrganizerUserId == callerUserId,
+				AcceptedRequestId = sportsEvent.EventJoinRequests
+					.Where(request => request.RequesterUserId == callerUserId
+						&& request.Status == EventJoinRequestStatus.Accepted)
+					.Select(request => (Guid?)request.Id)
+					.SingleOrDefault(),
+				Organizer = new
+				{
+					sportsEvent.Organizer.Id,
+					sportsEvent.Organizer.ContactPhone,
+					sportsEvent.Organizer.ContactEmail,
+					sportsEvent.Organizer.CommunicatorPlatform,
+					sportsEvent.Organizer.CommunicatorHandle
+				},
+				AcceptedParticipants = sportsEvent.EventJoinRequests
+					.Where(request => sportsEvent.OrganizerUserId == callerUserId
+						&& request.Status == EventJoinRequestStatus.Accepted)
+					.OrderBy(request => request.CreatedUtc)
+					.ThenBy(request => request.Id)
+					.Select(request => new
+					{
+						RequestId = request.Id,
+						request.Requester.Id,
+						request.Requester.ContactPhone,
+						request.Requester.ContactEmail,
+						request.Requester.CommunicatorPlatform,
+						request.Requester.CommunicatorHandle
+					})
+					.ToList()
+			})
+			.SingleOrDefaultAsync(cancellationToken);
+
+		if (entitlement is null
+			|| (!entitlement.IsOrganizer && !entitlement.AcceptedRequestId.HasValue))
+		{
+			return RequestNotFound();
+		}
+
+		IReadOnlyList<EventContactResponse> contacts = entitlement.IsOrganizer
+			? entitlement.AcceptedParticipants
+				.Select(participant => new EventContactResponse(
+					participant.Id,
+					participant.RequestId,
+					IsOrganizer: false,
+					new ContactInfoResponse(
+						participant.ContactPhone,
+						participant.ContactEmail,
+						participant.CommunicatorPlatform,
+						participant.CommunicatorHandle)))
+				.ToList()
+			:
+			[
+				new EventContactResponse(
+					entitlement.Organizer.Id,
+					JoinRequestId: null,
+					IsOrganizer: true,
+					new ContactInfoResponse(
+						entitlement.Organizer.ContactPhone,
+						entitlement.Organizer.ContactEmail,
+						entitlement.Organizer.CommunicatorPlatform,
+						entitlement.Organizer.CommunicatorHandle))
+			];
+
+		return Results.Ok(new EventContactsResponse(contacts));
 	}
 
 	private static async Task<IResult> ResolveJoinRequestAsync(
@@ -707,6 +942,14 @@ public static class EventEndpoints
 			joinRequest.UpdatedUtc.HasValue
 				? new DateTimeOffset(joinRequest.UpdatedUtc.Value, TimeSpan.Zero)
 				: null);
+	}
+
+	private static IResult RequestNotFound()
+	{
+		return Results.NotFound(new EventConflictResponse(
+			EventConflictCodes.RequestNotFound,
+			"eventId",
+			"The event or join requests are no longer available."));
 	}
 
 	private static async Task<SportsEvent?> FindEventAsync(
