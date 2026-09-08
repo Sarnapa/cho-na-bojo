@@ -572,17 +572,17 @@ One new migration in Phase 2 adds the `UpdatedUtc`/`Status` transition check con
 
 #### Automated
 
-- [x] 3.1 Solution builds
-- [x] 3.2 All three new routes appear in the OpenAPI document
-- [x] 3.3 Contact-reveal authorization matrix verified across organizer, accepted, pending, rejected, uninvolved, and second-participant callers
-- [x] 3.4 my-events and join-requests raw JSON contain no contact or login-email keys
-- [x] 3.5 join-requests as a non-organizer returns 404 with the nonexistent-event body shape
+- [x] 3.1 Solution builds — 6f84e41
+- [x] 3.2 All three new routes appear in the OpenAPI document — 6f84e41
+- [x] 3.3 Contact-reveal authorization matrix verified across organizer, accepted, pending, rejected, uninvolved, and second-participant callers — 6f84e41
+- [x] 3.4 my-events and join-requests raw JSON contain no contact or login-email keys — 6f84e41
+- [x] 3.5 join-requests as a non-organizer returns 404 with the nonexistent-event body shape — 6f84e41
 
 #### Manual
 
-- [x] 3.6 Revealed contacts match registration input, including a single-method user
-- [x] 3.7 A past event still appears in the organizer's own-events payload
-- [x] 3.8 Pending-request count matches the queue length
+- [x] 3.6 Revealed contacts match registration input, including a single-method user — 6f84e41
+- [x] 3.7 A past event still appears in the organizer's own-events payload — 6f84e41
+- [x] 3.8 Pending-request count matches the queue length — 6f84e41
 
 ### Phase 4: Client — "My events" tab with organizer accept/reject
 
