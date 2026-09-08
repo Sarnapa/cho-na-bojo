@@ -297,6 +297,18 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 					"""
 					"Status" IN (1, 2, 3)
 					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_EventJoinRequests_StatusUpdatedUtc",
+					"""
+					(
+						"Status" = 1 AND "UpdatedUtc" IS NULL
+					)
+					OR
+					(
+						"Status" <> 1 AND "UpdatedUtc" IS NOT NULL
+					)
+					""");
 			});
 
 			entity.HasKey(request => request.Id);

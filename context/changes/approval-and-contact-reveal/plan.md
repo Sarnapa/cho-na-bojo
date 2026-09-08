@@ -555,18 +555,18 @@ One new migration in Phase 2 adds the `UpdatedUtc`/`Status` transition check con
 
 #### Automated
 
-- [ ] 2.1 Solution builds
-- [ ] 2.2 Migration applies cleanly
-- [ ] 2.3 No pending model changes
-- [ ] 2.4 Both new routes appear in the OpenAPI document
-- [ ] 2.5 Accept/reject HTTP checks: 200 organizer, 404 non-organizer, 409 already-resolved, 404 fabricated id
+- [x] 2.1 Solution builds
+- [x] 2.2 Migration applies cleanly
+- [x] 2.3 No pending model changes
+- [x] 2.4 Both new routes appear in the OpenAPI document
+- [x] 2.5 Accept/reject HTTP checks: 200 organizer, 404 non-organizer, 409 already-resolved, 404 fabricated id
 
 #### Manual
 
-- [ ] 2.6 B requests, A accepts, B's card shows "Joined" after refresh
-- [ ] 2.7 A rejects C; C's card shows rejected and re-tapping Join replays the rejection
-- [ ] 2.8 Auto-accept event accepts the request immediately with no organizer action
-- [ ] 2.9 Full event refuses further accepts and leaves pending requests pending
+- [x] 2.6 B requests, A accepts, B's card shows "Joined" after refresh
+- [x] 2.7 A rejects C; C's card shows rejected and re-tapping Join replays the rejection
+- [x] 2.8 Auto-accept event accepts the request immediately with no organizer action
+- [x] 2.9 Full event refuses further accepts and leaves pending requests pending
 
 ### Phase 3: Server — my-events read model and contact reveal
 

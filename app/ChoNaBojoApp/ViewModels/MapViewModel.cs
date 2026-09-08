@@ -517,6 +517,13 @@ public partial class MapViewModel : ViewModelBase
 						card => card with
 						{
 							CurrentUserRequestStatus = result.Response!.Status,
+							ParticipantCount =
+								result.Response.Status == EventJoinRequestStatus.Accepted
+								&& card.CurrentUserRequestStatus != EventJoinRequestStatus.Accepted
+									? Math.Min(
+										card.ParticipantCount + 1,
+										card.ParticipantLimit)
+									: card.ParticipantCount,
 							IsJoinInFlight = false
 						});
 					if (listWasLoading)
@@ -525,9 +532,13 @@ public partial class MapViewModel : ViewModelBase
 					}
 
 					await _feedbackService.ShowSnackbarAsync(
-						result.IsReplay
-							? "Your existing join request was restored."
-							: "Join request sent.",
+						result.Response.Status == EventJoinRequestStatus.Accepted
+							? result.IsReplay
+								? "You're already part of this event."
+								: "You've joined this event."
+							: result.IsReplay
+								? "Your existing join request was restored."
+								: "Join request sent.",
 						joinToken);
 					break;
 

@@ -36,6 +36,16 @@ public static class EventEndpoints
 		endpoints.MapPost("/events/{eventId:guid}/join-requests", RequestToJoinEventAsync)
 			.WithName("EventsJoinRequestsCreate");
 
+		endpoints.MapPost(
+				"/events/{eventId:guid}/join-requests/{requestId:guid}/accept",
+				AcceptJoinRequestAsync)
+			.WithName("EventsJoinRequestsAccept");
+
+		endpoints.MapPost(
+				"/events/{eventId:guid}/join-requests/{requestId:guid}/reject",
+				RejectJoinRequestAsync)
+			.WithName("EventsJoinRequestsReject");
+
 		return endpoints;
 	}
 	#endregion
@@ -300,98 +310,377 @@ public static class EventEndpoints
 			return Results.Ok(ToJoinResponse(existingRequest));
 		}
 
-		DateTime nowUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+		JoinRequestTransitionResult transition = await TransitionJoinRequestAsync(
+			dbContext,
+			eventId,
+			requesterUserId,
+			requestId: null,
+			EventJoinRequestStatus.Accepted,
+			createIfMissing: true,
+			cancellationToken);
 
-		var eventState = await dbContext.SportsEvents
-			.AsNoTracking()
-			.Where(sportsEvent => sportsEvent.Id == eventId)
-			.Select(sportsEvent => new
-			{
-				sportsEvent.OrganizerUserId,
-				sportsEvent.EstimatedEndsAtUtc,
-				sportsEvent.ParticipantLimit,
-				AcceptedCount = sportsEvent.EventJoinRequests
-					.Count(request => request.Status == EventJoinRequestStatus.Accepted)
-			})
-			.SingleOrDefaultAsync(cancellationToken);
+		return ToJoinCreationResult(transition);
+	}
 
-		if (eventState is null)
+	private static async Task<IResult> AcceptJoinRequestAsync(
+		Guid eventId,
+		Guid requestId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		return await ResolveJoinRequestAsync(
+			dbContext,
+			eventId,
+			requestId,
+			httpContext.GetUserId(),
+			EventJoinRequestStatus.Accepted,
+			cancellationToken);
+	}
+
+	private static async Task<IResult> RejectJoinRequestAsync(
+		Guid eventId,
+		Guid requestId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		return await ResolveJoinRequestAsync(
+			dbContext,
+			eventId,
+			requestId,
+			httpContext.GetUserId(),
+			EventJoinRequestStatus.Rejected,
+			cancellationToken);
+	}
+
+	private static async Task<IResult> ResolveJoinRequestAsync(
+		ChoNaBojoContext dbContext,
+		Guid eventId,
+		Guid requestId,
+		Guid organizerUserId,
+		EventJoinRequestStatus targetStatus,
+		CancellationToken cancellationToken)
+	{
+		JoinRequestTransitionResult transition = await TransitionJoinRequestAsync(
+			dbContext,
+			eventId,
+			organizerUserId,
+			requestId,
+			targetStatus,
+			createIfMissing: false,
+			cancellationToken);
+
+		if (transition.Request is not null)
 		{
-			return Results.Conflict(new EventConflictResponse(
-				EventConflictCodes.EventNotFound,
-				"eventId",
-				"The selected event no longer exists."));
+			return Results.Ok(ToJoinResponse(transition.Request));
 		}
 
-		if (eventState.EstimatedEndsAtUtc <= nowUtc)
+		return transition.Failure switch
 		{
-			return Results.Conflict(new EventConflictResponse(
-				EventConflictCodes.EventEnded,
-				"eventId",
-				"This event has already ended."));
-		}
-
-		if (eventState.OrganizerUserId == requesterUserId)
-		{
-			return Results.Conflict(new EventConflictResponse(
-				EventConflictCodes.OrganizerCannotJoin,
-				"eventId",
-				"You cannot join an event you are organizing."));
-		}
-
-		if (1 + eventState.AcceptedCount >= eventState.ParticipantLimit)
-		{
-			return Results.Conflict(new EventConflictResponse(
-				EventConflictCodes.EventFull,
-				"eventId",
-				"This event has reached its participant limit."));
-		}
-
-		var joinRequest = new EventJoinRequest
-		{
-			SportsEventId = eventId,
-			RequesterUserId = requesterUserId,
-			Status = EventJoinRequestStatus.Pending,
-			CreatedUtc = nowUtc
+			JoinRequestTransitionFailure.RequestNotFound =>
+				Results.NotFound(new EventConflictResponse(
+					EventConflictCodes.RequestNotFound,
+					"requestId",
+					"The join request is no longer available.")),
+			JoinRequestTransitionFailure.RequestAlreadyResolved =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.RequestAlreadyResolved,
+					"requestId",
+					"The join request has already been resolved.")),
+			JoinRequestTransitionFailure.EventEnded =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventEnded,
+					"eventId",
+					"This event has already ended.")),
+			JoinRequestTransitionFailure.EventFull =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventFull,
+					"eventId",
+					"This event has reached its participant limit.")),
+			_ => throw new InvalidOperationException(
+				$"Unexpected join-request transition failure: {transition.Failure}.")
 		};
+	}
 
-		dbContext.EventJoinRequests.Add(joinRequest);
+	private static async Task<JoinRequestTransitionResult> TransitionJoinRequestAsync(
+		ChoNaBojoContext dbContext,
+		Guid eventId,
+		Guid actorUserId,
+		Guid? requestId,
+		EventJoinRequestStatus targetStatus,
+		bool createIfMissing,
+		CancellationToken cancellationToken)
+	{
+		await using var transaction = await dbContext.Database.BeginTransactionAsync(
+			cancellationToken);
+		EventJoinRequest? joinRequest = null;
 
 		try
 		{
-			await dbContext.SaveChangesAsync(cancellationToken);
-		}
-		catch (DbUpdateException exception) when (HasConstraint(exception, UniqueJoinRequestConstraint))
-		{
-			dbContext.Entry(joinRequest).State = EntityState.Detached;
-			existingRequest = await FindJoinRequestAsync(
-				dbContext,
-				eventId,
-				requesterUserId,
+			await dbContext.Database.ExecuteSqlAsync(
+				$"""SELECT 1 FROM "SportsEvents" WHERE "Id" = {eventId} FOR UPDATE""",
 				cancellationToken);
 
+			SportsEvent? sportsEvent;
+			if (createIfMissing)
+			{
+				sportsEvent = await dbContext.SportsEvents
+					.SingleOrDefaultAsync(
+						entity => entity.Id == eventId,
+						cancellationToken);
+				if (sportsEvent is null)
+				{
+					await transaction.RollbackAsync(cancellationToken);
+					return JoinRequestTransitionResult.Failed(
+						JoinRequestTransitionFailure.EventNotFound);
+				}
+
+				joinRequest = await dbContext.EventJoinRequests
+					.SingleOrDefaultAsync(
+						request => request.SportsEventId == eventId
+							&& request.RequesterUserId == actorUserId,
+						cancellationToken);
+				if (joinRequest is not null)
+				{
+					await transaction.CommitAsync(cancellationToken);
+					return JoinRequestTransitionResult.Succeeded(
+						joinRequest,
+						wasCreated: false);
+				}
+
+				if (sportsEvent.OrganizerUserId == actorUserId)
+				{
+					await transaction.RollbackAsync(cancellationToken);
+					return JoinRequestTransitionResult.Failed(
+						JoinRequestTransitionFailure.OrganizerCannotJoin);
+				}
+
+				DateTime createdUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+				joinRequest = new EventJoinRequest
+				{
+					SportsEventId = eventId,
+					RequesterUserId = actorUserId,
+					Status = EventJoinRequestStatus.Pending,
+					CreatedUtc = createdUtc
+				};
+				dbContext.EventJoinRequests.Add(joinRequest);
+			}
+			else
+			{
+				Guid existingRequestId = requestId
+					?? throw new InvalidOperationException(
+						"An existing request id is required for manual resolution.");
+				joinRequest = await dbContext.EventJoinRequests
+					.Include(request => request.SportsEvent)
+					.SingleOrDefaultAsync(
+						request => request.Id == existingRequestId
+							&& request.SportsEventId == eventId
+							&& request.SportsEvent.OrganizerUserId == actorUserId,
+						cancellationToken);
+				if (joinRequest is null)
+				{
+					await transaction.RollbackAsync(cancellationToken);
+					return JoinRequestTransitionResult.Failed(
+						JoinRequestTransitionFailure.RequestNotFound);
+				}
+
+				sportsEvent = joinRequest.SportsEvent;
+				if (joinRequest.Status == targetStatus)
+				{
+					await transaction.CommitAsync(cancellationToken);
+					return JoinRequestTransitionResult.Succeeded(
+						joinRequest,
+						wasCreated: false);
+				}
+
+				if (joinRequest.Status != EventJoinRequestStatus.Pending)
+				{
+					await transaction.RollbackAsync(cancellationToken);
+					return JoinRequestTransitionResult.Failed(
+						JoinRequestTransitionFailure.RequestAlreadyResolved);
+				}
+			}
+
+			DateTime resolvedUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+			EventJoinRequestStatus effectiveTargetStatus =
+				createIfMissing && !sportsEvent.AutoAccept
+					? EventJoinRequestStatus.Pending
+					: targetStatus;
+			if (effectiveTargetStatus == EventJoinRequestStatus.Accepted)
+			{
+				JoinRequestTransitionFailure? failure =
+					await ClaimParticipantSlotUnderLockAsync(
+						dbContext,
+						sportsEvent,
+						joinRequest,
+						resolvedUtc,
+						cancellationToken);
+				if (failure.HasValue)
+				{
+					await transaction.RollbackAsync(cancellationToken);
+					if (createIfMissing)
+					{
+						dbContext.Entry(joinRequest).State = EntityState.Detached;
+					}
+
+					return JoinRequestTransitionResult.Failed(failure.Value);
+				}
+			}
+			else if (effectiveTargetStatus == EventJoinRequestStatus.Rejected)
+			{
+				joinRequest.Status = EventJoinRequestStatus.Rejected;
+				joinRequest.UpdatedUtc = resolvedUtc;
+			}
+			else if (effectiveTargetStatus == EventJoinRequestStatus.Pending
+				&& createIfMissing)
+			{
+				JoinRequestTransitionFailure? failure =
+					await GetJoinabilityFailureUnderLockAsync(
+						dbContext,
+						sportsEvent,
+						resolvedUtc,
+						cancellationToken);
+				if (failure.HasValue)
+				{
+					await transaction.RollbackAsync(cancellationToken);
+					dbContext.Entry(joinRequest).State = EntityState.Detached;
+					return JoinRequestTransitionResult.Failed(failure.Value);
+				}
+			}
+			else
+			{
+				throw new InvalidOperationException(
+					$"Unsupported join-request target status: {effectiveTargetStatus}.");
+			}
+
+			await dbContext.SaveChangesAsync(cancellationToken);
+			await transaction.CommitAsync(cancellationToken);
+
+			return JoinRequestTransitionResult.Succeeded(
+				joinRequest,
+				wasCreated: createIfMissing);
+		}
+		catch (DbUpdateException exception)
+			when (createIfMissing
+				&& HasConstraint(exception, UniqueJoinRequestConstraint))
+		{
+			await transaction.RollbackAsync(cancellationToken);
+			if (joinRequest is not null)
+			{
+				dbContext.Entry(joinRequest).State = EntityState.Detached;
+			}
+
+			EventJoinRequest? existingRequest = await FindJoinRequestAsync(
+				dbContext,
+				eventId,
+				actorUserId,
+				cancellationToken);
 			if (existingRequest is null)
 			{
 				throw;
 			}
 
-			return Results.Ok(ToJoinResponse(existingRequest));
+			return JoinRequestTransitionResult.Succeeded(
+				existingRequest,
+				wasCreated: false);
 		}
 		catch (DbUpdateException exception)
-			when (HasConstraint(exception, JoinRequestEventForeignKeyConstraint))
+			when (createIfMissing
+				&& HasConstraint(exception, JoinRequestEventForeignKeyConstraint))
 		{
-			// The event was deleted between the state read above and this insert.
-			dbContext.Entry(joinRequest).State = EntityState.Detached;
+			await transaction.RollbackAsync(cancellationToken);
+			if (joinRequest is not null)
+			{
+				dbContext.Entry(joinRequest).State = EntityState.Detached;
+			}
 
-			return Results.Conflict(new EventConflictResponse(
-				EventConflictCodes.EventNotFound,
-				"eventId",
-				"The selected event no longer exists."));
+			return JoinRequestTransitionResult.Failed(
+				JoinRequestTransitionFailure.EventNotFound);
+		}
+	}
+
+	private static async Task<JoinRequestTransitionFailure?>
+		ClaimParticipantSlotUnderLockAsync(
+			ChoNaBojoContext dbContext,
+			SportsEvent sportsEvent,
+			EventJoinRequest joinRequest,
+			DateTime resolvedUtc,
+			CancellationToken cancellationToken)
+	{
+		JoinRequestTransitionFailure? failure =
+			await GetJoinabilityFailureUnderLockAsync(
+				dbContext,
+				sportsEvent,
+				resolvedUtc,
+				cancellationToken);
+		if (failure.HasValue)
+		{
+			return failure;
 		}
 
-		return Results.Json(
-			ToJoinResponse(joinRequest),
-			statusCode: StatusCodes.Status201Created);
+		joinRequest.Status = EventJoinRequestStatus.Accepted;
+		joinRequest.UpdatedUtc = resolvedUtc;
+		return null;
+	}
+
+	private static async Task<JoinRequestTransitionFailure?>
+		GetJoinabilityFailureUnderLockAsync(
+			ChoNaBojoContext dbContext,
+			SportsEvent sportsEvent,
+			DateTime nowUtc,
+			CancellationToken cancellationToken)
+	{
+		if (sportsEvent.EstimatedEndsAtUtc <= nowUtc)
+		{
+			return JoinRequestTransitionFailure.EventEnded;
+		}
+
+		int acceptedCount = await dbContext.EventJoinRequests
+			.CountAsync(
+				request => request.SportsEventId == sportsEvent.Id
+					&& request.Status == EventJoinRequestStatus.Accepted,
+				cancellationToken);
+		return 1 + acceptedCount >= sportsEvent.ParticipantLimit
+			? JoinRequestTransitionFailure.EventFull
+			: null;
+	}
+
+	private static IResult ToJoinCreationResult(JoinRequestTransitionResult transition)
+	{
+		if (transition.Request is not null)
+		{
+			JoinRequestResponse response = ToJoinResponse(transition.Request);
+			return transition.WasCreated
+				? Results.Json(response, statusCode: StatusCodes.Status201Created)
+				: Results.Ok(response);
+		}
+
+		return transition.Failure switch
+		{
+			JoinRequestTransitionFailure.EventNotFound =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventNotFound,
+					"eventId",
+					"The selected event no longer exists.")),
+			JoinRequestTransitionFailure.EventEnded =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventEnded,
+					"eventId",
+					"This event has already ended.")),
+			JoinRequestTransitionFailure.EventFull =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventFull,
+					"eventId",
+					"This event has reached its participant limit.")),
+			JoinRequestTransitionFailure.OrganizerCannotJoin =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.OrganizerCannotJoin,
+					"eventId",
+					"You cannot join an event you are organizing.")),
+			_ => throw new InvalidOperationException(
+				$"Unexpected join-request creation failure: {transition.Failure}.")
+		};
 	}
 
 	private static async Task<EventJoinRequest?> FindJoinRequestAsync(
@@ -530,6 +819,35 @@ public static class EventEndpoints
 			ConstraintName: var actualConstraintName
 		}
 			&& string.Equals(actualConstraintName, constraintName, StringComparison.Ordinal);
+	}
+
+	private enum JoinRequestTransitionFailure
+	{
+		EventNotFound,
+		EventEnded,
+		EventFull,
+		OrganizerCannotJoin,
+		RequestNotFound,
+		RequestAlreadyResolved
+	}
+
+	private sealed record JoinRequestTransitionResult(
+		EventJoinRequest? Request,
+		JoinRequestTransitionFailure? Failure,
+		bool WasCreated)
+	{
+		public static JoinRequestTransitionResult Succeeded(
+			EventJoinRequest request,
+			bool wasCreated)
+		{
+			return new(request, null, wasCreated);
+		}
+
+		public static JoinRequestTransitionResult Failed(
+			JoinRequestTransitionFailure failure)
+		{
+			return new(null, failure, false);
+		}
 	}
 	#endregion
 }

@@ -9,4 +9,6 @@ public static class EventConflictCodes
 	public const string EventEnded = "event_ended";
 	public const string EventFull = "event_full";
 	public const string OrganizerCannotJoin = "organizer_cannot_join";
+	public const string RequestAlreadyResolved = "request_already_resolved";
+	public const string RequestNotFound = "request_not_found";
 }
