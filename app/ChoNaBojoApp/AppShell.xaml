@@ -3,12 +3,35 @@
     x:Class="ChoNaBojo.App.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:materialSymbols="clr-namespace:UraniumUI.Icons.MaterialSymbols;assembly=UraniumUI.Icons.MaterialSymbols"
     xmlns:views="clr-namespace:ChoNaBojo.App.Views"
+    FlyoutBehavior="Disabled"
     Title="ChoNaBojoApp">
 
-    <ShellContent
-        Title="Map"
-        ContentTemplate="{DataTemplate views:MapPage}"
-        Route="MapPage" />
+    <TabBar>
+        <ShellContent
+            Title="Map"
+            ContentTemplate="{DataTemplate views:MapPage}"
+            Route="MapPage">
+            <ShellContent.Icon>
+                <FontImageSource
+                    FontFamily="MaterialOutlined"
+                    Glyph="{x:Static materialSymbols:MaterialOutlined.Map}"
+                    Size="24" />
+            </ShellContent.Icon>
+        </ShellContent>
+
+        <ShellContent
+            Title="My events"
+            ContentTemplate="{DataTemplate views:MyEventsPage}"
+            Route="MyEventsPage">
+            <ShellContent.Icon>
+                <FontImageSource
+                    FontFamily="MaterialOutlined"
+                    Glyph="{x:Static materialSymbols:MaterialOutlined.Event}"
+                    Size="24" />
+            </ShellContent.Icon>
+        </ShellContent>
+    </TabBar>
 
 </Shell>

@@ -329,6 +329,124 @@ public class ApiService: IApiService
 			return JoinEventResult.Unknown();
 		}
 	}
+
+	public async Task<MyEventsResult> GetMyEventsAsync(
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.GetAsync(
+				"/api/me/events",
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+					var myEvents = await response.Content.ReadFromJsonAsync<MyEventsResponse>(
+						JsonOptions,
+						cancellationToken);
+					return myEvents is null
+						|| myEvents.OrganizedEvents.Any(IsInvalidOrganizedEvent)
+						|| myEvents.RequestedEvents.Any(IsInvalidRequestedEvent)
+						? MyEventsResult.Unknown()
+						: MyEventsResult.Success(myEvents);
+
+				case HttpStatusCode.Unauthorized:
+					return MyEventsResult.Unauthorized();
+
+				default:
+					return MyEventsResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return MyEventsResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return MyEventsResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return MyEventsResult.Unknown();
+		}
+	}
+
+	public async Task<EventJoinRequestQueueResult> GetEventJoinRequestsAsync(
+		Guid eventId,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.GetAsync(
+				$"/api/events/{eventId:D}/join-requests",
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+					var requests = await response.Content.ReadFromJsonAsync<
+						List<EventJoinRequestQueueItemResponse>>(
+							JsonOptions,
+							cancellationToken);
+					return requests is null || requests.Any(IsInvalidJoinRequestQueueItem)
+						? EventJoinRequestQueueResult.Unknown()
+						: EventJoinRequestQueueResult.Success(requests);
+
+				case HttpStatusCode.NotFound:
+					var notFound = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return notFound is null
+						? EventJoinRequestQueueResult.Unknown()
+						: EventJoinRequestQueueResult.NotFound(notFound);
+
+				case HttpStatusCode.Unauthorized:
+					return EventJoinRequestQueueResult.Unauthorized();
+
+				default:
+					return EventJoinRequestQueueResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return EventJoinRequestQueueResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return EventJoinRequestQueueResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return EventJoinRequestQueueResult.Unknown();
+		}
+	}
+
+	public Task<ResolveJoinRequestResult> AcceptEventJoinRequestAsync(
+		Guid eventId,
+		Guid requestId,
+		CancellationToken cancellationToken)
+	{
+		return ResolveEventJoinRequestAsync(
+			eventId,
+			requestId,
+			"accept",
+			EventJoinRequestStatus.Accepted,
+			cancellationToken);
+	}
+
+	public Task<ResolveJoinRequestResult> RejectEventJoinRequestAsync(
+		Guid eventId,
+		Guid requestId,
+		CancellationToken cancellationToken)
+	{
+		return ResolveEventJoinRequestAsync(
+			eventId,
+			requestId,
+			"reject",
+			EventJoinRequestStatus.Rejected,
+			cancellationToken);
+	}
 	#endregion
 
 	#region Private methods
@@ -375,6 +493,109 @@ public class ApiService: IApiService
 			|| string.IsNullOrWhiteSpace(item.Sport.Name)
 			|| item.CurrentUserRequestStatus is { } status
 				&& !Enum.IsDefined(status);
+	}
+
+	private static bool IsInvalidOrganizedEvent(OrganizedEventResponse item)
+	{
+		return item.EventId == Guid.Empty
+			|| string.IsNullOrWhiteSpace(item.Title)
+			|| item.Venue is null
+			|| item.Venue.Id <= 0
+			|| string.IsNullOrWhiteSpace(item.Venue.Name)
+			|| item.Sport is null
+			|| item.Sport.Id <= 0
+			|| string.IsNullOrWhiteSpace(item.Sport.Name)
+			|| item.ParticipantCount < 1
+			|| item.ParticipantCount > item.ParticipantLimit
+			|| item.PendingRequestCount < 0;
+	}
+
+	private static bool IsInvalidRequestedEvent(RequestedEventResponse item)
+	{
+		return item.EventId == Guid.Empty
+			|| item.JoinRequestId == Guid.Empty
+			|| string.IsNullOrWhiteSpace(item.Title)
+			|| item.Venue is null
+			|| item.Venue.Id <= 0
+			|| string.IsNullOrWhiteSpace(item.Venue.Name)
+			|| item.Sport is null
+			|| item.Sport.Id <= 0
+			|| string.IsNullOrWhiteSpace(item.Sport.Name)
+			|| item.ParticipantCount < 1
+			|| item.ParticipantCount > item.ParticipantLimit
+			|| !Enum.IsDefined(item.Status);
+	}
+
+	private static bool IsInvalidJoinRequestQueueItem(
+		EventJoinRequestQueueItemResponse item)
+	{
+		return item.RequestId == Guid.Empty
+			|| string.IsNullOrWhiteSpace(item.RequesterDisplayKey)
+			|| !Enum.IsDefined(item.Status);
+	}
+
+	private async Task<ResolveJoinRequestResult> ResolveEventJoinRequestAsync(
+		Guid eventId,
+		Guid requestId,
+		string action,
+		EventJoinRequestStatus expectedStatus,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.PostAsync(
+				$"/api/events/{eventId:D}/join-requests/{requestId:D}/{action}",
+				content: null,
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+					var joinRequest = await response.Content.ReadFromJsonAsync<JoinRequestResponse>(
+						JsonOptions,
+						cancellationToken);
+					return joinRequest is null
+						|| joinRequest.EventId != eventId
+						|| joinRequest.RequestId != requestId
+						|| joinRequest.Status != expectedStatus
+						? ResolveJoinRequestResult.Unknown()
+						: ResolveJoinRequestResult.Success(joinRequest);
+
+				case HttpStatusCode.NotFound:
+					var notFound = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return notFound is null
+						? ResolveJoinRequestResult.Unknown()
+						: ResolveJoinRequestResult.NotFound(notFound);
+
+				case HttpStatusCode.Conflict:
+					var conflict = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return conflict is null
+						? ResolveJoinRequestResult.Unknown()
+						: ResolveJoinRequestResult.Conflict(conflict);
+
+				case HttpStatusCode.Unauthorized:
+					return ResolveJoinRequestResult.Unauthorized();
+
+				default:
+					return ResolveJoinRequestResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return ResolveJoinRequestResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return ResolveJoinRequestResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return ResolveJoinRequestResult.Unknown();
+		}
 	}
 
 	private async Task<AuthResult> PostAuthAsync<TRequest>(string path, TRequest request, CancellationToken cancellationToken)

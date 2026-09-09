@@ -1,0 +1,515 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="ChoNaBojo.App.Views.MyEventsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:materialSymbols="clr-namespace:UraniumUI.Icons.MaterialSymbols;assembly=UraniumUI.Icons.MaterialSymbols"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
+    x:DataType="viewModels:MyEventsViewModel"
+    Title="My events"
+    BackgroundColor="{StaticResource BackgroundColor}">
+
+    <Grid>
+        <RefreshView
+            Command="{Binding RefreshCommand}"
+            IsRefreshing="{Binding IsRefreshing, Mode=TwoWay}"
+            IsVisible="{Binding IsListVisible}">
+            <ScrollView>
+                <VerticalStackLayout Margin="16" Spacing="24">
+                    <VerticalStackLayout
+                        Spacing="16"
+                        IsVisible="{Binding HasOrganizedEvents}">
+                        <Label
+                            Style="{StaticResource TitleStyle}"
+                            Text="Organizing" />
+
+                        <VerticalStackLayout
+                            Spacing="16"
+                            BindableLayout.ItemsSource="{Binding OrganizedEvents}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:OrganizedEventViewData">
+                                    <Border
+                                        Padding="16"
+                                        BackgroundColor="{StaticResource SurfaceColor}"
+                                        Opacity="{Binding CardOpacity}"
+                                        Shadow="{StaticResource CardShadow}"
+                                        Stroke="{StaticResource DividerColor}"
+                                        StrokeShape="RoundRectangle 16"
+                                        SemanticProperties.Description="{Binding SemanticDescription}">
+                                        <VerticalStackLayout Spacing="8">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <Label
+                                                    Grid.Column="0"
+                                                    Style="{StaticResource TitleStyle}"
+                                                    Text="{Binding Title}" />
+                                                <Border
+                                                    Grid.Column="1"
+                                                    Padding="8,4"
+                                                    BackgroundColor="{StaticResource SurfaceColor}"
+                                                    Stroke="{StaticResource DividerColor}"
+                                                    StrokeShape="RoundRectangle 16">
+                                                    <Label
+                                                        Style="{StaticResource LabelStyle}"
+                                                        Text="{Binding StateLabel}" />
+                                                </Border>
+                                            </Grid>
+
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding SportName}" />
+                                            <Label
+                                                Style="{StaticResource BodyStyle}"
+                                                Text="{Binding VenueName}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding VenueAddress}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding StartsAtDisplay, StringFormat='Starts {0}'}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding EstimatedEndsAtDisplay, StringFormat='Ends {0}'}" />
+
+                                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                                                <Label
+                                                    Grid.Column="0"
+                                                    FontFamily="MaterialOutlined"
+                                                    FontSize="24"
+                                                    Text="{x:Static materialSymbols:MaterialOutlined.Group}"
+                                                    TextColor="{StaticResource SecondaryTextColor}"
+                                                    VerticalOptions="Center"
+                                                    AutomationProperties.IsInAccessibleTree="False" />
+                                                <Label
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource LabelStyle}"
+                                                    Text="{Binding ParticipantDisplay}"
+                                                    VerticalOptions="Center">
+                                                    <Label.Triggers>
+                                                        <DataTrigger
+                                                            TargetType="Label"
+                                                            Binding="{Binding IsFull}"
+                                                            Value="True">
+                                                            <Setter
+                                                                Property="TextColor"
+                                                                Value="{StaticResource ErrorColor}" />
+                                                        </DataTrigger>
+                                                    </Label.Triggers>
+                                                </Label>
+                                                <Border
+                                                    Grid.Column="2"
+                                                    Padding="8,4"
+                                                    HorizontalOptions="End"
+                                                    BackgroundColor="{StaticResource SurfaceColor}"
+                                                    Stroke="{StaticResource PrimaryColor}"
+                                                    StrokeShape="RoundRectangle 16">
+                                                    <Label
+                                                        Style="{StaticResource LabelStyle}"
+                                                        Text="{Binding PendingRequestDisplay}"
+                                                        TextColor="{StaticResource PrimaryColor}" />
+                                                </Border>
+                                            </Grid>
+
+                                            <Button
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Text="{Binding OpenRequestsLabel}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=OpenRequestsCommand}"
+                                                CommandParameter="{Binding .}"
+                                                SemanticProperties.Description="{Binding Title, StringFormat='Open join requests for {0}'}" />
+                                        </VerticalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        Spacing="8"
+                        IsVisible="{Binding ShowNoOrganizedEvents}">
+                        <Label
+                            Style="{StaticResource TitleStyle}"
+                            Text="Organizing" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            Text="You are not organizing any events yet." />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        Spacing="16"
+                        IsVisible="{Binding HasRequestedEvents}">
+                        <Label
+                            Style="{StaticResource TitleStyle}"
+                            Text="My requests" />
+
+                        <VerticalStackLayout
+                            Spacing="16"
+                            BindableLayout.ItemsSource="{Binding RequestedEvents}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:RequestedEventViewData">
+                                    <Border
+                                        Padding="16"
+                                        BackgroundColor="{StaticResource SurfaceColor}"
+                                        Opacity="{Binding CardOpacity}"
+                                        Shadow="{StaticResource CardShadow}"
+                                        Stroke="{StaticResource DividerColor}"
+                                        StrokeShape="RoundRectangle 16"
+                                        SemanticProperties.Description="{Binding SemanticDescription}">
+                                        <VerticalStackLayout Spacing="8">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <Label
+                                                    Grid.Column="0"
+                                                    Style="{StaticResource TitleStyle}"
+                                                    Text="{Binding Title}" />
+                                                <Border
+                                                    Grid.Column="1"
+                                                    Padding="8,4"
+                                                    BackgroundColor="{StaticResource SurfaceColor}"
+                                                    Stroke="{StaticResource DividerColor}"
+                                                    StrokeShape="RoundRectangle 16">
+                                                    <Label
+                                                        Style="{StaticResource LabelStyle}"
+                                                        Text="{Binding StatusLabel}" />
+                                                </Border>
+                                            </Grid>
+
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding SportName}" />
+                                            <Label
+                                                Style="{StaticResource BodyStyle}"
+                                                Text="{Binding VenueName}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding VenueAddress}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding StartsAtDisplay, StringFormat='Starts {0}'}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding EstimatedEndsAtDisplay, StringFormat='Ends {0}'}" />
+
+                                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                                                <Label
+                                                    Grid.Column="0"
+                                                    FontFamily="MaterialOutlined"
+                                                    FontSize="24"
+                                                    Text="{x:Static materialSymbols:MaterialOutlined.Group}"
+                                                    TextColor="{StaticResource SecondaryTextColor}"
+                                                    VerticalOptions="Center"
+                                                    AutomationProperties.IsInAccessibleTree="False" />
+                                                <Label
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource LabelStyle}"
+                                                    Text="{Binding ParticipantDisplay}"
+                                                    VerticalOptions="Center">
+                                                    <Label.Triggers>
+                                                        <DataTrigger
+                                                            TargetType="Label"
+                                                            Binding="{Binding IsFull}"
+                                                            Value="True">
+                                                            <Setter
+                                                                Property="TextColor"
+                                                                Value="{StaticResource ErrorColor}" />
+                                                        </DataTrigger>
+                                                    </Label.Triggers>
+                                                </Label>
+                                                <Label
+                                                    Grid.Column="2"
+                                                    Style="{StaticResource LabelStyle}"
+                                                    HorizontalOptions="End"
+                                                    Text="Ended"
+                                                    IsVisible="{Binding IsEnded}"
+                                                    VerticalOptions="Center" />
+                                            </Grid>
+
+                                            <Border
+                                                Padding="16,8"
+                                                MinimumHeightRequest="48"
+                                                BackgroundColor="{StaticResource SurfaceColor}"
+                                                Stroke="{StaticResource DividerColor}"
+                                                StrokeShape="RoundRectangle 16"
+                                                IsVisible="{Binding IsContactLocked}"
+                                                SemanticProperties.Description="Contact details are locked">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                    <Label
+                                                        Grid.Column="0"
+                                                        FontFamily="MaterialOutlined"
+                                                        FontSize="24"
+                                                        Text="{x:Static materialSymbols:MaterialOutlined.Lock}"
+                                                        TextColor="{StaticResource SecondaryTextColor}"
+                                                        VerticalOptions="Center"
+                                                        AutomationProperties.IsInAccessibleTree="False" />
+                                                    <Label
+                                                        Grid.Column="1"
+                                                        Style="{StaticResource LabelStyle}"
+                                                        Text="Contact shared after acceptance"
+                                                        VerticalOptions="Center" />
+                                                </Grid>
+                                            </Border>
+                                        </VerticalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        Spacing="8"
+                        IsVisible="{Binding ShowNoRequestedEvents}">
+                        <Label
+                            Style="{StaticResource TitleStyle}"
+                            Text="My requests" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            Text="You have not requested to join an event yet." />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        Padding="16"
+                        Spacing="16"
+                        HorizontalOptions="Center"
+                        IsVisible="{Binding HasNoEvents}">
+                        <Label
+                            FontFamily="MaterialOutlined"
+                            FontSize="48"
+                            HorizontalTextAlignment="Center"
+                            Text="{x:Static materialSymbols:MaterialOutlined.Event_busy}"
+                            TextColor="{StaticResource SecondaryTextColor}"
+                            SemanticProperties.Description="No events" />
+                        <Label
+                            Style="{StaticResource TitleStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="No events or requests yet" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            HorizontalTextAlignment="Center"
+                            Text="Create an event or request to join one from the map." />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+        </RefreshView>
+
+        <ScrollView IsVisible="{Binding IsDetailVisible}">
+            <VerticalStackLayout Margin="16" Spacing="24">
+                <Button
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    HorizontalOptions="Start"
+                    Text="Back to my events"
+                    Command="{Binding CloseRequestsCommand}"
+                    SemanticProperties.Description="Return to the my events list" />
+
+                <Border
+                    Padding="16"
+                    BackgroundColor="{StaticResource SurfaceColor}"
+                    Opacity="{Binding SelectedOrganizedEvent.CardOpacity}"
+                    Shadow="{StaticResource CardShadow}"
+                    Stroke="{StaticResource DividerColor}"
+                    StrokeShape="RoundRectangle 16">
+                    <VerticalStackLayout Spacing="8">
+                        <Label
+                            Style="{StaticResource HeadlineStyle}"
+                            Text="{Binding SelectedOrganizedEvent.Title}" />
+                        <Label
+                            Style="{StaticResource BodyStyle}"
+                            Text="{Binding SelectedOrganizedEvent.VenueName}" />
+                        <Label
+                            Style="{StaticResource LabelStyle}"
+                            Text="{Binding SelectedOrganizedEvent.SportName}" />
+                        <Label
+                            Style="{StaticResource LabelStyle}"
+                            Text="{Binding SelectedOrganizedEvent.ParticipantDisplay, StringFormat='Participants {0}'}" />
+                        <Label
+                            Style="{StaticResource LabelStyle}"
+                            Text="{Binding SelectedOrganizedEvent.StateLabel}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label
+                    Style="{StaticResource TitleStyle}"
+                    Text="Join requests" />
+
+                <VerticalStackLayout
+                    Spacing="16"
+                    IsVisible="{Binding HasQueuedRequests}"
+                    BindableLayout.ItemsSource="{Binding RequestQueue}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:EventJoinRequestViewData">
+                            <Border
+                                Padding="16"
+                                BackgroundColor="{StaticResource SurfaceColor}"
+                                Shadow="{StaticResource CardShadow}"
+                                Stroke="{StaticResource DividerColor}"
+                                StrokeShape="RoundRectangle 16"
+                                SemanticProperties.Description="{Binding SemanticDescription}">
+                                <VerticalStackLayout Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <Label
+                                            Grid.Column="0"
+                                            Style="{StaticResource TitleStyle}"
+                                            Text="{Binding RequesterDisplayKey}" />
+                                        <Border
+                                            Grid.Column="1"
+                                            Padding="8,4"
+                                            BackgroundColor="{StaticResource SurfaceColor}"
+                                            Stroke="{StaticResource DividerColor}"
+                                            StrokeShape="RoundRectangle 16">
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding StatusLabel}" />
+                                        </Border>
+                                    </Grid>
+
+                                    <Label
+                                        Style="{StaticResource LabelStyle}"
+                                        Text="{Binding CreatedDisplay, StringFormat='Requested {0}'}" />
+
+                                    <Grid
+                                        ColumnDefinitions="*,*"
+                                        ColumnSpacing="8"
+                                        IsVisible="{Binding IsPending}">
+                                        <Button
+                                            Grid.Column="0"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Text="Accept"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=AcceptRequestCommand}"
+                                            CommandParameter="{Binding .}"
+                                            IsEnabled="{Binding CanAccept}"
+                                            SemanticProperties.Description="{Binding RequesterDisplayKey, StringFormat='Accept {0}'}" />
+                                        <Button
+                                            Grid.Column="1"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Text="Reject"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=RejectRequestCommand}"
+                                            CommandParameter="{Binding .}"
+                                            IsEnabled="{Binding CanReject}"
+                                            SemanticProperties.Description="{Binding RequesterDisplayKey, StringFormat='Reject {0}'}" />
+                                    </Grid>
+
+                                    <Border
+                                        Padding="16,8"
+                                        MinimumHeightRequest="48"
+                                        BackgroundColor="{StaticResource SurfaceColor}"
+                                        Stroke="{StaticResource DividerColor}"
+                                        StrokeShape="RoundRectangle 16"
+                                        IsVisible="{Binding IsContactLocked}"
+                                        SemanticProperties.Description="Contact details are locked">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                            <Label
+                                                Grid.Column="0"
+                                                FontFamily="MaterialOutlined"
+                                                FontSize="24"
+                                                Text="{x:Static materialSymbols:MaterialOutlined.Lock}"
+                                                TextColor="{StaticResource SecondaryTextColor}"
+                                                VerticalOptions="Center"
+                                                AutomationProperties.IsInAccessibleTree="False" />
+                                            <Label
+                                                Grid.Column="1"
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="Contact shared after acceptance"
+                                                VerticalOptions="Center" />
+                                        </Grid>
+                                    </Border>
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout
+                    Spacing="16"
+                    HorizontalOptions="Center"
+                    IsVisible="{Binding ShowQueueLoading}">
+                    <ActivityIndicator
+                        IsRunning="{Binding IsQueueLoading}"
+                        SemanticProperties.Description="Loading join requests" />
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        Text="Loading join requests..." />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout
+                    Spacing="16"
+                    HorizontalOptions="Center"
+                    IsVisible="{Binding HasNoQueuedRequests}">
+                    <Label
+                        FontFamily="MaterialOutlined"
+                        FontSize="48"
+                        HorizontalTextAlignment="Center"
+                        Text="{x:Static materialSymbols:MaterialOutlined.Inbox}"
+                        TextColor="{StaticResource SecondaryTextColor}"
+                        SemanticProperties.Description="No join requests" />
+                    <Label
+                        Style="{StaticResource TitleStyle}"
+                        HorizontalTextAlignment="Center"
+                        Text="No join requests yet" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout
+                    Spacing="16"
+                    HorizontalOptions="Center"
+                    IsVisible="{Binding ShowQueueError}">
+                    <Label
+                        FontFamily="MaterialOutlined"
+                        FontSize="48"
+                        HorizontalTextAlignment="Center"
+                        Text="{x:Static materialSymbols:MaterialOutlined.Error}"
+                        TextColor="{StaticResource ErrorColor}"
+                        SemanticProperties.Description="Error loading join requests" />
+                    <Label
+                        Style="{StaticResource BodyStyle}"
+                        HorizontalTextAlignment="Center"
+                        Text="{Binding QueueErrorMessage}" />
+                    <Button
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Text="Retry"
+                        Command="{Binding OpenRequestsCommand}"
+                        CommandParameter="{Binding SelectedOrganizedEvent}"
+                        SemanticProperties.Description="Retry loading join requests" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <Grid
+            BackgroundColor="{StaticResource BackgroundColor}"
+            IsVisible="{Binding ShowInitialLoading}">
+            <VerticalStackLayout
+                Spacing="16"
+                HorizontalOptions="Center"
+                VerticalOptions="Center">
+                <ActivityIndicator
+                    IsRunning="{Binding IsLoading}"
+                    SemanticProperties.Description="Loading your events" />
+                <Label
+                    Style="{StaticResource BodyStyle}"
+                    Text="Loading your events..." />
+            </VerticalStackLayout>
+        </Grid>
+
+        <Grid
+            Padding="16"
+            BackgroundColor="{StaticResource BackgroundColor}"
+            IsVisible="{Binding ShowListError}">
+            <VerticalStackLayout
+                Spacing="16"
+                HorizontalOptions="Center"
+                VerticalOptions="Center">
+                <Label
+                    FontFamily="MaterialOutlined"
+                    FontSize="48"
+                    HorizontalTextAlignment="Center"
+                    Text="{x:Static materialSymbols:MaterialOutlined.Error}"
+                    TextColor="{StaticResource ErrorColor}"
+                    SemanticProperties.Description="Error loading your events" />
+                <Label
+                    Style="{StaticResource BodyStyle}"
+                    HorizontalTextAlignment="Center"
+                    Text="{Binding ListErrorMessage}" />
+                <Button
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Text="Retry"
+                    Command="{Binding RefreshCommand}"
+                    SemanticProperties.Description="Retry loading your events" />
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+
+</ContentPage>

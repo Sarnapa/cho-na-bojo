@@ -36,6 +36,12 @@ namespace ChoNaBojo.App
 					handlers.AddHandler<Views.Maps.VenueMap, Views.Maps.VenueMapHandler>();
 #if ANDROID
 					handlers.AddHandler<Views.Maps.VenuePin, Platforms.Android.VenuePinHandler>();
+
+					// Replaces UraniumUI's StatefulButtonHandler, whose DisconnectHandler
+					// throws "PlatformView cannot be null here" during page teardown and
+					// aborts Shell's PopModalAsync pipeline. Must be registered after
+					// UseUraniumUI() so it wins the Button mapping.
+					handlers.AddHandler<Button, Platforms.Android.SafeStatefulButtonHandler>();
 #endif
 				})
 				.ConfigureFonts(fonts =>
@@ -89,6 +95,7 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<CreateEventPage>();
 			builder.Services.AddTransient<EventDetailPage>();
 			builder.Services.AddTransient<VenueEventsPage>();
+			builder.Services.AddTransient<MyEventsPage>();
 
 			builder.Services.AddTransient<LoginViewModel>();
 			builder.Services.AddTransient<RegisterViewModel>();
@@ -97,6 +104,7 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<CreateEventViewModel>();
 			builder.Services.AddTransient<EventDetailViewModel>();
 			builder.Services.AddTransient<AvailabilityFilterViewModel>();
+			builder.Services.AddTransient<MyEventsViewModel>();
 
 #if DEBUG
 			builder.Logging.AddDebug();

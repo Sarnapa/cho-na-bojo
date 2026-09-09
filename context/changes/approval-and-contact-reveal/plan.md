@@ -588,19 +588,19 @@ One new migration in Phase 2 adds the `UpdatedUtc`/`Status` transition check con
 
 #### Automated
 
-- [ ] 4.1 Solution builds
-- [ ] 4.2 Android app builds
-- [ ] 4.3 No hardcoded colors or off-grid spacing in the new XAML
+- [x] 4.1 Solution builds
+- [x] 4.2 Android app builds
+- [x] 4.3 No hardcoded colors or off-grid spacing in the new XAML
 
 #### Manual
 
-- [ ] 4.4 Two tabs render; map, venue sheet, and venue-events modal all still work
-- [ ] 4.5 Organizer sees an accurate pending badge and opens the request queue
-- [ ] 4.6 Accept increments the count; reject confirms first, then resolves the row
-- [ ] 4.7 Double-tapping Accept produces no duplicate action or error
-- [ ] 4.8 Participant sees correct statuses and the locked contact state
-- [ ] 4.9 Network loss mid-accept produces a retryable message, not a crash or wrong state
-- [ ] 4.10 An empty account sees the empty state
+- [x] 4.4 Two tabs render; map, venue sheet, and venue-events modal all still work
+- [x] 4.5 Organizer sees an accurate pending badge and opens the request queue
+- [x] 4.6 Accept increments the count; reject confirms first, then resolves the row
+- [x] 4.7 Double-tapping Accept produces no duplicate action or error
+- [x] 4.8 Participant sees correct statuses and the locked contact state
+- [x] 4.9 Network loss mid-accept produces a retryable message, not a crash or wrong state
+- [x] 4.10 An empty account sees the empty state
 
 ### Phase 5: Client — contact reveal
 

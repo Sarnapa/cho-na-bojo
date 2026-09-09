@@ -156,6 +156,194 @@ public sealed record JoinEventResult
 }
 #endregion
 
+#region MyEventsResultStatus
+public enum MyEventsResultStatus
+{
+	Success,
+	Unauthorized,
+	Network,
+	Unknown
+}
+#endregion
+
+#region MyEventsResult
+/// <summary>
+/// Typed client outcome for <c>GET /api/me/events</c>.
+/// </summary>
+public sealed record MyEventsResult
+{
+	#region Properties
+	public MyEventsResultStatus Status { get; }
+	public MyEventsResponse? Response { get; }
+	#endregion
+
+	#region Constructors
+	private MyEventsResult(MyEventsResultStatus status, MyEventsResponse? response)
+	{
+		Status = status;
+		Response = response;
+	}
+	#endregion
+
+	#region Public methods
+	public static MyEventsResult Success(MyEventsResponse response)
+	{
+		return new(MyEventsResultStatus.Success, response);
+	}
+
+	public static MyEventsResult Unauthorized()
+	{
+		return new(MyEventsResultStatus.Unauthorized, null);
+	}
+
+	public static MyEventsResult Network()
+	{
+		return new(MyEventsResultStatus.Network, null);
+	}
+
+	public static MyEventsResult Unknown()
+	{
+		return new(MyEventsResultStatus.Unknown, null);
+	}
+	#endregion
+}
+#endregion
+
+#region EventJoinRequestQueueResultStatus
+public enum EventJoinRequestQueueResultStatus
+{
+	Success,
+	NotFound,
+	Unauthorized,
+	Network,
+	Unknown
+}
+#endregion
+
+#region EventJoinRequestQueueResult
+/// <summary>
+/// Typed client outcome for <c>GET /api/events/{eventId}/join-requests</c>.
+/// </summary>
+public sealed record EventJoinRequestQueueResult
+{
+	#region Properties
+	public EventJoinRequestQueueResultStatus Status { get; }
+	public IReadOnlyList<EventJoinRequestQueueItemResponse>? Requests { get; }
+	public EventConflictResponse? NotFoundResponse { get; }
+	#endregion
+
+	#region Constructors
+	private EventJoinRequestQueueResult(
+		EventJoinRequestQueueResultStatus status,
+		IReadOnlyList<EventJoinRequestQueueItemResponse>? requests,
+		EventConflictResponse? notFoundResponse)
+	{
+		Status = status;
+		Requests = requests;
+		NotFoundResponse = notFoundResponse;
+	}
+	#endregion
+
+	#region Public methods
+	public static EventJoinRequestQueueResult Success(
+		IReadOnlyList<EventJoinRequestQueueItemResponse> requests)
+	{
+		return new(EventJoinRequestQueueResultStatus.Success, requests, null);
+	}
+
+	public static EventJoinRequestQueueResult NotFound(EventConflictResponse conflict)
+	{
+		return new(EventJoinRequestQueueResultStatus.NotFound, null, conflict);
+	}
+
+	public static EventJoinRequestQueueResult Unauthorized()
+	{
+		return new(EventJoinRequestQueueResultStatus.Unauthorized, null, null);
+	}
+
+	public static EventJoinRequestQueueResult Network()
+	{
+		return new(EventJoinRequestQueueResultStatus.Network, null, null);
+	}
+
+	public static EventJoinRequestQueueResult Unknown()
+	{
+		return new(EventJoinRequestQueueResultStatus.Unknown, null, null);
+	}
+	#endregion
+}
+#endregion
+
+#region ResolveJoinRequestResultStatus
+public enum ResolveJoinRequestResultStatus
+{
+	Success,
+	Conflict,
+	NotFound,
+	Unauthorized,
+	Network,
+	Unknown
+}
+#endregion
+
+#region ResolveJoinRequestResult
+/// <summary>
+/// Typed client outcome shared by organizer accept and reject calls.
+/// </summary>
+public sealed record ResolveJoinRequestResult
+{
+	#region Properties
+	public ResolveJoinRequestResultStatus Status { get; }
+	public JoinRequestResponse? Response { get; }
+	public EventConflictResponse? ConflictResponse { get; }
+	#endregion
+
+	#region Constructors
+	private ResolveJoinRequestResult(
+		ResolveJoinRequestResultStatus status,
+		JoinRequestResponse? response,
+		EventConflictResponse? conflictResponse)
+	{
+		Status = status;
+		Response = response;
+		ConflictResponse = conflictResponse;
+	}
+	#endregion
+
+	#region Public methods
+	public static ResolveJoinRequestResult Success(JoinRequestResponse response)
+	{
+		return new(ResolveJoinRequestResultStatus.Success, response, null);
+	}
+
+	public static ResolveJoinRequestResult Conflict(EventConflictResponse conflict)
+	{
+		return new(ResolveJoinRequestResultStatus.Conflict, null, conflict);
+	}
+
+	public static ResolveJoinRequestResult NotFound(EventConflictResponse conflict)
+	{
+		return new(ResolveJoinRequestResultStatus.NotFound, null, conflict);
+	}
+
+	public static ResolveJoinRequestResult Unauthorized()
+	{
+		return new(ResolveJoinRequestResultStatus.Unauthorized, null, null);
+	}
+
+	public static ResolveJoinRequestResult Network()
+	{
+		return new(ResolveJoinRequestResultStatus.Network, null, null);
+	}
+
+	public static ResolveJoinRequestResult Unknown()
+	{
+		return new(ResolveJoinRequestResultStatus.Unknown, null, null);
+	}
+	#endregion
+}
+#endregion
+
 #region CreateEventResult
 /// <summary>
 /// Typed client outcome for <c>POST /api/events</c>. Transport details never escape to the

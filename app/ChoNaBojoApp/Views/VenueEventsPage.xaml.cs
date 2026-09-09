@@ -71,7 +71,14 @@ public partial class VenueEventsPage : ContentPage
 	#region Event handlers
 	private async void OnCloseClicked(object? sender, EventArgs e)
 	{
-		await CompleteAndCloseAsync();
+		try
+		{
+			await CompleteAndCloseAsync();
+		}
+		catch (Exception ex)
+		{
+			ReportHandlerFailure(nameof(OnCloseClicked), ex);
+		}
 	}
 
 	private void OnFilterButtonLoaded(object? sender, EventArgs e)
@@ -141,6 +148,10 @@ public partial class VenueEventsPage : ContentPage
 				await _viewModel.ReloadSelectedVenueEventsAsync(createdVenueId);
 			}
 		}
+		catch (Exception ex)
+		{
+			ReportHandlerFailure(nameof(OnCreateEventRequested), ex);
+		}
 		finally
 		{
 			_isOpeningChildModal = false;
@@ -162,17 +173,35 @@ public partial class VenueEventsPage : ContentPage
 		object? sender,
 		EventAvailabilityWindow window)
 	{
-		if (_viewModel is not null)
+		if (_viewModel is null)
+		{
+			return;
+		}
+
+		try
 		{
 			await _viewModel.ApplyCustomAvailabilityAsync(window);
+		}
+		catch (Exception ex)
+		{
+			ReportHandlerFailure(nameof(OnAvailabilityApplyRequested), ex);
 		}
 	}
 
 	private async void OnAvailabilityClearRequested(object? sender, EventArgs e)
 	{
-		if (_viewModel is not null)
+		if (_viewModel is null)
+		{
+			return;
+		}
+
+		try
 		{
 			await _viewModel.ClearAvailabilityAsync();
+		}
+		catch (Exception ex)
+		{
+			ReportHandlerFailure(nameof(OnAvailabilityClearRequested), ex);
 		}
 	}
 
@@ -221,11 +250,20 @@ public partial class VenueEventsPage : ContentPage
 		object? sender,
 		PropertyChangedEventArgs e)
 	{
-		if (e.PropertyName == nameof(MapViewModel.IsVenueSheetVisible)
-			&& _viewModel?.IsVenueSheetVisible == false
-			&& _completion is not null)
+		if (e.PropertyName != nameof(MapViewModel.IsVenueSheetVisible)
+			|| _viewModel?.IsVenueSheetVisible != false
+			|| _completion is null)
+		{
+			return;
+		}
+
+		try
 		{
 			await CompleteAndCloseAsync();
+		}
+		catch (Exception ex)
+		{
+			ReportHandlerFailure(nameof(OnViewModelPropertyChanged), ex);
 		}
 	}
 
@@ -255,6 +293,16 @@ public partial class VenueEventsPage : ContentPage
 		_completion = null;
 		_viewModel?.DismissVenueSheetCommand.Execute(null);
 		completion.TrySetResult();
+	}
+
+	// async void event handlers post their exceptions straight to the Android sync context,
+	// where they become fatal. Modal teardown can legitimately throw from third-party
+	// handlers (UraniumUI StatefulButtonHandler.DisconnectHandler re-enters the property
+	// mapper after PlatformView is already null), so failures are logged, not propagated.
+	private static void ReportHandlerFailure(string handlerName, Exception ex)
+	{
+		System.Diagnostics.Debug.WriteLine(
+			$"VenueEventsPage.{handlerName} failed: {ex}");
 	}
 	#endregion
 }

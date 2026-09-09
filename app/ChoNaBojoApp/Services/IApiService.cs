@@ -36,4 +36,20 @@ public interface IApiService
   Task<JoinEventResult> RequestToJoinEventAsync(
 	  Guid eventId,
 	  CancellationToken cancellationToken);
+
+  Task<MyEventsResult> GetMyEventsAsync(CancellationToken cancellationToken);
+
+  Task<EventJoinRequestQueueResult> GetEventJoinRequestsAsync(
+	  Guid eventId,
+	  CancellationToken cancellationToken);
+
+  Task<ResolveJoinRequestResult> AcceptEventJoinRequestAsync(
+	  Guid eventId,
+	  Guid requestId,
+	  CancellationToken cancellationToken);
+
+  Task<ResolveJoinRequestResult> RejectEventJoinRequestAsync(
+	  Guid eventId,
+	  Guid requestId,
+	  CancellationToken cancellationToken);
 }
