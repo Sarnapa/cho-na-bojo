@@ -3,7 +3,7 @@ project: "ChoNaBojo"
 version: 1
 status: draft
 created: 2026-06-13
-updated: 2026-09-09
+updated: 2026-09-10
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -204,6 +204,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **S-02: A logged-in user opens the map screen centered on their location (with a manual-address fallback when permissions are denied), sees venues from the database within the current viewport, pans/zooms (the viewport is the proximity boundary per Business Logic), and optionally enables a sport filter populated from the `Sports` lookup — by default, all sports are visible.** — Archived 2026-09-02 → `context/archive/2026-08-24-map-venue-discovery/`. Lesson: —.
 - **S-03: A logged-in user opens "Create event" from the map/venue list: picks a sport from those that the chosen venue supports (read from `VenueSports`), date, estimated end time, participant limit (≥ 2, ≤ 300 per Polish gathering rules), and optionally toggles auto-accept; the event is saved (with a foreign key to `Sports`) and visible at the venue.** — Archived 2026-09-06 → `context/archive/2026-09-02-event-creation/`. Lesson: —.
 - **S-04: The user picks a venue on the map and sees a list of current/upcoming events (only non-expired per FR-007 — past estimated end times are hidden on read), with a fill counter (taken vs. limit), optionally filtered by time availability; they can send a request to join a chosen event.** — Archived 2026-09-07 → `context/archive/2026-09-06-event-listing-and-join-request/`. Lesson: —.
+- **S-05: The organizer sees a list of pending join requests for their event and can accept or reject each one; on acceptance, both parties (organizer + participant) see each other's contacts (the ones the other side opted to share in S-01). In this slice, notification is in-app indicator/pull (push arrives in S-06 — does not block hypothesis validation).** — Archived 2026-09-10 → `context/archive/2026-09-07-approval-and-contact-reveal/`. Lesson: —.
 
 ## Parked
 

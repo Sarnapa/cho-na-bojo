@@ -1,10 +1,10 @@
 ---
 change_id: approval-and-contact-reveal
 title: Approval and contact reveal
-status: impl_reviewed
+status: archived
 created: 2026-09-07
 updated: 2026-09-10
-archived_at: null
+archived_at: 2026-09-10T13:01:47Z
 ---
 
 ## Notes

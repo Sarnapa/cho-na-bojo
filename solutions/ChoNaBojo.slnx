@@ -81,6 +81,15 @@
     <File Path="../context/archive/2026-09-06-event-listing-and-join-request/reviews/impl-review.md" />
     <File Path="../context/archive/2026-09-06-event-listing-and-join-request/reviews/plan-review.md" />
   </Folder>
+  <Folder Name="/context/archive/2026-09-07-approval-and-contact-reveal/">
+    <File Path="../context/archive/2026-09-07-approval-and-contact-reveal/change.md" />
+    <File Path="../context/archive/2026-09-07-approval-and-contact-reveal/plan-brief.md" />
+    <File Path="../context/archive/2026-09-07-approval-and-contact-reveal/plan.md" />
+  </Folder>
+  <Folder Name="/context/archive/2026-09-07-approval-and-contact-reveal/reviews/">
+    <File Path="../context/archive/2026-09-07-approval-and-contact-reveal/reviews/impl-review.md" />
+    <File Path="../context/archive/2026-09-07-approval-and-contact-reveal/reviews/plan-review.md" />
+  </Folder>
   <Folder Name="/context/archive/bootstrap-verification/">
     <File Path="../context/archive/bootstrap-verification/verification.md" />
   </Folder>
@@ -89,15 +98,6 @@
   </Folder>
   <Folder Name="/context/changes/">
     <File Path="../context/changes/README.md" />
-  </Folder>
-  <Folder Name="/context/changes/approval-and-contact-reveal/">
-    <File Path="../context/changes/approval-and-contact-reveal/change.md" />
-    <File Path="../context/changes/approval-and-contact-reveal/plan-brief.md" />
-    <File Path="../context/changes/approval-and-contact-reveal/plan.md" />
-  </Folder>
-  <Folder Name="/context/changes/approval-and-contact-reveal/reviews/">
-    <File Path="../context/changes/approval-and-contact-reveal/reviews/impl-review.md" />
-    <File Path="../context/changes/approval-and-contact-reveal/reviews/plan-review.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
