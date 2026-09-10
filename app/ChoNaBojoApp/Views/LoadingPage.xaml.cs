@@ -1,5 +1,6 @@
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Navigation;
+using ChoNaBojo.App.Services.Push;
 
 namespace ChoNaBojo.App.Views;
 
@@ -8,14 +9,19 @@ public partial class LoadingPage : ContentPage
 	#region Private fields
 	private readonly ISessionService _sessionService;
 	private readonly INavigationRootService _navigationRootService;
+	private readonly IPushRegistrationService _pushRegistrationService;
 	#endregion
 
 	#region Constructors
-	public LoadingPage(ISessionService sessionService, INavigationRootService navigationRootService)
+	public LoadingPage(
+		ISessionService sessionService,
+		INavigationRootService navigationRootService,
+		IPushRegistrationService pushRegistrationService)
 	{
 		InitializeComponent();
 		_sessionService = sessionService;
 		_navigationRootService = navigationRootService;
+		_pushRegistrationService = pushRegistrationService;
 		Loaded += OnLoaded;
 	}
 	#endregion
@@ -41,6 +47,7 @@ public partial class LoadingPage : ContentPage
 		if (_sessionService.IsAuthenticated)
 		{
 			_navigationRootService.SetAppRoot();
+			_ = _pushRegistrationService.SyncAsync(CancellationToken.None);
 		}
 		else
 		{

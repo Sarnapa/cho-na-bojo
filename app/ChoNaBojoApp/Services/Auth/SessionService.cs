@@ -1,3 +1,5 @@
+using ChoNaBojo.App.Services.Push;
+
 namespace ChoNaBojo.App.Services.Auth;
 
 /// <summary>
@@ -11,15 +13,20 @@ public class SessionService: ISessionService
 	#region Private fields
 	private readonly ITokenStore _tokenStore;
 	private readonly IAuthTokenClient _authTokenClient;
+	private readonly IPushRegistrationStore _pushRegistrationStore;
 	private readonly SemaphoreSlim _signOutLock = new(1, 1);
 	private bool _signedOut = true;
 	#endregion
 
 	#region Constructors
-	public SessionService(ITokenStore tokenStore, IAuthTokenClient authTokenClient)
+	public SessionService(
+		ITokenStore tokenStore,
+		IAuthTokenClient authTokenClient,
+		IPushRegistrationStore pushRegistrationStore)
 	{
 		_tokenStore = tokenStore;
 		_authTokenClient = authTokenClient;
+		_pushRegistrationStore = pushRegistrationStore;
 	}
 	#endregion
 
@@ -90,6 +97,7 @@ public class SessionService: ISessionService
 	public async Task SignOutAsync(bool revokeServer)
 	{
 		string? refreshTokenToRevoke = null;
+		string? deviceRegistrationId = null;
 
 		await _signOutLock.WaitAsync();
 		try
@@ -102,8 +110,10 @@ public class SessionService: ISessionService
 
 			_signedOut = true;
 			refreshTokenToRevoke = Current?.RefreshToken;
+			deviceRegistrationId = _pushRegistrationStore.GetLatestRegistrationId();
 			Current = null;
 			await _tokenStore.ClearAsync();
+			_pushRegistrationStore.ClearUploadedState();
 		}
 		finally
 		{
@@ -114,7 +124,10 @@ public class SessionService: ISessionService
 		{
 			try
 			{
-				await _authTokenClient.LogoutAsync(refreshTokenToRevoke, CancellationToken.None);
+				await _authTokenClient.LogoutAsync(
+					refreshTokenToRevoke,
+					deviceRegistrationId,
+					CancellationToken.None);
 			}
 			catch
 			{

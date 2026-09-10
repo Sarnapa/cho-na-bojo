@@ -1,5 +1,6 @@
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Events;
+using ChoNaBojo.App.Services.Push;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.Contracts.DTOs;
 
@@ -19,6 +20,10 @@ public interface IApiService
   Task<AuthResult> LoginAsync(LoginRequest request, CancellationToken cancellationToken);
 
   Task<CurrentUserResult> GetCurrentUserAsync(CancellationToken cancellationToken);
+
+  Task<RegisterPushInstallationResult> RegisterPushInstallationAsync(
+	  RegisterPushInstallationRequest request,
+	  CancellationToken cancellationToken);
 
   Task<VenueCatalogResult> GetVenuesAsync(CancellationToken cancellationToken);
 

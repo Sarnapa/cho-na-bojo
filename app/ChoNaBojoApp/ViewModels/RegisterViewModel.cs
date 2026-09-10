@@ -4,6 +4,7 @@ using ChoNaBojo.App.Services;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Navigation;
+using ChoNaBojo.App.Services.Push;
 using ChoNaBojo.Contracts.DTOs;
 using ChoNaBojo.Contracts.Enums;
 using ChoNaBojo.Validation;
@@ -22,6 +23,7 @@ public partial class RegisterViewModel : ViewModelBase
 	private readonly ISessionService _sessionService;
 	private readonly INavigationRootService _navigationRootService;
 	private readonly IFeedbackService _feedbackService;
+	private readonly IPushRegistrationService _pushRegistrationService;
 	#endregion
 
 	#region Observable properties
@@ -109,12 +111,18 @@ public partial class RegisterViewModel : ViewModelBase
 	#endregion
 
 	#region Constructors
-	public RegisterViewModel(IApiService apiService, ISessionService sessionService, INavigationRootService navigationRootService, IFeedbackService feedbackService)
+	public RegisterViewModel(
+		IApiService apiService,
+		ISessionService sessionService,
+		INavigationRootService navigationRootService,
+		IFeedbackService feedbackService,
+		IPushRegistrationService pushRegistrationService)
 	{
 		_apiService = apiService;
 		_sessionService = sessionService;
 		_navigationRootService = navigationRootService;
 		_feedbackService = feedbackService;
+		_pushRegistrationService = pushRegistrationService;
 	}
 	#endregion
 
@@ -156,6 +164,7 @@ public partial class RegisterViewModel : ViewModelBase
 						result.Response.RefreshToken,
 						result.Response.AccessTokenExpiresUtc);
 					await _sessionService.SetAsync(session);
+					_ = _pushRegistrationService.SyncAsync(CancellationToken.None);
 					navigateToApp = true;
 					break;
 

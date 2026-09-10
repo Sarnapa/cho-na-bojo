@@ -830,18 +830,18 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [ ] 3.1 Solution builds for both TFMs
-- [ ] 3.2 Android build succeeds
+- [x] 3.1 Solution builds for both TFMs
+- [x] 3.2 Android build succeeds
 
 #### Manual
 
-- [ ] 3.3 Fresh install and login creates exactly one installation row
-- [ ] 3.4 Relaunch creates no duplicate row and refreshes LastSeenUtc
-- [ ] 3.5 Online logout sets DisabledUtc
-- [ ] 3.6 Second account on the same device reassigns and re-enables the row
-- [ ] 3.7 Offline logout completes promptly without hanging and leaves the row active until re-claimed
-- [ ] 3.8 Refresh-token expiry force sign-out leaves the row knowingly active
-- [ ] 3.9 Same account on two devices yields two active rows
+- [x] 3.3 Fresh install and login creates exactly one installation row
+- [x] 3.4 Relaunch creates no duplicate row and refreshes LastSeenUtc
+- [x] 3.5 Online logout sets DisabledUtc
+- [x] 3.6 Second account on the same device reassigns and re-enables the row
+- [x] 3.7 Offline logout completes promptly without hanging and leaves the row active until re-claimed
+- [x] 3.8 Refresh-token expiry force sign-out leaves the row knowingly active
+- [x] 3.9 Same account on two devices yields two active rows
 
 ### Phase 4: Transactional Outbox & Intent Creation
 

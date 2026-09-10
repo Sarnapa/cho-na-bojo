@@ -66,11 +66,17 @@ public class AuthTokenClient : IAuthTokenClient
 		}
 	}
 
-	public async Task LogoutAsync(string refreshToken, CancellationToken cancellationToken)
+	public async Task LogoutAsync(
+		string refreshToken,
+		string? deviceRegistrationId,
+		CancellationToken cancellationToken)
 	{
 		try
 		{
-			await _httpClient.PostAsJsonAsync("/auth/logout", new RefreshRequest(refreshToken), cancellationToken);
+			await _httpClient.PostAsJsonAsync(
+				"/auth/logout",
+				new LogoutRequest(refreshToken, deviceRegistrationId),
+				cancellationToken);
 		}
 		catch (HttpRequestException)
 		{

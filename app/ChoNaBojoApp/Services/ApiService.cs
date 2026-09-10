@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text.Json;
 using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Events;
+using ChoNaBojo.App.Services.Push;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.Contracts.DTOs;
 using ChoNaBojo.Contracts.Enums;
@@ -81,6 +82,56 @@ public class ApiService: IApiService
 			// Malformed body, an HTML error page from a proxy, or contract drift — must map to a
 			// typed result rather than escaping into the caller's command.
 			return CurrentUserResult.Unknown();
+		}
+	}
+
+	public async Task<RegisterPushInstallationResult> RegisterPushInstallationAsync(
+		RegisterPushInstallationRequest request,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.PutAsJsonAsync(
+				"/api/me/push-installations",
+				request,
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+					var body = await response.Content.ReadFromJsonAsync<RegisterPushInstallationResponse>(
+						JsonOptions,
+						cancellationToken);
+					return body is null || body.InstallationId == Guid.Empty
+						? RegisterPushInstallationResult.Unknown()
+						: RegisterPushInstallationResult.Success(body);
+
+				case HttpStatusCode.BadRequest:
+					var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>(
+						JsonOptions,
+						cancellationToken);
+					return problem?.Errors is not { } validationErrors
+						? RegisterPushInstallationResult.Unknown()
+						: RegisterPushInstallationResult.ValidationFailed(validationErrors);
+
+				case HttpStatusCode.Unauthorized:
+					return RegisterPushInstallationResult.Unauthorized();
+
+				default:
+					return RegisterPushInstallationResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return RegisterPushInstallationResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return RegisterPushInstallationResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return RegisterPushInstallationResult.Unknown();
 		}
 	}
 

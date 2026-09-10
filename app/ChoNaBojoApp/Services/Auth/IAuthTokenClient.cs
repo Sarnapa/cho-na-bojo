@@ -65,6 +65,9 @@ public interface IAuthTokenClient
 {
 	Task<RefreshOutcome> RefreshAsync(string refreshToken, CancellationToken cancellationToken);
 
-	Task LogoutAsync(string refreshToken, CancellationToken cancellationToken);
+	Task LogoutAsync(
+		string refreshToken,
+		string? deviceRegistrationId,
+		CancellationToken cancellationToken);
 }
 #endregion

@@ -1,7 +1,10 @@
 using Android.App;
 using Android.Content;
 using Android.Util;
+using ChoNaBojo.App.Services.Push;
 using Firebase.Messaging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Maui;
 
 namespace ChoNaBojo.App.Platforms.Android.Push;
 
@@ -16,6 +19,20 @@ public sealed class ChoNaBojoMessagingService: FirebaseMessagingService
 	#region Overrides
 	public override void OnRegistered(string installationId)
 	{
+		IServiceProvider? services = IPlatformApplication.Current?.Services;
+		IPushRegistrationStore registrationStore =
+			services?.GetService<IPushRegistrationStore>() ?? new PushRegistrationStore();
+		registrationStore.SetLatestRegistrationId(installationId);
+
+		IPushRegistrationService? registrationService =
+			services?.GetService<IPushRegistrationService>();
+		if (registrationService is not null)
+		{
+			_ = registrationService.OnRegistrationIdChangedAsync(
+				installationId,
+				CancellationToken.None);
+		}
+
 		Log.Info(LogTag, "Firebase registration identifier received (length {0}).", installationId.Length);
 	}
 

@@ -8,6 +8,7 @@ using ChoNaBojo.App.Services.Events;
 using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Geocoding;
 using ChoNaBojo.App.Services.Navigation;
+using ChoNaBojo.App.Services.Push;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.ViewModels;
 using ChoNaBojo.App.Views;
@@ -73,6 +74,13 @@ namespace ChoNaBojo.App
 			builder.Services.AddTransient<AuthenticatingHttpMessageHandler>();
 
 			builder.Services.AddSingleton<ITokenStore, TokenStore>();
+#if ANDROID
+			builder.Services.AddSingleton<IPushRegistrationStore, PushRegistrationStore>();
+			builder.Services.AddSingleton<IPushRegistrationService, PushRegistrationService>();
+#else
+			builder.Services.AddSingleton<IPushRegistrationStore, NoOpPushRegistrationStore>();
+			builder.Services.AddSingleton<IPushRegistrationService, NoOpPushRegistrationService>();
+#endif
 			builder.Services.AddSingleton<ISessionService, SessionService>();
 			builder.Services.AddSingleton<IAuthTokenClient, AuthTokenClient>();
 			builder.Services.AddSingleton<INavigationRootService, NavigationRootService>();
