@@ -1,7 +1,7 @@
 ---
 change_id: push-notifications
 title: Push notifications
-status: preparing
+status: planned
 created: 2026-09-10
 updated: 2026-09-10
 archived_at: null
