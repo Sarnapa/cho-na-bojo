@@ -6,13 +6,13 @@ Deliver FCM push notifications around the matchmaking loop: the organizer is not
 
 ## Current State Analysis
 
-**The domain triggers already exist and converge on one code path.** `TransitionJoinRequestAsync` (`server/Events/EventEndpoints.cs:641-810`) serves join, accept, and reject. It opens an explicit transaction, takes `SELECT 1 FROM "SportsEvents" ... FOR UPDATE`, validates state and capacity, mutates the request, and ends with a single `SaveChangesAsync` + `CommitAsync` (`server/Events/EventEndpoints.cs:787-788`). Auto-accept flows through the same path via `effectiveTargetStatus` (`server/Events/EventEndpoints.cs:753-757`). This is the outbox insertion point.
+**The domain triggers already exist and converge on one code path.** `TransitionJoinRequestAsync` (`server/Events/EventEndpoints.cs:641-810`) serves join, accept, and reject. It opens an explicit transaction, takes `SELECT 1 FROM "SportsEvents" ... FOR UPDATE`, validates state and capacity, mutates the request, and ends with a single `SaveChangesAsync` + `CommitAsync` (`server/Events/EventEndpoints.cs:792-793`). Auto-accept flows through the same path via `effectiveTargetStatus` (`server/Events/EventEndpoints.cs:753-757`). This is the outbox insertion point.
 
-**Three early-return paths commit without a state change** and must not enqueue anything:
+**Three early-return paths return without a state change** and must not enqueue anything:
 
 - an existing request found before the transition (`server/Events/EventEndpoints.cs:317-321` and `:684-691`),
 - a resolution whose `Status` already equals `targetStatus` (`server/Events/EventEndpoints.cs:725-732`),
-- the unique-constraint recovery path that resolves to a pre-existing request (`server/Events/EventEndpoints.cs:800-825`).
+- the unique-constraint recovery path that **rolls back** (`server/Events/EventEndpoints.cs:799-821`, rollback at `:802`) and resolves to a pre-existing request.
 
 **Nothing push-related exists yet.** The server has no Firebase dependency (`server/server.csproj:1-27`) and no `PushInstallations`/outbox tables (`server/Data/ChoNaBojoContext.cs:9-70`). The app has no Firebase package (`app/ChoNaBojoApp/ChoNaBojoApp.csproj:69-78`), no `POST_NOTIFICATIONS` permission and no Firebase metadata (`app/ChoNaBojoApp/Platforms/Android/AndroidManifest.xml:1-14`), and a bare `MainActivity` with no `OnCreate`/`OnNewIntent` override (`app/ChoNaBojoApp/Platforms/Android/MainActivity.cs:1-10`).
 
@@ -20,9 +20,9 @@ Deliver FCM push notifications around the matchmaking loop: the organizer is not
 
 **Route prefix `/me` already exists** under the authenticated `/api` group: `MapGet("/me/events", ...)` (`server/Events/EventEndpoints.cs:49-50`), mapped through `apiGroup` in `server/Program.cs:126-129`. Push installation endpoints follow that existing prefix rather than introducing a new grouping concept.
 
-**Logout sequencing is actively hostile to unlinking.** `SessionService.SignOutAsync` sets `_signedOut`, nulls `Current`, and calls `_tokenStore.ClearAsync()` *before* its best-effort server call (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:88-125`). Any unlink issued after that point has no bearer token. Critically, the class carries an explicit invariant in its doc comment (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`): it depends only on `ITokenStore` and `IAuthTokenClient`, **never** on `IApiService`, so it cannot recurse into the `AuthenticatingHttpMessageHandler`-wrapped `"ChoNaBojoApi"` client. Any unlink hook must respect that invariant.
+**Logout sequencing constrains where the unlink can live.** `SessionService.SignOutAsync` sets `_signedOut`, nulls `Current`, and calls `_tokenStore.ClearAsync()` *before* its best-effort server call (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:88-125`). Any unlink issued after that point has no bearer token — but the surviving call, `_authTokenClient.LogoutAsync` (`:117`), carries the **refresh token**, which is credential enough. Critically, the class carries an explicit invariant in its doc comment (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`): it depends only on `ITokenStore` and `IAuthTokenClient`, **never** on `IApiService`, so it cannot recurse into the `AuthenticatingHttpMessageHandler`-wrapped `"ChoNaBojoApi"` client. Any unlink hook must respect that invariant.
 
-**The Windows TFM still builds.** `TargetFrameworks` includes `net10.0-windows10.0.19041.0` on Windows hosts (`app/ChoNaBojoApp/ChoNaBojoApp.csproj:12-13`), so every Firebase item must be Android-conditional or the Windows build breaks.
+**The Windows TFM still builds.** `TargetFrameworks` includes `net10.0-windows10.0.19041.0` on Windows hosts (`app/ChoNaBojoApp/ChoNaBojoApp.csproj:11-12`), so every Firebase item must be Android-conditional or the Windows build breaks.
 
 **`minSdk` is 21 while the PRD claims Android 10+.** `SupportedOSPlatformVersion` for Android is `21.0` (`app/ChoNaBojoApp/ChoNaBojoApp.csproj:38`).
 
@@ -32,7 +32,7 @@ Deliver FCM push notifications around the matchmaking loop: the organizer is not
 
 - The shared transition already owns the transaction the outbox needs — no new transaction scope, no restructuring of `EventEndpoints` (`server/Events/EventEndpoints.cs:641-660`).
 - Idempotent replay is a first-class concept in this codebase and already returns early on commit — the "don't double-notify" requirement maps onto existing branches rather than new logic (`server/Events/EventEndpoints.cs:317-321`).
-- `SessionService`'s no-`IApiService` invariant forces the unlink call onto a separate un-handled HTTP client with an explicitly passed bearer token (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`, `app/ChoNaBojoApp/MauiProgram.cs:56-76`).
+- `SessionService`'s no-`IApiService` invariant rules out unlinking through `IApiService`; the existing `_authTokenClient.LogoutAsync` call on the un-handled `"ChoNaBojoAuth"` client is the natural carrier, since it already authenticates with the refresh token (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`, `app/ChoNaBojoApp/MauiProgram.cs:68-72`).
 - `EventJoinRequest` demonstrates the required enum guarding pattern — `CK_EventJoinRequests_Status ... IN (1, 2, 3)` alongside application validation (`server/Data/ChoNaBojoContext.cs:277-282`), which `context/foundation/lessons.md` requires for every persisted enum.
 - `Guid` primary keys use `HasDefaultValueSql("gen_random_uuid()")` and timestamps use `timestamp with time zone` (`server/Data/ChoNaBojoContext.cs:252-268`).
 - The Maps API key already establishes the "build-time secret with a graceful empty fallback" pattern (`app/ChoNaBojoApp/ChoNaBojoApp.csproj:3-8`), which the Firebase server credential deliberately does **not** follow — it is a server-side secret, never a client build input.
@@ -40,7 +40,7 @@ Deliver FCM push notifications around the matchmaking loop: the organizer is not
 
 ## Desired End State
 
-An organizer with the app installed and notification permission granted receives a heads-up notification within 30 seconds of someone requesting to join their event. A requester receives one within 30 seconds of the organizer accepting or rejecting. Tapping any of them opens the app on **My events**, refreshed from the server. The notification body never contains a name, contact detail, or event title. Logging out stops that device receiving the previous account's notifications. A user with two devices gets the notification on both.
+An organizer with the app installed and notification permission granted receives a heads-up notification within 30 seconds of someone requesting to join their event. A requester receives one within 30 seconds of the organizer accepting or rejecting. Tapping any of them opens the app on **My events**, refreshed from the server. The notification body never contains a name, contact detail, or event title. Explicitly logging out while online stops that device receiving the previous account's notifications; a session that simply expires leaves the row active until the next login on that device re-claims it. A user with two devices gets the notification on both.
 
 Verification: with the API deployed and a real device, perform join → accept and join → reject with a stopwatch; both notifications arrive and the measured commit-to-display latency is under 30 seconds. `dotnet test` passes. `dotnet build solutions/ChoNaBojo.slnx` succeeds for both the Android and Windows TFMs.
 
@@ -55,14 +55,14 @@ Verification: with the API deployed and a real device, perform join → accept a
 - **No Workload Identity Federation.** Railway gets a sealed service-account JSON variable.
 - **No user-facing notification preferences/mute settings.**
 - **No topic subscriptions or multicast batching** — per-installation sends only; volume does not justify it.
-- **No exactly-once delivery guarantee.** Duplicates are deduplicated client-side by `notificationId`.
+- **No exactly-once delivery guarantee.** Duplicates collapse into a single system notification because the same `notificationId` is used as the Android notification **tag** on both display paths — server-set in `AndroidConfig` for SDK-displayed (backgrounded) notifications, and client-set by `PushNotificationPresenter` for foreground ones.
 
 ## Implementation Approach
 
 Three independent tracks that converge:
 
 1. **Server delivery pipeline** — `PushOutbox` + `PushDeliveries` tables written inside the existing join-request transaction, drained by a `BackgroundService` that claims rows with `FOR UPDATE SKIP LOCKED`, fans out to each active installation, calls Firebase Admin, and records per-installation outcomes with exponential backoff and a dead-letter terminal state.
-2. **Registration lifecycle** — `PushInstallations` keyed on the device registration id (one row per app installation, not per user), upserted through `PUT /api/me/push-installations`, atomically reassigned on account switch, unlinked on logout before local tokens are cleared.
+2. **Registration lifecycle** — `PushInstallations` keyed on the device registration id (one row per app installation, not per user), upserted through `PUT /api/me/push-installations`, atomically reassigned on account switch, and disabled server-side as part of the existing `POST /api/auth/logout` refresh-token revocation on explicit sign-out.
 3. **Android client** — Firebase binding, notification channel, permission prompt, foreground handling, and cold/warm tap routing gated on session restoration.
 
 Two decisions shape the structure:
@@ -73,9 +73,15 @@ Two decisions shape the structure:
 
 ## Critical Implementation Details
 
-**Outbox insert ordering.** The `PushOutbox` row must be added to the change tracker *before* the existing `await dbContext.SaveChangesAsync(cancellationToken)` at `server/Events/EventEndpoints.cs:787`, so the domain mutation and the notification intent are in the same `SaveChanges` and the same commit. Inserting after `SaveChangesAsync` but before `CommitAsync` would still be atomic but requires a second round-trip; inserting after `CommitAsync` loses the intent if the process dies. Do not add a nested transaction — `BeginTransactionAsync` is already active on this path.
+**Outbox insert ordering.** The `PushOutbox` row must be added and persisted *after* the existing `await dbContext.SaveChangesAsync(cancellationToken)` at `server/Events/EventEndpoints.cs:792-793` and *before* `CommitAsync`, via a second `SaveChangesAsync` on the same open transaction. This is atomic — both writes land in one commit — at the cost of one extra round-trip inside the `FOR UPDATE` lock (sub-millisecond, and the lock is already held for the duration of the transaction).
 
-**`SessionService` may not take `IApiService`.** The unlink is invoked through a narrow `IPushInstallationUnlinker` abstraction backed by its **own** named `HttpClient` with no `AuthenticatingHttpMessageHandler` in its pipeline, receiving the bearer token as an explicit argument. Injecting `IApiService` (directly or transitively) recreates the recursion the handler comment warns about (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`).
+Adding the outbox row to the change tracker *before* the first `SaveChangesAsync` is **not** viable: `EventJoinRequest.Id` is database-generated (`HasDefaultValueSql("gen_random_uuid()")`, `server/Data/ChoNaBojoContext.cs:316`), so on the `createIfMissing` path (`server/Events/EventEndpoints.cs:700-705`) the id is still `Guid.Empty` until `SaveChanges` reads back the `RETURNING` value. Enqueuing before the save would write `EventJoinRequestId = Guid.Empty` (FK violation) and an `EventKey` of `join-request:00000000-...:{type}:{recipientUserId}` that collides on the unique index on the organizer's second join request — producing a 500 and a rolled-back join request, violating the rule that notification failure must never affect the domain response.
+
+Inserting after `CommitAsync` loses the intent if the process dies. Do not add a nested transaction — `BeginTransactionAsync` is already active on this path.
+
+**`SessionService` may not take `IApiService`.** The unlink rides on the logout call `SessionService` already makes: `_authTokenClient.LogoutAsync` runs on the un-handled `"ChoNaBojoAuth"` client (`app/ChoNaBojoApp/MauiProgram.cs:68-72`) and authenticates with the **refresh token**, so no access token and no extra named client are needed. `SessionService` therefore gains no new dependency beyond the existing `IPushRegistrationStore` read for the registration id. Injecting `IApiService` (directly or transitively) would recreate the recursion the handler comment warns about (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`).
+
+**The logout unlink covers explicit sign-out only — by design.** There are three `SignOutAsync` call sites. Only `app/ChoNaBojoApp/ViewModels/MapViewModel.cs:675` passes `revokeServer: true`; `app/ChoNaBojoApp/Services/Auth/AuthenticatingHttpMessageHandler.cs:167` and `:171` pass `revokeServer: false` because they *are* the refresh-failure path (`app/ChoNaBojoApp/Services/Auth/ISessionService.cs:28-31`) — by definition no usable credential exists, so no server call of any kind is possible. Session expiry and offline explicit logout therefore leave the installation row active. That is accepted: the row is re-claimed (`UserId` reassigned, `DisabledUtc` cleared) by the next `PUT /api/me/push-installations` on that device, and the stale-installation cleanup job removes rows that are never reused. The end-state promise is scoped accordingly.
 
 **`OnMessageReceived` runs on a worker thread with a hard 20-second budget** and must not touch MAUI UI. Marshal to the main thread via `MainThread.BeginInvokeOnMainThread` for any state refresh, and never call Shell navigation from the service.
 
@@ -95,7 +101,7 @@ Stand up the Firebase project, wire the Android binding into the build, raise `m
 
 **Intent**: Create the single Firebase project that serves the MVP and download the Android client configuration. Create the narrowly-scoped server service account that Phase 5 and Phase 7 consume.
 
-**Contract**: One Firebase project; one Android app registered with package name exactly `com.cho_na_bojo` (case-sensitive match to `ApplicationId` in `app/ChoNaBojoApp/ChoNaBojoApp.csproj:31`); FCM HTTP v1 API enabled; `google-services.json` downloaded unrenamed; one service account holding only the **Firebase Cloud Messaging API Admin** role, with a JSON key generated and stored outside the repository. No legacy server key is created. No Android signing SHA-1 is required for FCM.
+**Contract**: One Firebase project; one Android app registered with package name exactly `com.cho_na_bojo` (case-sensitive match to `ApplicationId` in `app/ChoNaBojoApp/ChoNaBojoApp.csproj:30`); FCM HTTP v1 API enabled; `google-services.json` downloaded unrenamed; one service account holding only the **Firebase Cloud Messaging API Admin** role, with a JSON key generated and stored outside the repository. No legacy server key is created. No Android signing SHA-1 is required for FCM.
 
 #### 2. Android build wiring
 
@@ -168,7 +174,7 @@ Stand up the Firebase project, wire the Android binding into the build, raise `m
 
 ### Overview
 
-Persist one row per app installation and expose the authenticated endpoints the client uses to link and unlink it. No sending, no client changes.
+Persist one row per app installation, expose the authenticated endpoint the client uses to link it, and disable it on logout. No sending, no client changes.
 
 ### Changes Required:
 
@@ -176,9 +182,9 @@ Persist one row per app installation and expose the authenticated endpoints the 
 
 **File**: `shared/ChoNaBojo.Contracts/DTOs/PushDTOs.cs`
 
-**Intent**: Define the request/response shapes for installation registration and unlinking, in the dependency-free Contracts project per `context/foundation/lessons.md`.
+**Intent**: Define the request/response shapes for installation registration, in the dependency-free Contracts project per `context/foundation/lessons.md`.
 
-**Contract**: `RegisterPushInstallationRequest(string DeviceRegistrationId, string? AppVersion)` and `RegisterPushInstallationResponse(Guid InstallationId)`. No `UserId` field in either direction — the server derives it from the JWT. The response id is the server's opaque row identifier, used later for unlinking; the registration id itself is never echoed back.
+**Contract**: `RegisterPushInstallationRequest(string DeviceRegistrationId, string? AppVersion)` and `RegisterPushInstallationResponse(Guid InstallationId)`. No `UserId` field in either direction — the server derives it from the JWT. The response id is the server's opaque row identifier, stored locally for diagnostics; the registration id itself is never echoed back. Logout-time unlinking uses the `LogoutRequest` shape in `AuthDTOs.cs` (change 7b), keyed on the registration id rather than this installation id, because the logout call has no bearer token to scope an id lookup with.
 
 #### 2. Push constants
 
@@ -224,9 +230,21 @@ Persist one row per app installation and expose the authenticated endpoints the 
 
 **File**: `server/Push/PushEndpoints.cs`
 
-**Intent**: Let an authenticated device link its registration id and unlink it on logout.
+**Intent**: Let an authenticated device link its registration id.
 
-**Contract**: `MapPushEndpoints(this IEndpointRouteBuilder)` registering `PUT /me/push-installations` → `RegisterPushInstallationAsync` (name `MePushInstallationsRegister`) and `DELETE /me/push-installations/{installationId:guid}` → `UnlinkPushInstallationAsync` (name `MePushInstallationsUnlink`), matching the existing `/me/events` prefix (`server/Events/EventEndpoints.cs:49-50`). The upsert derives `UserId` from `httpContext.GetUserId()`, matches on `DeviceRegistrationId`, and on match **reassigns** `UserId` (account switch), clears `DisabledUtc`, and refreshes `LastSeenUtc` — one row, no duplicates. Returns `200` with the installation id for both create and update; `400` with the existing `ValidationProblemResponse` on invalid input. Unlink sets `DisabledUtc` only when the row belongs to the calling user, and returns `204` whether or not a row was affected, so a repeated logout is idempotent and unlinking cannot be used to probe other users' rows.
+**Contract**: `MapPushEndpoints(this IEndpointRouteBuilder)` registering `PUT /me/push-installations` → `RegisterPushInstallationAsync` (name `MePushInstallationsRegister`), matching the existing `/me/events` prefix (`server/Events/EventEndpoints.cs:49-50`). The upsert derives `UserId` from `httpContext.GetUserId()`, matches on `DeviceRegistrationId`, and on match **reassigns** `UserId` (account switch), clears `DisabledUtc`, and refreshes `LastSeenUtc` — one row, no duplicates. Returns `200` with the installation id for both create and update; `400` with the existing `ValidationProblemResponse` on invalid input.
+
+There is **no** `DELETE` endpoint. Unlinking is a side effect of logout (change 7 below), because that is the only sign-out path with a usable credential.
+
+#### 7b. Logout-time unlink
+
+**Files**: `shared/ChoNaBojo.Contracts/DTOs/AuthDTOs.cs`, `shared/ChoNaBojo.Validation/AuthValidation.cs`, `server/Auth/AuthEndpoints.cs`
+
+**Intent**: Disable the installation on the one sign-out path that can authenticate — the refresh-token revocation the client already performs.
+
+**Contract**: `POST /auth/logout` currently binds `RefreshRequest` (`shared/ChoNaBojo.Contracts/DTOs/AuthDTOs.cs:16`) and is handled by `LogoutAsync` (`server/Auth/AuthEndpoints.cs:172-185`). Introduce a dedicated `LogoutRequest(string RefreshToken, string? DeviceRegistrationId)` and bind logout to it; `/auth/refresh` keeps `RefreshRequest` unchanged. The new field is optional and additive, so an older client posting only `refreshToken` still binds and still validates — `ValidateLogoutRequest` reuses the existing refresh-token rule and only bounds `DeviceRegistrationId`'s length when present.
+
+After `RevokeFamilyAsync` succeeds and when `DeviceRegistrationId` is non-blank, set `DisabledUtc` on the matching `PushInstallations` row **only if it belongs to the user whose refresh-token family was just revoked** — so a stolen registration id cannot be used to silence another user's device. Still returns `204` whether or not a row was affected, so repeated logout is idempotent and the call cannot be used to probe other users' rows. A failure to disable the row is logged and swallowed: logout must not fail because of push bookkeeping.
 
 #### 8. Endpoint registration
 
@@ -250,18 +268,20 @@ Persist one row per app installation and expose the authenticated endpoints the 
 - Repeating the same call updates `LastSeenUtc` without creating a second row
 - The same registration id sent with a second user's token reassigns `UserId` — still exactly one row
 - The endpoint returns `401` without a bearer token
-- `DELETE` with a foreign installation id returns `204` and changes nothing
+- `POST /api/auth/logout` with `deviceRegistrationId` sets `DisabledUtc` on that row and still returns `204`
+- `POST /api/auth/logout` with another user's `deviceRegistrationId` returns `204` and changes nothing
+- `POST /api/auth/logout` with no `deviceRegistrationId` behaves exactly as before
 - A blank registration id returns `400` shaped as `ValidationProblemResponse`
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for manual confirmation before proceeding.
 
 ---
 
-## Phase 3: Client Registration Lifecycle & Logout Resequencing
+## Phase 3: Client Registration Lifecycle & Logout Unlink
 
 ### Overview
 
-Carry the registration id from the Firebase callback to the authenticated API, surviving the fact that registration can fire before a session exists — and stop a logged-out device receiving the previous account's notifications.
+Carry the registration id from the Firebase callback to the authenticated API, surviving the fact that registration can fire before a session exists — and stop a device that was explicitly logged out while online from receiving the previous account's notifications.
 
 ### Changes Required:
 
@@ -295,7 +315,7 @@ Carry the registration id from the Firebase callback to the authenticated API, s
 
 **Intent**: Upload the registration id at every point a session becomes available.
 
-**Contract**: After `SetAppRoot()` on successful session restoration (`app/ChoNaBojoApp/Views/LoadingPage.xaml.cs:38-40`) and after a successful login/registration, fire `SyncAsync` without awaiting it on the navigation path — registration must never delay or block entering the app.
+**Contract**: After `SetAppRoot()` on successful session restoration (`app/ChoNaBojoApp/Views/LoadingPage.xaml.cs:43`) and after a successful login/registration, fire `SyncAsync` without awaiting it on the navigation path — registration must never delay or block entering the app.
 
 #### 5. API client methods
 
@@ -305,23 +325,25 @@ Carry the registration id from the Firebase callback to the authenticated API, s
 
 **Contract**: `RegisterPushInstallationAsync(RegisterPushInstallationRequest, CancellationToken)` returning the existing typed-result pattern used by the other methods in this file, over the `"ChoNaBojoApi"` named client so bearer attachment and transparent refresh apply.
 
-#### 6. Unlink path that respects the SessionService invariant
+#### 6. Logout carries the registration id
 
-**Files**: `app/ChoNaBojoApp/Services/Push/IPushInstallationUnlinker.cs`, `app/ChoNaBojoApp/Services/Push/PushInstallationUnlinker.cs`, `app/ChoNaBojoApp/MauiProgram.cs`
+**Files**: `app/ChoNaBojoApp/Services/Auth/IAuthTokenClient.cs`, `app/ChoNaBojoApp/Services/Auth/AuthTokenClient.cs`
 
-**Intent**: Unlink the installation during sign-out without giving `SessionService` a dependency on `IApiService`.
+**Intent**: Send the registration id on the one sign-out call that can authenticate, without introducing a second HTTP client or a second endpoint.
 
-**Contract**: `Task UnlinkAsync(string accessToken, CancellationToken)` — takes the bearer token explicitly and issues `DELETE /api/me/push-installations/{id}` over a **new** named `HttpClient` (`"ChoNaBojoPush"`) registered *without* `AddHttpMessageHandler<AuthenticatingHttpMessageHandler>()`, exactly as `"ChoNaBojoAuth"` is registered today (`app/ChoNaBojoApp/MauiProgram.cs:68-73`). Reads the installation id from the store; no-ops when absent. Bounded timeout (5 s) so an offline logout is not delayed. On success, clears the uploaded-state markers in the store.
+**Contract**: `LogoutAsync(string refreshToken, CancellationToken)` (`app/ChoNaBojoApp/Services/Auth/IAuthTokenClient.cs:68`) gains a `string? deviceRegistrationId` parameter and posts the Phase 2 `LogoutRequest` instead of `RefreshRequest`. It keeps running on the existing un-handled `"ChoNaBojoAuth"` named client (`app/ChoNaBojoApp/MauiProgram.cs:68-72`), so the documented no-recursion invariant holds unchanged. No new `IPushInstallationUnlinker`, no `"ChoNaBojoPush"` client, no `DELETE` call — the refresh token already authenticates this request, so no access token is needed.
 
-#### 7. Sign-out resequencing
+#### 7. Sign-out passes the registration id and clears local push state
 
 **File**: `app/ChoNaBojoApp/Services/Auth/SessionService.cs`
 
-**Intent**: Perform the unlink while the access token is still valid and still available — i.e. before the token store is cleared.
+**Intent**: Supply the registration id to the logout call and reset local push markers, without breaking the `IApiService`-free invariant.
 
-**Contract**: `SignOutAsync` gains an optional `IPushInstallationUnlinker` dependency (interface only; the concrete type is on the un-handled client, preserving the documented no-recursion invariant at `app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`). Inside the `_signOutLock` critical section, the current access token is captured alongside the refresh token; **after** releasing the lock and **before** `_authTokenClient.LogoutAsync` (which revokes the session server-side), the unlink is awaited best-effort inside a try/catch. `_tokenStore.ClearAsync()` and the `Current = null` assignment stay inside the lock as today — the captured token is what the unlink uses. Any unlink failure is swallowed; local sign-out always completes.
+**Contract**: `SessionService` takes `IPushRegistrationStore` (a `Preferences`-backed synchronous store — not an API client, so the invariant at `app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8` is preserved). Inside the `_signOutLock` critical section, the stored registration id is read alongside the refresh token; the existing best-effort `_authTokenClient.LogoutAsync(refreshTokenToRevoke, ...)` call (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:117`) becomes `LogoutAsync(refreshTokenToRevoke, deviceRegistrationId, ...)`. Regardless of whether that call succeeds, the uploaded-state markers (uploaded registration id, installation id, uploaded-for user id) are cleared locally so the next login re-uploads and re-claims the row; the registration id itself is kept, since it survives logout on the device. Any logout failure stays swallowed as today; local sign-out always completes.
 
-The ordering constraint is real and load-bearing: `LogoutAsync` revokes the refresh token family server-side, so an unlink issued after it may be rejected. Unlink first, then revoke.
+No new ordering constraint is introduced: the unlink now happens *inside* the revocation request, so it cannot be rejected by a revocation that already ran.
+
+The two `revokeServer: false` call sites (`app/ChoNaBojoApp/Services/Auth/AuthenticatingHttpMessageHandler.cs:167`, `:171`) are deliberately unchanged — they are the refresh-failure path and have no usable credential. See "The logout unlink covers explicit sign-out only" in Critical Implementation Details.
 
 #### 8. Service registration
 
@@ -329,7 +351,7 @@ The ordering constraint is real and load-bearing: `LogoutAsync` revokes the refr
 
 **Intent**: Register the new services as singletons alongside the existing ones.
 
-**Contract**: `IPushRegistrationStore`, `IPushRegistrationService`, and `IPushInstallationUnlinker` added as singletons near the existing registrations (`app/ChoNaBojoApp/MauiProgram.cs:78-89`), with `#if ANDROID` selecting the real implementations and no-ops elsewhere, mirroring the existing `IAddressSearchService` pattern.
+**Contract**: `IPushRegistrationStore` and `IPushRegistrationService` added as singletons near the existing registrations (`app/ChoNaBojoApp/MauiProgram.cs:75-87`), with `#if ANDROID` selecting the real implementations and no-ops elsewhere, mirroring the existing `IAddressSearchService` pattern. `IPushRegistrationStore` must be registered *before* `ISessionService`, which now depends on it. No new named `HttpClient` is added.
 
 ### Success Criteria:
 
@@ -342,9 +364,10 @@ The ordering constraint is real and load-bearing: `LogoutAsync` revokes the refr
 
 - Fresh install → log in → exactly one `PushInstallations` row appears for that user
 - Force-close and relaunch → no duplicate row; `LastSeenUtc` refreshes
-- Log out → the row's `DisabledUtc` is set
+- Log out (online) → the row's `DisabledUtc` is set
 - Log in as a second user on the same device → the same row is reassigned to the new `UserId` and re-enabled; still exactly one row for that registration id
-- Log out with airplane mode on → sign-out completes promptly (no hang) and the app returns to the login screen
+- Log out with airplane mode on → sign-out completes promptly (no hang), the app returns to the login screen, and the row stays active until the next login on that device re-claims it
+- Let the refresh token expire so the handler force-signs-out → sign-out completes and the row is knowingly left active (documented scope limit, not a defect)
 - Install on a second device with the same account → two rows, both active
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for manual confirmation before proceeding.
@@ -373,7 +396,9 @@ Record notification intent atomically with the join-request state change — sti
 
 **Intent**: Separate the logical notification (one per recipient per transition) from its per-installation delivery attempts, so a success on one device is never retried because another device failed.
 
-**Contract**: `PushOutboxItem` — `Id`, `EventKey` (string, unique), `RecipientUserId`, `Type` (`PushNotificationType`), `SportsEventId`, `EventJoinRequestId`, `NotificationId` (Guid, the client-side dedup key), `OccurredUtc`, `ClaimedUtc?`, `CompletedUtc?`. `PushDelivery` — `Id`, `PushOutboxItemId`, `PushInstallationId`, `AttemptCount`, `NextAttemptUtc`, `AcceptedUtc?`, `DeadLetteredUtc?`, `LastErrorCode?`, `FcmMessageId?`.
+**Contract**: `PushOutboxItem` — `Id`, `EventKey` (string, unique), `RecipientUserId`, `Type` (`PushNotificationType`), `SportsEventId`, `EventJoinRequestId`, `NotificationId` (Guid, the client-side dedup key), `OccurredUtc`, `NextAttemptUtc`, `ClaimedUtc?`, `CompletedUtc?`. `PushDelivery` — `Id`, `PushOutboxItemId`, `PushInstallationId`, `AttemptCount`, `NextAttemptUtc`, `AcceptedUtc?`, `DeadLetteredUtc?`, `LastErrorCode?`, `FcmMessageId?`.
+
+`PushOutboxItem.NextAttemptUtc` is the item's **due time** — the minimum `NextAttemptUtc` across its still-pending deliveries, initialised to `OccurredUtc` on insert and recomputed at the end of every worker pass. Without it the claim would re-select a backing-off item every poll, and because that item is also the *oldest*, it would sit at the front of the `OccurredUtc` ordering and hold batch slots ahead of fresh work — head-of-line blocking that bites hardest exactly when FCM is already degraded.
 
 `EventKey` is the idempotency guard and carries the recipient, because an accept produces one notification for one recipient but S-07 will fan a single transition to many: `join-request:{joinRequestId}:{type}:{recipientUserId}`.
 
@@ -383,7 +408,7 @@ Record notification intent atomically with the join-request state change — sti
 
 **Intent**: Configure both tables per existing conventions, with the enum guarded at the database layer.
 
-**Contract**: DbSets for both; `gen_random_uuid()` defaults; `timestamp with time zone` throughout; unique index on `PushOutboxItem.EventKey`; unique composite index on `(PushOutboxItemId, PushInstallationId)`; a filtered index supporting the claim query over incomplete items ordered by `OccurredUtc`; `CK_PushOutbox_Type` restricting `Type` to `IN (1, 2, 3)` per the `CK_EventJoinRequests_Status` precedent (`server/Data/ChoNaBojoContext.cs:277-282`); `CK_PushDeliveries_AttemptCount` (`>= 0`). FK from `PushDelivery` → `PushOutboxItem` cascades; FK → `PushInstallation` restricts, so installation cleanup cannot silently erase delivery history.
+**Contract**: DbSets for both; `gen_random_uuid()` defaults; `timestamp with time zone` throughout; unique index on `PushOutboxItem.EventKey`; unique composite index on `(PushOutboxItemId, PushInstallationId)`; a filtered index over incomplete items (`WHERE "CompletedUtc" IS NULL`) keyed on `(NextAttemptUtc, OccurredUtc)` so the claim's due-time filter and its ordering are both served; `CK_PushOutbox_Type` restricting `Type` to `IN (1, 2, 3)` per the `CK_EventJoinRequests_Status` precedent (`server/Data/ChoNaBojoContext.cs:277-282`); `CK_PushDeliveries_AttemptCount` (`>= 0`). FK from `PushDelivery` → `PushOutboxItem` cascades; FK → `PushInstallation` restricts, so installation cleanup cannot silently erase delivery history.
 
 #### 4. Migration
 
@@ -417,7 +442,11 @@ Auto-accept notifies the **organizer only** — the requester already received `
 
 **Intent**: Write the intent inside the transaction that performs the state change.
 
-**Contract**: Immediately before `await dbContext.SaveChangesAsync(cancellationToken)` (`server/Events/EventEndpoints.cs:787`), call the intent factory and, when it yields an intent, `dbContext.PushOutbox.Add(...)`. No new transaction. The three early-return paths that commit without a state change (`server/Events/EventEndpoints.cs:317-321`, `:684-691`, `:725-732`) are deliberately left untouched, as is the unique-constraint recovery path (`server/Events/EventEndpoints.cs:800-825`) — none of them may enqueue. A `DbUpdateException` on the outbox unique index is not expected within a locked transaction; if it occurs it propagates as today rather than being silently swallowed.
+**Contract**: Between the existing `await dbContext.SaveChangesAsync(cancellationToken)` (`server/Events/EventEndpoints.cs:792`) and `await transaction.CommitAsync(cancellationToken)` (`:793`), call the intent factory and, when it yields an intent, `dbContext.PushOutbox.Add(...)` followed by a second `await dbContext.SaveChangesAsync(cancellationToken)`. This ordering is required so that `joinRequest.Id` — database-generated, `Guid.Empty` until the first save returns — is populated before it is used as the outbox `EventJoinRequestId` and in `EventKey`. No new transaction; both saves share the open transaction and the single `CommitAsync`.
+
+Because the outbox row is only added after the domain save succeeds, the two `DbUpdateException` recovery paths (`server/Events/EventEndpoints.cs:799-821` unique-constraint, `:822-834` FK) cannot leave an orphaned `Added` `PushOutboxItem` in the change tracker — they roll back and detach `joinRequest` before any outbox entity exists. The three early-return paths that commit without a state change (`server/Events/EventEndpoints.cs:317-321`, `:684-691`, `:725-732`) are deliberately left untouched — none of them may enqueue.
+
+A `DbUpdateException` on the outbox unique index is not expected within a locked transaction; if it occurs it propagates and rolls back the transaction. This is the one residual case where a notification failure affects the domain response, and it is accepted because `EventKey` is derived from `(joinRequestId, type, recipientUserId)`, all of which are unique per state transition under the row lock.
 
 #### 7. Test project
 
@@ -494,7 +523,7 @@ Drain the outbox: claim work, fan out to each active installation, send through 
 
 **Intent**: Own the single `FirebaseApp` instance and the only line in the codebase that knows whether the destination is a FID or a legacy token.
 
-**Contract**: Singleton. Creates one `FirebaseApp` from `GoogleCredential.FromJson(options.ServiceAccountJson)` — parsed in memory, never written to disk and never via `GOOGLE_APPLICATION_CREDENTIALS`. Targets the destination with `Message.Fid` or `Message.Token` per the mode recorded in `binding-spike.md`. Sets `AndroidConfig` with `Priority = High` and `TimeToLive = TimeSpan.FromMinutes(30)`. Maps `FirebaseMessagingException` to `PushSendOutcome` and never rethrows into the worker loop.
+**Contract**: Singleton. Creates one `FirebaseApp` from `GoogleCredential.FromJson(options.ServiceAccountJson)` — parsed in memory, never written to disk and never via `GOOGLE_APPLICATION_CREDENTIALS`. Targets the destination with `Message.Fid` or `Message.Token` per the mode recorded in `binding-spike.md`. Sets `AndroidConfig` with `Priority = High`, `TimeToLive = TimeSpan.FromMinutes(30)`, and `Notification = new AndroidNotification { Tag = notificationId }`. The tag is **required for correctness, not cosmetics**: when the app is backgrounded the FCM SDK displays the notification itself and `OnMessageReceived` is never called, so the client-side tag applied by `PushNotificationPresenter` (Phase 6 change 4) does not apply. Each retry produces a distinct FCM message id, so without the server-set tag an application-level retry after a send that actually succeeded stacks a second system notification. Maps `FirebaseMessagingException` to `PushSendOutcome` and never rethrows into the worker loop.
 
 #### 5. Payload construction (pure)
 
@@ -518,7 +547,7 @@ Drain the outbox: claim work, fan out to each active installation, send through 
 
 **Intent**: One pass over due work — the unit that is easy to reason about and to call once from a test or a diagnostic.
 
-**Contract**: Scoped. Claims a bounded batch (20) of incomplete outbox items with `FOR UPDATE SKIP LOCKED` inside a transaction, so future Railway replicas cannot double-send. On first claim, snapshots the recipient's currently active installations (`DisabledUtc IS NULL`) into `PushDelivery` rows — the snapshot is what makes the send set stable across retries. Sends only deliveries that are pending and due, records each outcome individually, disables the installation on `UnregisteredDestination`, and completes the outbox item once every delivery is accepted, dead-lettered, or terminal. An outbox item with zero active installations completes immediately — a user with no device is not an error.
+**Contract**: Scoped. Claims a bounded batch (20) of **due** outbox items — `CompletedUtc IS NULL AND NextAttemptUtc <= now()`, ordered by `OccurredUtc` — with `FOR UPDATE SKIP LOCKED` inside a transaction, so future Railway replicas cannot double-send. The due-time predicate is what keeps backing-off items out of the batch; without it the oldest failing item would be re-claimed every poll and starve fresh work. On first claim, snapshots the recipient's currently active installations (`DisabledUtc IS NULL`) into `PushDelivery` rows — the snapshot is what makes the send set stable across retries. Sends only deliveries that are pending and due, records each outcome individually, disables the installation on `UnregisteredDestination`, and completes the outbox item once every delivery is accepted, dead-lettered, or terminal. Before the pass ends, the item's `NextAttemptUtc` is recomputed as the minimum `NextAttemptUtc` across its still-pending deliveries, so the item next becomes visible exactly when its earliest delivery is due. An outbox item with zero active installations completes immediately — a user with no device is not an error.
 
 #### 8. Hosted worker
 
@@ -567,6 +596,7 @@ Drain the outbox: claim work, fan out to each active installation, send through 
 - The same account on two devices receives the notification on both
 - Sending to a manually corrupted registration id disables that installation and does not retry it
 - Stopping the API mid-queue and restarting it delivers the pending notification (durability)
+- A backing-off item (forced by a corrupted registration id) is not re-claimed on every poll, and a fresh notification queued behind it still arrives within 30 seconds
 - Worker logs show queue age and send duration, and contain no registration ids, payload bodies, or credentials
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for manual confirmation before proceeding.
@@ -591,11 +621,13 @@ Make the notification behave correctly on the device: a stable channel, a permis
 
 #### 2. Permission request
 
-**Files**: `app/ChoNaBojoApp/Services/Push/IPushPermissionService.cs`, `app/ChoNaBojoApp/Services/Push/PushPermissionService.cs`, `app/ChoNaBojoApp/Views/MapPage.xaml.cs`
+**Files**: `app/ChoNaBojoApp/Services/Push/IPushPermissionService.cs`, `app/ChoNaBojoApp/Services/Push/PushPermissionService.cs`, `app/ChoNaBojoApp/ViewModels/MapViewModel.cs`
 
 **Intent**: Ask for `POST_NOTIFICATIONS` once, on the first authenticated screen, with a rationale — never from `MauiProgram` or `LoadingPage`.
 
-**Contract**: Requests `Permissions.PostNotifications` on `MapPage`'s first appearance after the authenticated root is set, showing a short in-app rationale before the system dialog. Asks at most once per install (tracked in `Preferences`); a denial is recorded and never re-prompted automatically, and must not block or degrade any other feature. On API < 33 the permission is implicitly granted and the prompt is skipped. Sequenced so it does not collide with the location permission prompt already on this page.
+**Contract**: Requests `Permissions.PostNotifications` on `MapPage`'s first appearance after the authenticated root is set, showing a short in-app rationale before the system dialog. Asks at most once per install (tracked in `Preferences`); a denial is recorded and never re-prompted automatically, and must not block or degrade any other feature. On API < 33 the permission is implicitly granted and the prompt is skipped.
+
+**Sequencing is load-bearing and the call site is not obvious.** The location prompt is *not* on `MapPage`: `app/ChoNaBojoApp/Views/MapPage.xaml.cs:226` only inspects status, while the actual `Permissions.RequestAsync<Permissions.LocationWhenInUse>` runs in `app/ChoNaBojoApp/ViewModels/MapViewModel.cs:1019`, reached asynchronously from `AppearingCommand` (fired at `app/ChoNaBojoApp/Views/MapPage.xaml.cs:61`). Firing the notification request from `OnAppearing` would therefore race an in-flight location request, and MAUI's Android permission implementation does not queue concurrent requests. The notification request must be **chained inside the existing `AppearingCommand` flow in `MapViewModel`, awaited only after the location request has resolved** — not issued independently from the page.
 
 #### 3. Foreground message handling
 
@@ -611,7 +643,7 @@ Make the notification behave correctly on the device: a stable channel, a permis
 
 **Intent**: Post the foreground notification with deduplication and a tap intent that carries the payload.
 
-**Contract**: Builds a notification on the `event_updates` channel using `notificationId` as the notification **tag**, so a duplicate delivery of the same logical notification replaces rather than stacks. The content intent targets `MainActivity` with the validated ids as extras, using `PendingIntentFlags.Immutable | UpdateCurrent`.
+**Contract**: Builds a notification on the `event_updates` channel using `notificationId` as the notification **tag**, so a duplicate delivery of the same logical notification replaces rather than stacks. This covers the foreground path only; the backgrounded path is covered by the identical tag set server-side in `AndroidConfig` (Phase 5 change 4). The content intent targets `MainActivity` with the validated ids as extras, using `PendingIntentFlags.Immutable | UpdateCurrent`.
 
 #### 5. Tap routing
 
@@ -635,7 +667,7 @@ Make the notification behave correctly on the device: a stable channel, a permis
 
 **Intent**: Consume pending navigation once the app is authenticated and ready; discard it on sign-out.
 
-**Contract**: `ConsumePendingAsync` is invoked after `SetAppRoot()` and after a successful login. `Clear()` is invoked during sign-out alongside the Phase 3 unlink.
+**Contract**: `ConsumePendingAsync` is invoked after `SetAppRoot()` and after a successful login. `Clear()` is invoked during sign-out alongside the Phase 3 clearing of the push uploaded-state markers.
 
 ### Success Criteria:
 
@@ -647,13 +679,13 @@ Make the notification behave correctly on the device: a stable channel, a permis
 
 #### Manual Verification:
 
-- Fresh install on Android 13+: the rationale and system permission prompt appear on first MapPage view, not earlier; denying leaves the app fully usable
+- Fresh install on Android 13+: the rationale and system permission prompt appear on first MapPage view *after* the location prompt resolves, not earlier and never simultaneously; denying leaves the app fully usable
 - Android 10 device/emulator: no prompt appears and notifications still display
 - App foregrounded: notification appears and My events reflects the change without a manual pull
 - App backgrounded: notification appears; tapping opens My events with fresh data
 - App removed from recents (cold start): tapping opens the app, restores the session, and lands on My events — never flashing protected content before authentication
 - App running on a different page (warm `SingleTop`): tapping switches to My events
-- Two deliveries of the same `notificationId` produce one notification, not two
+- Two deliveries of the same `notificationId` produce one notification, not two — verified with the app **backgrounded** (SDK-displayed, server tag) and again in the foreground (presenter tag)
 - Notification content on the lock screen shows no name, contact detail, or event title
 - Notification channel disabled in system settings: no crash; app remains usable
 - Log out while a notification is pending, log in as another user: no navigation to the previous account's context
@@ -748,7 +780,8 @@ Deliberately out of scope. Transactional atomicity, `FOR UPDATE SKIP LOCKED` cla
 3. Accept; measure requester notification latency. Repeat with reject.
 4. Repeat the join twice identically; confirm exactly one notification and one outbox row.
 5. Background, cold-start, and warm-start tap routing to My events.
-6. Log out, confirm the row is disabled and the device stops receiving notifications.
+6. Log out while online, confirm the row is disabled and the device stops receiving notifications.
+6b. Log out while offline (and separately, let the refresh token expire), confirm sign-out completes and the row is knowingly left active until the next login re-claims it.
 7. Log in as another account on the same device; confirm reassignment and correct targeting.
 8. Corrupt a registration id in the database; confirm the installation is disabled after one failed send and not retried.
 9. Stop the API with work queued, restart, and confirm delivery.
@@ -758,7 +791,7 @@ Deliberately out of scope. Transactional atomicity, `FOR UPDATE SKIP LOCKED` cla
 
 The 30-second budget decomposes as: transaction commit (immediate) → worker claim (≤2 s at a 2-second poll) → Firebase acceptance (typically sub-second) → FCM to device (variable, outside our control). The controllable portion is bounded by the poll interval, so queue age is the metric that matters; if p95 queue age approaches the poll interval consistently, the batch size is too small rather than the interval too long.
 
-Batch size is capped at 20 items per pass to bound transaction duration while holding claim locks. High FCM priority is used for all three types — they are genuinely time-sensitive, user-visible alerts — and the 30-minute TTL prevents a stale "your request was accepted" from arriving after the event.
+Batch size is capped at 20 items per pass to bound transaction duration while holding claim locks. Because the claim filters on `NextAttemptUtc <= now()`, retrying items drop out of the batch until they are actually due, so a degraded FCM cannot let a handful of failing recipients hold all 20 slots ahead of fresh work — head-of-line blocking is prevented structurally rather than by tuning. High FCM priority is used for all three types — they are genuinely time-sensitive, user-visible alerts — and the 30-minute TTL prevents a stale "your request was accepted" from arriving after the event.
 
 The outbox and delivery tables grow monotonically. At MVP volume this is irrelevant; a retention/pruning job is deferred to S-07, which will already be touching this infrastructure.
 
@@ -766,9 +799,20 @@ The outbox and delivery tables grow monotonically. At MVP volume this is irrelev
 
 Two additive migrations (`AddPushInstallations`, `AddPushOutbox`); no existing table is altered and no data is backfilled. Existing users have no installations until their app updates and registers, and an outbox item with no active installations completes immediately — so the pipeline is safe to deploy before any client update ships.
 
-Deployment order is server-first: deploy the API (Phases 2, 4, 5) and apply migrations before the app release, so the first registering client has an endpoint to call. Rolling back is dropping the migrations; nothing in the join-request path depends on the outbox for its own correctness.
+Deployment order is server-first: deploy the API (Phases 2, 4, 5) and apply migrations before the app release, so the first registering client has an endpoint to call. `POST /auth/logout` gains one optional field (`deviceRegistrationId`); an older client posting only `refreshToken` binds and behaves exactly as before, so the contract change is backward compatible in the server-first order. Rolling back is dropping the migrations; nothing in the join-request path depends on the outbox for its own correctness.
 
 The `minSdk` 21→29 change drops devices below Android 10 at the next store release. This is intentional alignment with the PRD's stated support boundary, not a regression.
+
+## Open Risks
+
+**The registration id is a bearer-like secret, and `PUT /api/me/push-installations` is therefore a reassignment primitive.** The upsert matches on `DeviceRegistrationId` and, on match, reassigns `UserId` with no proof of device ownership. Any authenticated user who obtains another user's registration id can redirect that user's notifications to their own account and simultaneously deny the victim theirs. This is **accepted, not fixed**: reassignment is exactly what makes same-device account switching work, and the MVP has no device-attestation mechanism to distinguish a legitimate switch from a hijack.
+
+Two mitigations are mandatory rather than optional, and both are structural:
+
+- **Registration ids are never logged, echoed, or surfaced.** The server never returns the registration id in any response (Phase 2 change 1) and never writes it to logs (Phase 5 change 9). The same rule extends to the client: `PushRegistrationStore` (Phase 3 change 1) must never log or display the stored id, and it stays in `Preferences` — private to the app sandbox — rather than anywhere shared or exportable.
+- **The blast radius is bounded by the payload.** Even a successful hijack leaks no contact detail, name, or event title, because the payload factory structurally cannot include them (Phase 5 change 5). The attacker learns only that *some* join-request activity occurred, and the victim notices lost notifications.
+
+Post-MVP, the accepted route to closing this is proof-of-possession on registration (server-issued nonce echoed through an FCM message to the device before the row is reassigned). It is out of scope for S-06 and is recorded here so the decision is visible rather than implicit.
 
 ## References
 
@@ -777,10 +821,10 @@ The `minSdk` 21→29 change drops devices below Android 10 at the next store rel
 - Roadmap slice: `context/foundation/roadmap.md` (S-06)
 - Repository lessons applied: `context/foundation/lessons.md` (dependency-free shared projects; enum guarded at both layers; one error body shape per status code)
 - Outbox insertion point: `server/Events/EventEndpoints.cs:641-810`
-- Replay paths that must not enqueue: `server/Events/EventEndpoints.cs:317-321`, `:684-691`, `:725-732`, `:800-825`
+- Replay paths that must not enqueue: `server/Events/EventEndpoints.cs:317-321`, `:684-691`, `:725-732`, `:799-821`
 - Enum CHECK-constraint precedent: `server/Data/ChoNaBojoContext.cs:277-282`
 - Sign-out sequence and its no-`IApiService` invariant: `app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`, `:88-125`
-- Un-handled named client precedent: `app/ChoNaBojoApp/MauiProgram.cs:68-73`
+- Un-handled named client precedent: `app/ChoNaBojoApp/MauiProgram.cs:68-72`
 - Session restoration boundary: `app/ChoNaBojoApp/Views/LoadingPage.xaml.cs:26-44`
 - `SingleTop` activity: `app/ChoNaBojoApp/Platforms/Android/MainActivity.cs:7`
 
@@ -817,10 +861,12 @@ The `minSdk` 21→29 change drops devices below Android 10 at the next store rel
 - [ ] 2.5 Repeat PUT updates LastSeenUtc without a second row
 - [ ] 2.6 Second user's token reassigns UserId on the same registration id
 - [ ] 2.7 Endpoint returns 401 without a bearer token
-- [ ] 2.8 DELETE with a foreign installation id returns 204 and changes nothing
-- [ ] 2.9 Blank registration id returns 400 as ValidationProblemResponse
+- [ ] 2.8 Logout with deviceRegistrationId sets DisabledUtc and still returns 204
+- [ ] 2.9 Logout with another user's deviceRegistrationId returns 204 and changes nothing
+- [ ] 2.10 Logout with no deviceRegistrationId behaves exactly as before
+- [ ] 2.11 Blank registration id returns 400 as ValidationProblemResponse
 
-### Phase 3: Client Registration Lifecycle & Logout Resequencing
+### Phase 3: Client Registration Lifecycle & Logout Unlink
 
 #### Automated
 
@@ -831,10 +877,11 @@ The `minSdk` 21→29 change drops devices below Android 10 at the next store rel
 
 - [ ] 3.3 Fresh install and login creates exactly one installation row
 - [ ] 3.4 Relaunch creates no duplicate row and refreshes LastSeenUtc
-- [ ] 3.5 Logout sets DisabledUtc
+- [ ] 3.5 Online logout sets DisabledUtc
 - [ ] 3.6 Second account on the same device reassigns and re-enables the row
-- [ ] 3.7 Offline logout completes promptly without hanging
-- [ ] 3.8 Same account on two devices yields two active rows
+- [ ] 3.7 Offline logout completes promptly without hanging and leaves the row active until re-claimed
+- [ ] 3.8 Refresh-token expiry force sign-out leaves the row knowingly active
+- [ ] 3.9 Same account on two devices yields two active rows
 
 ### Phase 4: Transactional Outbox & Intent Creation
 
@@ -868,7 +915,8 @@ The `minSdk` 21→29 change drops devices below Android 10 at the next store rel
 - [ ] 5.6 Same account on two devices receives on both
 - [ ] 5.7 Corrupted registration id disables that installation without retry
 - [ ] 5.8 API restart mid-queue still delivers pending notifications
-- [ ] 5.9 Worker logs show queue age and duration with no credentials, registration ids, or payload bodies
+- [ ] 5.9 Backing-off item is not re-claimed every poll and does not delay a notification queued behind it
+- [ ] 5.10 Worker logs show queue age and duration with no credentials, registration ids, or payload bodies
 
 ### Phase 6: Android Delivery, Permission & Tap Routing
 
@@ -880,13 +928,13 @@ The `minSdk` 21→29 change drops devices below Android 10 at the next store rel
 
 #### Manual
 
-- [ ] 6.4 Android 13+ prompt appears on first MapPage view; denial leaves the app usable
+- [ ] 6.4 Android 13+ prompt appears on first MapPage view after the location prompt resolves; denial leaves the app usable
 - [ ] 6.5 Android 10 shows no prompt and still displays notifications
 - [ ] 6.6 Foreground delivery refreshes My events without a manual pull
 - [ ] 6.7 Background tap opens My events with fresh data
 - [ ] 6.8 Cold-start tap restores the session before showing protected content
 - [ ] 6.9 Warm SingleTop tap switches to My events
-- [ ] 6.10 Duplicate notificationId produces one notification
+- [ ] 6.10 Duplicate notificationId produces one notification, backgrounded and foregrounded
 - [ ] 6.11 Lock-screen content shows no name, contact detail, or event title
 - [ ] 6.12 Disabled notification channel causes no crash
 - [ ] 6.13 Pending navigation is discarded across a logout and different-account login

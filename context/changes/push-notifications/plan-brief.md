@@ -30,7 +30,7 @@ An organizer with the app installed gets a heads-up notification within 30 secon
 | Auto-accept policy | Organizer-only push | The requester already received `Accepted` synchronously in the HTTP response. | Plan |
 | Test scope | One xUnit project, pure logic, no external services | Automate everything that runs without Docker or a database; concurrency and delivery are verified manually. | Plan |
 | Retry budget | TTL 30 min, max 5 attempts, then dead-letter | Survives a transient FCM outage while preventing an hour-old "you were accepted" arriving after the event. | Plan |
-| Logout unlink | Inside `SignOutAsync`, before tokens are cleared | The only point where a valid access token still exists; anything later has no bearer. | Plan |
+| Logout unlink | Carried on the existing `POST /auth/logout` call, keyed on the registration id | That call already authenticates with the refresh token, so no access token, extra HTTP client, or `DELETE` endpoint is needed; the two `revokeServer: false` sign-out paths have no credential at all and are knowingly out of scope. | Plan |
 | `minSdk` | Raised 21 → 29 in this slice | Aligns packaging with the PRD's Android 10+ claim and removes compatibility branches that would otherwise be written now and deleted later. | Plan |
 
 ## Scope
@@ -65,8 +65,8 @@ The outbox insert is the only push work inside the domain transaction; everythin
 | Phase | What it delivers | Key risk |
 | --- | --- | --- |
 | 1. Firebase setup & binding spike | Firebase project, Android binding, manifest, `minSdk` 29, registration id logged on a device | The binding may not expose the FID API — this phase exists to find out before anything depends on it |
-| 2. Installation persistence & API | `PushInstallations` table, `PUT`/`DELETE /api/me/push-installations` | Account-switch reassignment must be atomic or duplicate rows appear |
-| 3. Client registration lifecycle | Registration upload after auth, account switching, logout unlink | `SessionService` may not depend on `IApiService`; unlink must precede token clearing and revocation |
+| 2. Installation persistence & API | `PushInstallations` table, `PUT /api/me/push-installations`, logout-time unlink on `POST /api/auth/logout` | Account-switch reassignment must be atomic or duplicate rows appear |
+| 3. Client registration lifecycle | Registration upload after auth, account switching, registration id carried on logout | `SessionService` may not depend on `IApiService`; unlink rides the existing refresh-token logout call |
 | 4. Transactional outbox | Outbox + delivery tables, intent written inside the existing transaction, test project | Replay paths must not enqueue — four early-return branches to respect |
 | 5. Gateway & delivery worker | Firebase Admin send, retry classification, backoff, dead-letter, stale-install cleanup | Retry policy is easy to get wrong in a way that only shows under real failures |
 | 6. Android delivery & tap routing | Channel, permission prompt, foreground handling, dedup, cold/warm intent routing | Channel importance is immutable after first creation; cold-start routing must not precede session restore |
@@ -74,7 +74,7 @@ The outbox insert is the only push work inside the domain transaction; everythin
 
 **Prerequisites:** S-05 complete (done); a Google account able to create a Firebase project with FCM HTTP v1 enabled; a physical Android device or an emulator image with Google Play services; Railway access to set sealed variables.
 
-**Estimated effort:** ~7 sessions, one per phase, with Phases 5 and 6 the largest. Phases 1–2 are independent; 3 needs 2; 4 is independent of 1–3; 5 needs 4; 6 needs 1 and 5; 7 needs everything.
+**Estimated effort:** ~7 sessions, one per phase, with Phases 5 and 6 the largest. Phases 1–2 are independent; 3 needs 1 and 2 (change 2 edits `ChoNaBojoMessagingService.cs`, which Phase 1 creates); 4 is independent of 1–3; 5 needs 4; 6 needs 1 and 5; 7 needs everything.
 
 ## Open Risks & Assumptions
 
