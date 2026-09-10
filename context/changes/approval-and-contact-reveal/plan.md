@@ -606,17 +606,17 @@ One new migration in Phase 2 adds the `UpdatedUtc`/`Status` transition check con
 
 #### Automated
 
-- [x] 5.1 Solution builds
-- [x] 5.2 Android app builds
-- [x] 5.3 No raw contact field is bound in XAML
-- [x] 5.4 Contacts are not written to persistent storage
+- [x] 5.1 Solution builds — 6d3cfc7
+- [x] 5.2 Android app builds — 6d3cfc7
+- [x] 5.3 No raw contact field is bound in XAML — 6d3cfc7
+- [x] 5.4 Contacts are not written to persistent storage — 6d3cfc7
 
 #### Manual
 
-- [x] 5.5 North star: request → accept → mutual contact reveal on two real accounts
-- [x] 5.6 Single-method users render correctly; valid communicator handles open, while invalid/unmapped handles are copy-only
-- [x] 5.7 Separate phone/email Open and Copy actions work correctly
-- [x] 5.8 Pending and rejected requesters both see the locked state
-- [x] 5.9 Auto-accept event reveals contacts immediately to both sides
-- [x] 5.10 Leaving the tab or changing events clears contacts; returning refetches without flashing prior values
-- [x] 5.11 Contact rows stay legible at large system font sizes
+- [x] 5.5 North star: request → accept → mutual contact reveal on two real accounts — 6d3cfc7
+- [x] 5.6 Single-method users render correctly; valid communicator handles open, while invalid/unmapped handles are copy-only — 6d3cfc7
+- [x] 5.7 Separate phone/email Open and Copy actions work correctly — 6d3cfc7
+- [x] 5.8 Pending and rejected requesters both see the locked state — 6d3cfc7
+- [x] 5.9 Auto-accept event reveals contacts immediately to both sides — 6d3cfc7
+- [x] 5.10 Leaving the tab or changing events clears contacts; returning refetches without flashing prior values — 6d3cfc7
+- [x] 5.11 Contact rows stay legible at large system font sizes — 6d3cfc7
