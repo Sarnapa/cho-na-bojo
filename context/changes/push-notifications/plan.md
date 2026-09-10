@@ -836,16 +836,16 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [ ] 1.1 Android build succeeds
-- [ ] 1.2 Windows TFM builds (Firebase items correctly Android-conditional)
-- [ ] 1.3 Solution builds
-- [ ] 1.4 Merged manifest contains messaging service, POST_NOTIFICATIONS, minSdkVersion 29
+- [x] 1.1 Android build succeeds
+- [x] 1.2 Windows TFM builds (Firebase items correctly Android-conditional)
+- [x] 1.3 Solution builds
+- [x] 1.4 Merged manifest contains messaging service, POST_NOTIFICATIONS, minSdkVersion 29
 
 #### Manual
 
-- [ ] 1.5 Device logs a non-empty registration identifier on first launch
-- [ ] 1.6 Firebase Console test message displays on the device
-- [ ] 1.7 binding-spike.md records the resolved registration mode
+- [x] 1.5 Device logs a non-empty registration identifier on first launch
+- [x] 1.6 Firebase Console test message displays on the device
+- [x] 1.7 binding-spike.md records the resolved registration mode
 
 ### Phase 2: Push Installation Persistence & Registration API
 

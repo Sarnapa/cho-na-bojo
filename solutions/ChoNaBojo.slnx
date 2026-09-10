@@ -100,6 +100,7 @@
     <File Path="../context/changes/README.md" />
   </Folder>
   <Folder Name="/context/changes/push-notifications/">
+    <File Path="../context/changes/push-notifications/binding-spike.md" />
     <File Path="../context/changes/push-notifications/change.md" />
     <File Path="../context/changes/push-notifications/plan-brief.md" />
     <File Path="../context/changes/push-notifications/plan.md" />
