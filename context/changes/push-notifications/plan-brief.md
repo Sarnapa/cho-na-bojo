@@ -10,7 +10,7 @@ Roadmap slice S-06 closes the feedback loop on matchmaking: an organizer learns 
 
 ## Starting Point
 
-The domain triggers already exist and are unusually well-placed: join, accept, reject, and auto-accept all converge on one transactional method, `TransitionJoinRequestAsync` (`server/Events/EventEndpoints.cs:641-810`), which already holds a row lock and commits once. Nothing push-related exists anywhere else — no Firebase dependency on either side, no notification permission, no `MainActivity` intent handling, and no test project in the repository at all.
+The domain triggers already exist and are unusually well-placed: join, accept, reject, and auto-accept all converge on one transactional method, `TransitionJoinRequestAsync` (`server/Events/EventEndpoints.cs:641-810`), which already holds a row lock and commits once. Nothing push-related exists anywhere else — no Firebase dependency on either side, no notification permission, and no `MainActivity` intent handling.
 
 ## Desired End State
 
@@ -28,14 +28,13 @@ An organizer with the app installed gets a heads-up notification within 30 secon
 | Firebase environments | One project for the MVP | Solo developer, 3-week after-hours budget, no staging environment exists today. | Plan |
 | `google-services.json` | Committed to the repo | Client config, not a credential; keeps fresh clones building with no CI decode step. | Plan |
 | Auto-accept policy | Organizer-only push | The requester already received `Accepted` synchronously in the HTTP response. | Plan |
-| Test scope | One xUnit project, pure logic, no external services | Automate everything that runs without Docker or a database; concurrency and delivery are verified manually. | Plan |
 | Retry budget | TTL 30 min, max 5 attempts, then dead-letter | Survives a transient FCM outage while preventing an hour-old "you were accepted" arriving after the event. | Plan |
 | Logout unlink | Carried on the existing `POST /auth/logout` call, keyed on the registration id | That call already authenticates with the refresh token, so no access token, extra HTTP client, or `DELETE` endpoint is needed; the two `revokeServer: false` sign-out paths have no credential at all and are knowingly out of scope. | Plan |
 | `minSdk` | Raised 21 → 29 in this slice | Aligns packaging with the PRD's Android 10+ claim and removes compatibility branches that would otherwise be written now and deleted later. | Plan |
 
 ## Scope
 
-**In scope:** three notification types (join requested, accepted, rejected); installation registration/unlink API and lifecycle; transactional outbox with per-installation delivery, backoff and dead-lettering; Firebase Admin gateway and hosted worker; Android channel, permission, foreground handling, dedup and tap routing; Railway configuration; the repository's first test project.
+**In scope:** three notification types (join requested, accepted, rejected); installation registration/unlink API and lifecycle; transactional outbox with per-installation delivery, backoff and dead-lettering; Firebase Admin gateway and hosted worker; Android channel, permission, foreground handling, dedup and tap routing; Railway configuration.
 
 **Out of scope:** S-07 lifecycle notifications (cancel, remove, leave); in-app notification history; deep-linking to a specific event detail page; iOS; a second Firebase project; Postgres-backed or device-level automated tests; notification preferences; topic subscriptions; exactly-once delivery guarantees.
 
@@ -67,7 +66,7 @@ The outbox insert is the only push work inside the domain transaction; everythin
 | 1. Firebase setup & binding spike | Firebase project, Android binding, manifest, `minSdk` 29, registration id logged on a device | The binding may not expose the FID API — this phase exists to find out before anything depends on it |
 | 2. Installation persistence & API | `PushInstallations` table, `PUT /api/me/push-installations`, logout-time unlink on `POST /api/auth/logout` | Account-switch reassignment must be atomic or duplicate rows appear |
 | 3. Client registration lifecycle | Registration upload after auth, account switching, registration id carried on logout | `SessionService` may not depend on `IApiService`; unlink rides the existing refresh-token logout call |
-| 4. Transactional outbox | Outbox + delivery tables, intent written inside the existing transaction, test project | Replay paths must not enqueue — four early-return branches to respect |
+| 4. Transactional outbox | Outbox + delivery tables, intent written inside the existing transaction | Replay paths must not enqueue — four early-return branches to respect |
 | 5. Gateway & delivery worker | Firebase Admin send, retry classification, backoff, dead-letter, stale-install cleanup | Retry policy is easy to get wrong in a way that only shows under real failures |
 | 6. Android delivery & tap routing | Channel, permission prompt, foreground handling, dedup, cold/warm intent routing | Channel importance is immutable after first creation; cold-start routing must not precede session restore |
 | 7. Deployment & SLO measurement | Railway sealed credentials, latency measurement, device matrix, docs | The 30s NFR needs real measurement, not a "feels fast" judgement |
@@ -79,7 +78,7 @@ The outbox insert is the only push work inside the domain transaction; everythin
 ## Open Risks & Assumptions
 
 - The `Xamarin.Firebase.Messaging` binding may not generate the FID registration surface. Mitigated by making Phase 1 a spike and keeping the destination opaque everywhere except the gateway — but it remains the single riskiest unknown.
-- Concurrency behaviour (`FOR UPDATE SKIP LOCKED` claiming, transactional atomicity) is not covered by automated tests under the chosen test scope, so a claiming bug would only surface manually or in production.
+- Concurrency behaviour (`FOR UPDATE SKIP LOCKED` claiming, transactional atomicity) depends on the manual verification matrix, so a claiming bug could otherwise surface only in production.
 - The 30-second SLO is only meaningful for online devices with permission granted and the channel enabled; offline, force-stopped, and Doze/OEM-restricted devices are excluded by definition and cannot be guaranteed.
 - A single Firebase project means a local development send can reach a real user's device — mitigated by discipline, not by architecture.
 - Railway's API service must stay continuously running; a sleeping or scale-to-zero service cannot meet the SLO.

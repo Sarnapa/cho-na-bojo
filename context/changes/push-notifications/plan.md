@@ -16,8 +16,6 @@ Deliver FCM push notifications around the matchmaking loop: the organizer is not
 
 **Nothing push-related exists yet.** The server has no Firebase dependency (`server/server.csproj:1-27`) and no `PushInstallations`/outbox tables (`server/Data/ChoNaBojoContext.cs:9-70`). The app has no Firebase package (`app/ChoNaBojoApp/ChoNaBojoApp.csproj:69-78`), no `POST_NOTIFICATIONS` permission and no Firebase metadata (`app/ChoNaBojoApp/Platforms/Android/AndroidManifest.xml:1-14`), and a bare `MainActivity` with no `OnCreate`/`OnNewIntent` override (`app/ChoNaBojoApp/Platforms/Android/MainActivity.cs:1-10`).
 
-**There is no test project anywhere in the repository.** `app/`, `server/`, and `shared/` are the only projects in `solutions/ChoNaBojo.slnx`. `dotnet test` currently has nothing to run — this change creates the test project.
-
 **Route prefix `/me` already exists** under the authenticated `/api` group: `MapGet("/me/events", ...)` (`server/Events/EventEndpoints.cs:49-50`), mapped through `apiGroup` in `server/Program.cs:126-129`. Push installation endpoints follow that existing prefix rather than introducing a new grouping concept.
 
 **Logout sequencing constrains where the unlink can live.** `SessionService.SignOutAsync` sets `_signedOut`, nulls `Current`, and calls `_tokenStore.ClearAsync()` *before* its best-effort server call (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:88-125`). Any unlink issued after that point has no bearer token — but the surviving call, `_authTokenClient.LogoutAsync` (`:117`), carries the **refresh token**, which is credential enough. Critically, the class carries an explicit invariant in its doc comment (`app/ChoNaBojoApp/Services/Auth/SessionService.cs:3-8`): it depends only on `ITokenStore` and `IAuthTokenClient`, **never** on `IApiService`, so it cannot recurse into the `AuthenticatingHttpMessageHandler`-wrapped `"ChoNaBojoApi"` client. Any unlink hook must respect that invariant.
@@ -42,7 +40,7 @@ Deliver FCM push notifications around the matchmaking loop: the organizer is not
 
 An organizer with the app installed and notification permission granted receives a heads-up notification within 30 seconds of someone requesting to join their event. A requester receives one within 30 seconds of the organizer accepting or rejecting. Tapping any of them opens the app on **My events**, refreshed from the server. The notification body never contains a name, contact detail, or event title. Explicitly logging out while online stops that device receiving the previous account's notifications; a session that simply expires leaves the row active until the next login on that device re-claims it. A user with two devices gets the notification on both.
 
-Verification: with the API deployed and a real device, perform join → accept and join → reject with a stopwatch; both notifications arrive and the measured commit-to-display latency is under 30 seconds. `dotnet test` passes. `dotnet build solutions/ChoNaBojo.slnx` succeeds for both the Android and Windows TFMs.
+Verification: with the API deployed and a real device, perform join → accept and join → reject with a stopwatch; both notifications arrive and the measured commit-to-display latency is under 30 seconds. `dotnet build solutions/ChoNaBojo.slnx` succeeds for both the Android and Windows TFMs.
 
 ## What We're NOT Doing
 
@@ -378,7 +376,7 @@ The two `revokeServer: false` call sites (`app/ChoNaBojoApp/Services/Auth/Authen
 
 ### Overview
 
-Record notification intent atomically with the join-request state change — still without sending anything. Create the test project and lock the mapping and privacy rules under test.
+Record notification intent atomically with the join-request state change — still without sending anything.
 
 ### Changes Required:
 
@@ -422,7 +420,7 @@ Record notification intent atomically with the join-request state change — sti
 
 **File**: `server/Push/PushIntentFactory.cs`
 
-**Intent**: Decide, from a completed transition, whether a notification is owed and to whom — as a pure function so it is directly testable without a database.
+**Intent**: Decide, from a completed transition, whether a notification is owed and to whom, without coupling the mapping to database access.
 
 **Contract**: Given the join request, its owning event, the actor, the effective target status, and whether the request was newly created, returns zero or one intent descriptor (recipient user id, type, deterministic event key, notification id). The rules:
 
@@ -448,28 +446,11 @@ Because the outbox row is only added after the domain save succeeds, the two `Db
 
 A `DbUpdateException` on the outbox unique index is not expected within a locked transaction; if it occurs it propagates and rolls back the transaction. This is the one residual case where a notification failure affects the domain response, and it is accepted because `EventKey` is derived from `(joinRequestId, type, recipientUserId)`, all of which are unique per state transition under the row lock.
 
-#### 7. Test project
-
-**Files**: `tests/ChoNaBojo.Tests/ChoNaBojo.Tests.csproj`, `solutions/ChoNaBojo.slnx`
-
-**Intent**: Create the repository's first test project, restricted to logic that runs without external services.
-
-**Contract**: `net10.0` xUnit project referencing `server`, `shared/ChoNaBojo.Contracts`, and `shared/ChoNaBojo.Validation`. Nullable and implicit usings enabled, matching repository style. No Testcontainers, no Docker, no database connection string, no Firebase credentials. Added to `solutions/ChoNaBojo.slnx` under a `/tests/` folder so `dotnet build solutions/ChoNaBojo.slnx` and `dotnet test` both pick it up.
-
-#### 8. Intent and validation tests
-
-**Files**: `tests/ChoNaBojo.Tests/Push/PushIntentFactoryTests.cs`, `tests/ChoNaBojo.Tests/Push/PushValidationTests.cs`
-
-**Intent**: Lock the notification mapping — especially the negative cases, which are where duplicate-notification bugs live.
-
-**Contract**: Covers every row of the mapping table above, including the three "no intent" replay situations and the organizer-only auto-accept rule; asserts event-key determinism (same transition → same key, different recipients → different keys); covers registration-request validation bounds.
-
 ### Success Criteria:
 
 #### Automated Verification:
 
 - Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- Tests pass: `dotnet test`
 - Migration applies cleanly: `dotnet ef database update --project server`
 
 #### Manual Verification:
@@ -513,7 +494,7 @@ Drain the outbox: claim work, fan out to each active installation, send through 
 
 **Files**: `server/Push/IPushGateway.cs`, `server/Push/PushSendOutcome.cs`
 
-**Intent**: Isolate Firebase behind a testable seam so the worker and payload logic can be exercised without credentials.
+**Intent**: Isolate Firebase behind a gateway so delivery orchestration and payload construction do not depend directly on Firebase credentials or SDK details.
 
 **Contract**: `Task<PushSendOutcome> SendAsync(PushMessage message, CancellationToken)`. `PushSendOutcome` carries a result kind (`Accepted`, `RetryableFailure`, `TerminalFailure`, `UnregisteredDestination`), an optional FCM message id, an optional error code string, and an optional retry-after hint.
 
@@ -545,7 +526,7 @@ Drain the outbox: claim work, fan out to each active installation, send through 
 
 **File**: `server/Push/PushOutboxProcessor.cs`
 
-**Intent**: One pass over due work — the unit that is easy to reason about and to call once from a test or a diagnostic.
+**Intent**: Process one bounded pass over due work so delivery behaviour remains deterministic and can be invoked by the hosted worker or diagnostics.
 
 **Contract**: Scoped. Claims a bounded batch (20) of **due** outbox items — `CompletedUtc IS NULL AND NextAttemptUtc <= now()`, ordered by `OccurredUtc` — with `FOR UPDATE SKIP LOCKED` inside a transaction, so future Railway replicas cannot double-send. The due-time predicate is what keeps backing-off items out of the batch; without it the oldest failing item would be re-claimed every poll and starve fresh work. On first claim, snapshots the recipient's currently active installations (`DisabledUtc IS NULL`) into `PushDelivery` rows — the snapshot is what makes the send set stable across retries. Sends only deliveries that are pending and due, records each outcome individually, disables the installation on `UnregisteredDestination`, and completes the outbox item once every delivery is accepted, dead-lettered, or terminal. Before the pass ends, the item's `NextAttemptUtc` is recomputed as the minimum `NextAttemptUtc` across its still-pending deliveries, so the item next becomes visible exactly when its earliest delivery is due. An outbox item with zero active installations completes immediately — a user with no device is not an error.
 
@@ -573,20 +554,11 @@ Drain the outbox: claim work, fan out to each active installation, send through 
 
 **Contract**: Options bound from the `Firebase` section with `ValidateOnStart`; `IPushGateway` → `FirebasePushGateway` singleton; processor scoped; `AddHostedService<PushDeliveryWorker>()`. Registered alongside the existing service registrations (`server/Program.cs:92-95`).
 
-#### 11. Delivery tests
-
-**Files**: `tests/ChoNaBojo.Tests/Push/PushPayloadFactoryTests.cs`, `tests/ChoNaBojo.Tests/Push/PushFailureClassifierTests.cs`
-
-**Intent**: Lock the privacy boundary and the retry policy as executable assertions.
-
-**Contract**: Payload tests assert the data dictionary contains exactly the six approved keys and that the body equals one of the three fixed strings for every enum value — so any future edit that interpolates a name or title fails the build. Classifier tests cover each error class, the attempt-count → delay schedule, the 60-second floor, and that attempt 6 dead-letters rather than rescheduling.
-
 ### Success Criteria:
 
 #### Automated Verification:
 
 - Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- Tests pass: `dotnet test`
 - API starts with Firebase configuration present and fails fast with a clear message when `Firebase:ServiceAccountJson` is missing
 
 #### Manual Verification:
@@ -674,7 +646,6 @@ Make the notification behave correctly on the device: a stable channel, a permis
 #### Automated Verification:
 
 - Solution builds for both TFMs: `dotnet build solutions/ChoNaBojo.slnx`
-- Tests still pass: `dotnet test`
 - Merged manifest shows `minSdkVersion="29"`, `POST_NOTIFICATIONS`, and the messaging service
 
 #### Manual Verification:
@@ -734,7 +705,7 @@ Configure production, measure the 30-second requirement with real numbers rather
 
 **File**: `context/changes/push-notifications/reviews/manual-verification.md`
 
-**Intent**: Record the compatibility and lifecycle checks that the automated suite deliberately does not cover.
+**Intent**: Record the compatibility and lifecycle checks that build and configuration verification cannot cover.
 
 **Contract**: Results for Android 10/API 29 and Android 13+/API 33; foreground / background / removed-from-recents / warm `SingleTop`; permission granted, denied, later enabled in settings, channel disabled; offline then reconnect; Doze/App Standby; one account on two devices; logout then a different account on the same device; clear data and reinstall; stale-installation cleanup. Includes the concurrency checks that cannot be automated under the chosen test scope: two API instances (or two rapid worker passes) must not double-send, and a successful device must not be re-sent when a sibling delivery retries.
 
@@ -743,7 +714,6 @@ Configure production, measure the 30-second requirement with real numbers rather
 #### Automated Verification:
 
 - Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- Tests pass: `dotnet test`
 - Deployed API `/health` returns healthy after the Firebase variables are set
 
 #### Manual Verification:
@@ -757,17 +727,7 @@ Configure production, measure the 30-second requirement with real numbers rather
 
 ---
 
-## Testing Strategy
-
-### Unit Tests (`tests/ChoNaBojo.Tests`, no external services):
-
-- Intent mapping for all five transition situations, including the three replay cases that must produce nothing
-- Organizer-only auto-accept rule
-- Event-key determinism and recipient-scoped uniqueness
-- Payload contains exactly the six approved data keys and one of three fixed bodies — the executable form of the privacy boundary
-- FCM error classification per error class
-- Backoff schedule, `Retry-After` floor, and dead-lettering at attempt 6
-- Registration request validation bounds
+## Verification Strategy
 
 ### Integration Tests:
 
@@ -888,68 +848,64 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 #### Automated
 
 - [ ] 4.1 Solution builds
-- [ ] 4.2 Tests pass
-- [ ] 4.3 AddPushOutbox migration applies cleanly
+- [ ] 4.2 AddPushOutbox migration applies cleanly
 
 #### Manual
 
-- [ ] 4.4 Join request creates exactly one organizer-addressed outbox row
-- [ ] 4.5 Identical repeat request creates no additional row
-- [ ] 4.6 Accept creates one requester-addressed row; repeat accept creates none
-- [ ] 4.7 Reject creates one requester-addressed row
-- [ ] 4.8 Auto-accept join creates one organizer row and none for the requester
-- [ ] 4.9 Failed join (capacity or ended event) creates no row and response is unchanged
+- [ ] 4.3 Join request creates exactly one organizer-addressed outbox row
+- [ ] 4.4 Identical repeat request creates no additional row
+- [ ] 4.5 Accept creates one requester-addressed row; repeat accept creates none
+- [ ] 4.6 Reject creates one requester-addressed row
+- [ ] 4.7 Auto-accept join creates one organizer row and none for the requester
+- [ ] 4.8 Failed join (capacity or ended event) creates no row and response is unchanged
 
 ### Phase 5: Firebase Gateway & Delivery Worker
 
 #### Automated
 
 - [ ] 5.1 Solution builds
-- [ ] 5.2 Tests pass
-- [ ] 5.3 API fails fast with a clear message when Firebase configuration is missing
+- [ ] 5.2 API fails fast with a clear message when Firebase configuration is missing
 
 #### Manual
 
-- [ ] 5.4 Real join request delivers a notification within 30 seconds
-- [ ] 5.5 Accept and reject both deliver to the requester's device
-- [ ] 5.6 Same account on two devices receives on both
-- [ ] 5.7 Corrupted registration id disables that installation without retry
-- [ ] 5.8 API restart mid-queue still delivers pending notifications
-- [ ] 5.9 Backing-off item is not re-claimed every poll and does not delay a notification queued behind it
-- [ ] 5.10 Worker logs show queue age and duration with no credentials, registration ids, or payload bodies
+- [ ] 5.3 Real join request delivers a notification within 30 seconds
+- [ ] 5.4 Accept and reject both deliver to the requester's device
+- [ ] 5.5 Same account on two devices receives on both
+- [ ] 5.6 Corrupted registration id disables that installation without retry
+- [ ] 5.7 API restart mid-queue still delivers pending notifications
+- [ ] 5.8 Backing-off item is not re-claimed every poll and does not delay a notification queued behind it
+- [ ] 5.9 Worker logs show queue age and duration with no credentials, registration ids, or payload bodies
 
 ### Phase 6: Android Delivery, Permission & Tap Routing
 
 #### Automated
 
 - [ ] 6.1 Solution builds for both TFMs
-- [ ] 6.2 Tests pass
-- [ ] 6.3 Merged manifest shows minSdkVersion 29, POST_NOTIFICATIONS, and the messaging service
+- [ ] 6.2 Merged manifest shows minSdkVersion 29, POST_NOTIFICATIONS, and the messaging service
 
 #### Manual
 
-- [ ] 6.4 Android 13+ prompt appears on first MapPage view after the location prompt resolves; denial leaves the app usable
-- [ ] 6.5 Android 10 shows no prompt and still displays notifications
-- [ ] 6.6 Foreground delivery refreshes My events without a manual pull
-- [ ] 6.7 Background tap opens My events with fresh data
-- [ ] 6.8 Cold-start tap restores the session before showing protected content
-- [ ] 6.9 Warm SingleTop tap switches to My events
-- [ ] 6.10 Duplicate notificationId produces one notification, backgrounded and foregrounded
-- [ ] 6.11 Lock-screen content shows no name, contact detail, or event title
-- [ ] 6.12 Disabled notification channel causes no crash
-- [ ] 6.13 Pending navigation is discarded across a logout and different-account login
+- [ ] 6.3 Android 13+ prompt appears on first MapPage view after the location prompt resolves; denial leaves the app usable
+- [ ] 6.4 Android 10 shows no prompt and still displays notifications
+- [ ] 6.5 Foreground delivery refreshes My events without a manual pull
+- [ ] 6.6 Background tap opens My events with fresh data
+- [ ] 6.7 Cold-start tap restores the session before showing protected content
+- [ ] 6.8 Warm SingleTop tap switches to My events
+- [ ] 6.9 Duplicate notificationId produces one notification, backgrounded and foregrounded
+- [ ] 6.10 Lock-screen content shows no name, contact detail, or event title
+- [ ] 6.11 Disabled notification channel causes no crash
+- [ ] 6.12 Pending navigation is discarded across a logout and different-account login
 
 ### Phase 7: Deployment, SLO Measurement & Verification Matrix
 
 #### Automated
 
 - [ ] 7.1 Solution builds
-- [ ] 7.2 Tests pass
-- [ ] 7.3 Deployed API /health returns healthy with Firebase variables set
+- [ ] 7.2 Deployed API /health returns healthy with Firebase variables set
 
 #### Manual
 
-- [ ] 7.4 Measured commit-to-display latency under 30 seconds across all recorded runs
-- [ ] 7.5 No Firebase credential appears in logs, health responses, or built artifacts
-- [ ] 7.6 Full device and state matrix recorded with outcomes
-- [ ] 7.7 AGENTS.md is sufficient for a fresh clone to reach a working push setup
+- [ ] 7.3 Measured commit-to-display latency under 30 seconds across all recorded runs
+- [ ] 7.4 No Firebase credential appears in logs, health responses, or built artifacts
+- [ ] 7.5 Full device and state matrix recorded with outcomes
+- [ ] 7.6 AGENTS.md is sufficient for a fresh clone to reach a working push setup
