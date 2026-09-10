@@ -1,7 +1,7 @@
 ---
 change_id: approval-and-contact-reveal
 title: Approval and contact reveal
-status: implemented
+status: impl_reviewed
 created: 2026-09-07
 updated: 2026-09-10
 archived_at: null

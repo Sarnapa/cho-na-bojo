@@ -7,7 +7,7 @@
   </Folder>
   <Folder Name="/app/">
     <Project Path="../app/ChoNaBojoApp/ChoNaBojoApp.csproj" Id="cac6a2d5-7d1b-41ad-9271-0e5331091291">
-      <Deploy Solution="Debug|*" />
+      <Deploy />
     </Project>
   </Folder>
   <Folder Name="/config/">
@@ -96,6 +96,7 @@
     <File Path="../context/changes/approval-and-contact-reveal/plan.md" />
   </Folder>
   <Folder Name="/context/changes/approval-and-contact-reveal/reviews/">
+    <File Path="../context/changes/approval-and-contact-reveal/reviews/impl-review.md" />
     <File Path="../context/changes/approval-and-contact-reveal/reviews/plan-review.md" />
   </Folder>
   <Folder Name="/context/foundation/">
