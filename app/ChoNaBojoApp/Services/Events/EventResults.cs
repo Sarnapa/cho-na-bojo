@@ -274,6 +274,67 @@ public sealed record EventJoinRequestQueueResult
 }
 #endregion
 
+#region EventContactsResultStatus
+public enum EventContactsResultStatus
+{
+	Success,
+	NotFound,
+	Unauthorized,
+	Network,
+	Unknown
+}
+#endregion
+
+#region EventContactsResult
+/// <summary>
+/// Typed client outcome for <c>GET /api/events/{eventId}/contacts</c>.
+/// </summary>
+public sealed record EventContactsResult
+{
+	#region Properties
+	public EventContactsResultStatus Status { get; }
+	public EventContactsResponse? Response { get; }
+	#endregion
+
+	#region Constructors
+	private EventContactsResult(
+		EventContactsResultStatus status,
+		EventContactsResponse? response)
+	{
+		Status = status;
+		Response = response;
+	}
+	#endregion
+
+	#region Public methods
+	public static EventContactsResult Success(EventContactsResponse response)
+	{
+		return new(EventContactsResultStatus.Success, response);
+	}
+
+	public static EventContactsResult NotFound()
+	{
+		return new(EventContactsResultStatus.NotFound, null);
+	}
+
+	public static EventContactsResult Unauthorized()
+	{
+		return new(EventContactsResultStatus.Unauthorized, null);
+	}
+
+	public static EventContactsResult Network()
+	{
+		return new(EventContactsResultStatus.Network, null);
+	}
+
+	public static EventContactsResult Unknown()
+	{
+		return new(EventContactsResultStatus.Unknown, null);
+	}
+	#endregion
+}
+#endregion
+
 #region ResolveJoinRequestResultStatus
 public enum ResolveJoinRequestResultStatus
 {

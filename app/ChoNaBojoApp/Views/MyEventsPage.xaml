@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:materialSymbols="clr-namespace:UraniumUI.Icons.MaterialSymbols;assembly=UraniumUI.Icons.MaterialSymbols"
+    xmlns:views="clr-namespace:ChoNaBojo.App.Views"
     xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels"
     x:DataType="viewModels:MyEventsViewModel"
     Title="My events"
@@ -221,30 +222,17 @@
                                                     VerticalOptions="Center" />
                                             </Grid>
 
-                                            <Border
-                                                Padding="16,8"
-                                                MinimumHeightRequest="48"
-                                                BackgroundColor="{StaticResource SurfaceColor}"
-                                                Stroke="{StaticResource DividerColor}"
-                                                StrokeShape="RoundRectangle 16"
-                                                IsVisible="{Binding IsContactLocked}"
-                                                SemanticProperties.Description="Contact details are locked">
-                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                                    <Label
-                                                        Grid.Column="0"
-                                                        FontFamily="MaterialOutlined"
-                                                        FontSize="24"
-                                                        Text="{x:Static materialSymbols:MaterialOutlined.Lock}"
-                                                        TextColor="{StaticResource SecondaryTextColor}"
-                                                        VerticalOptions="Center"
-                                                        AutomationProperties.IsInAccessibleTree="False" />
-                                                    <Label
-                                                        Grid.Column="1"
-                                                        Style="{StaticResource LabelStyle}"
-                                                        Text="Contact shared after acceptance"
-                                                        VerticalOptions="Center" />
-                                                </Grid>
-                                            </Border>
+                                            <views:ContactRevealView
+                                                IsLocked="{Binding IsContactLocked}"
+                                                IsRevealed="{Binding HasRevealedContact}"
+                                                ShowLoadAction="{Binding ShowContactLoadAction}"
+                                                CanLoad="{Binding CanLoadContact}"
+                                                LoadActionLabel="{Binding ContactActionLabel}"
+                                                ContactRows="{Binding ContactRows}"
+                                                LoadCommand="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=LoadRequestedContactCommand}"
+                                                LoadCommandParameter="{Binding .}"
+                                                OpenCommand="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=OpenContactCommand}"
+                                                CopyCommand="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=CopyContactCommand}" />
                                         </VerticalStackLayout>
                                     </Border>
                                 </DataTemplate>
@@ -384,30 +372,12 @@
                                             SemanticProperties.Description="{Binding RequesterDisplayKey, StringFormat='Reject {0}'}" />
                                     </Grid>
 
-                                    <Border
-                                        Padding="16,8"
-                                        MinimumHeightRequest="48"
-                                        BackgroundColor="{StaticResource SurfaceColor}"
-                                        Stroke="{StaticResource DividerColor}"
-                                        StrokeShape="RoundRectangle 16"
-                                        IsVisible="{Binding IsContactLocked}"
-                                        SemanticProperties.Description="Contact details are locked">
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                            <Label
-                                                Grid.Column="0"
-                                                FontFamily="MaterialOutlined"
-                                                FontSize="24"
-                                                Text="{x:Static materialSymbols:MaterialOutlined.Lock}"
-                                                TextColor="{StaticResource SecondaryTextColor}"
-                                                VerticalOptions="Center"
-                                                AutomationProperties.IsInAccessibleTree="False" />
-                                            <Label
-                                                Grid.Column="1"
-                                                Style="{StaticResource LabelStyle}"
-                                                Text="Contact shared after acceptance"
-                                                VerticalOptions="Center" />
-                                        </Grid>
-                                    </Border>
+                                    <views:ContactRevealView
+                                        IsLocked="{Binding IsContactLocked}"
+                                        IsRevealed="{Binding HasRevealedContact}"
+                                        ContactRows="{Binding ContactRows}"
+                                        OpenCommand="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=OpenContactCommand}"
+                                        CopyCommand="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=CopyContactCommand}" />
                                 </VerticalStackLayout>
                             </Border>
                         </DataTemplate>

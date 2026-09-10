@@ -43,6 +43,10 @@ public interface IApiService
 	  Guid eventId,
 	  CancellationToken cancellationToken);
 
+  Task<EventContactsResult> GetEventContactsAsync(
+	  Guid eventId,
+	  CancellationToken cancellationToken);
+
   Task<ResolveJoinRequestResult> AcceptEventJoinRequestAsync(
 	  Guid eventId,
 	  Guid requestId,

@@ -3,7 +3,7 @@ project: "ChoNaBojo"
 version: 1
 status: draft
 created: 2026-06-13
-updated: 2026-09-06
+updated: 2026-09-09
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -35,7 +35,7 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 | S-02 | map-venue-discovery | open a map centered on their location (with manual-address fallback), see sports venues, and optionally filter them by discipline | S-01 | FR-003, FR-004, NFR (map < 2s), US-01 | done |
 | S-03 | event-creation | create an event at a selected venue with date, estimated end time, participant limit (≥ 2, ≤ 300), and optional auto-accept | S-02 | FR-005, US-02 | done |
 | S-04 | event-listing-and-join-request | view the available events at a selected venue (with fill state, not past end time), optionally filter by time availability, and send a join request | S-03 | FR-006, FR-007, US-01 | done |
-| S-05 | approval-and-contact-reveal | (as organizer) accept or reject a join request; on acceptance both parties see each other's contact info — **north star** | S-04 | FR-009, FR-011, US-01, US-02 | proposed |
+| S-05 | approval-and-contact-reveal | (as organizer) accept or reject a join request; on acceptance both parties see each other's contact info — **north star** | S-04 | FR-009, FR-011, US-01, US-02 | done |
 | S-06 | push-notifications | receive a push notification when someone requests to join my event, and when my own request is accepted or rejected | S-05 | FR-008, FR-010, NFR (push < 30s) | proposed |
 | S-07 | event-lifecycle-ops | cancel my own event (participants get a push), remove a participant (participant gets a push), leave an event as a participant (organizer gets a push); past-end events are auto-closed | S-06 | FR-012, FR-013, FR-014 | proposed |
 
@@ -151,7 +151,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** **This is the highest privacy-risk slice** — a single authorization slip (e.g., an endpoint returning contact info to anyone other than the accepted participant or organizer) breaks the PRD's main guardrail. The per-event role check from F-02 has to be hard-enforced here. Auto-accept (from S-03) flows through the same acceptance path, just without organizer interaction.
-- **Status:** proposed
+- **Status:** done
 
 ### S-06: Push notifications around the matchmaking loop
 
@@ -183,12 +183,12 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes |
 |---|---|---|---|---|
 | F-01 | data-layer-foundation | Foundation: Supabase Postgres + migrations + seeded sports & Warsaw venues | yes | Done — implementation review complete (`context/changes/data-layer-foundation/reviews/impl-review.md`, verdict APPROVED); issue #1 closed |
-| F-02 | auth-scaffold | Foundation: Email+password auth scaffold (User, JWT issuer/validator, middleware) | yes | Ready — F-01 done; ready for `/10x-new` → `/10x-plan` |
-| S-01 | account-and-session | User can register, log in, and stay logged in across app restarts | no | Waiting on F-02 |
-| S-02 | map-venue-discovery | User can browse a map of nearby venues with optional sport filter | no | Waiting on S-01 |
-| S-03 | event-creation | Organizer can create an event at a selected venue | no | Waiting on S-02 |
-| S-04 | event-listing-and-join-request | User can view venue events with availability filter and request to join | no | Waiting on S-03 |
-| S-05 | approval-and-contact-reveal | Organizer accepts/rejects a join request; contact info revealed on accept (north star) | no | Waiting on S-04 — north star |
+| F-02 | auth-scaffold | Foundation: Email+password auth scaffold (User, JWT issuer/validator, middleware) | yes | Done |
+| S-01 | account-and-session | User can register, log in, and stay logged in across app restarts | yes | Done |
+| S-02 | map-venue-discovery | User can browse a map of nearby venues with optional sport filter | yes | Done |
+| S-03 | event-creation | Organizer can create an event at a selected venue | yes | Done |
+| S-04 | event-listing-and-join-request | User can view venue events with availability filter and request to join | yes | Done |
+| S-05 | approval-and-contact-reveal | Organizer accepts/rejects a join request; contact info revealed on accept (north star) | yes | Done — north star matchmaking loop implemented |
 | S-06 | push-notifications | Push notifications across the join → accept/reject loop | no | Waiting on S-05 |
 | S-07 | event-lifecycle-ops | Cancel event, remove participant, leave event, auto-close past events | no | Waiting on S-06 |
 

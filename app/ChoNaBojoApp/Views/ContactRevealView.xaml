@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentView
+    x:Class="ChoNaBojo.App.Views.ContactRevealView"
+    x:Name="ContactView"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:materialSymbols="clr-namespace:UraniumUI.Icons.MaterialSymbols;assembly=UraniumUI.Icons.MaterialSymbols"
+    xmlns:viewModels="clr-namespace:ChoNaBojo.App.ViewModels">
+
+    <Grid>
+        <Border
+            Padding="16,8"
+            MinimumHeightRequest="48"
+            BackgroundColor="{StaticResource SurfaceColor}"
+            Stroke="{StaticResource DividerColor}"
+            StrokeShape="RoundRectangle 16"
+            IsVisible="{Binding IsLocked, Source={x:Reference ContactView}}"
+            SemanticProperties.Description="Contact details are locked">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                <Label
+                    Grid.Column="0"
+                    FontFamily="MaterialOutlined"
+                    FontSize="24"
+                    Text="{x:Static materialSymbols:MaterialOutlined.Lock}"
+                    TextColor="{StaticResource SecondaryTextColor}"
+                    VerticalOptions="Center"
+                    AutomationProperties.IsInAccessibleTree="False" />
+                <Label
+                    Grid.Column="1"
+                    Style="{StaticResource LabelStyle}"
+                    Text="Contact shared after acceptance"
+                    TextColor="{StaticResource SecondaryTextColor}"
+                    VerticalOptions="Center" />
+            </Grid>
+        </Border>
+
+        <Button
+            Style="{StaticResource SecondaryButtonStyle}"
+            Text="{Binding LoadActionLabel, Source={x:Reference ContactView}}"
+            Command="{Binding LoadCommand, Source={x:Reference ContactView}}"
+            CommandParameter="{Binding LoadCommandParameter, Source={x:Reference ContactView}}"
+            IsEnabled="{Binding CanLoad, Source={x:Reference ContactView}}"
+            IsVisible="{Binding ShowLoadAction, Source={x:Reference ContactView}}"
+            SemanticProperties.Description="Load contact details" />
+
+        <VerticalStackLayout
+            Spacing="8"
+            IsVisible="{Binding IsRevealed, Source={x:Reference ContactView}}"
+            BindableLayout.ItemsSource="{Binding ContactRows, Source={x:Reference ContactView}}">
+            <BindableLayout.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:ContactMethodViewData">
+                    <Border
+                        Padding="16,8"
+                        BackgroundColor="{StaticResource SurfaceColor}"
+                        Stroke="{StaticResource DividerColor}"
+                        StrokeShape="RoundRectangle 16">
+                        <Grid
+                            RowDefinitions="Auto,Auto"
+                            ColumnDefinitions="Auto,*"
+                            RowSpacing="8"
+                            ColumnSpacing="8">
+                            <Image
+                                Grid.Column="0"
+                                HeightRequest="24"
+                                WidthRequest="24"
+                                Source="{Binding IconKey}"
+                                VerticalOptions="Center"
+                                AutomationProperties.IsInAccessibleTree="False" />
+                            <Label
+                                Grid.Column="1"
+                                Style="{StaticResource BodyStyle}"
+                                LineBreakMode="WordWrap"
+                                Text="{Binding DisplayValue}"
+                                VerticalOptions="Center" />
+                            <HorizontalStackLayout
+                                Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Spacing="8"
+                                HorizontalOptions="End">
+                                <Button
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    MinimumWidthRequest="48"
+                                    Text="Copy"
+                                    Command="{Binding Source={x:Reference ContactView}, Path=CopyCommand}"
+                                    CommandParameter="{Binding .}"
+                                    SemanticProperties.Description="{Binding CopySemanticDescription}" />
+                                <Button
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    MinimumWidthRequest="48"
+                                    Text="Open"
+                                    Command="{Binding Source={x:Reference ContactView}, Path=OpenCommand}"
+                                    CommandParameter="{Binding .}"
+                                    IsVisible="{Binding CanLaunch}"
+                                    SemanticProperties.Description="{Binding OpenSemanticDescription}" />
+                            </HorizontalStackLayout>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </BindableLayout.ItemTemplate>
+        </VerticalStackLayout>
+    </Grid>
+</ContentView>

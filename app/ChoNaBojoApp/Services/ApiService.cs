@@ -422,6 +422,50 @@ public class ApiService: IApiService
 		}
 	}
 
+	public async Task<EventContactsResult> GetEventContactsAsync(
+		Guid eventId,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.GetAsync(
+				$"/api/events/{eventId:D}/contacts",
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+					var contacts = await response.Content.ReadFromJsonAsync<EventContactsResponse>(
+						JsonOptions,
+						cancellationToken);
+					return contacts is null || contacts.Contacts.Any(IsInvalidEventContact)
+						? EventContactsResult.Unknown()
+						: EventContactsResult.Success(contacts);
+
+				case HttpStatusCode.NotFound:
+					return EventContactsResult.NotFound();
+
+				case HttpStatusCode.Unauthorized:
+					return EventContactsResult.Unauthorized();
+
+				default:
+					return EventContactsResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return EventContactsResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return EventContactsResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return EventContactsResult.Unknown();
+		}
+	}
+
 	public Task<ResolveJoinRequestResult> AcceptEventJoinRequestAsync(
 		Guid eventId,
 		Guid requestId,
@@ -532,6 +576,13 @@ public class ApiService: IApiService
 		return item.RequestId == Guid.Empty
 			|| string.IsNullOrWhiteSpace(item.RequesterDisplayKey)
 			|| !Enum.IsDefined(item.Status);
+	}
+
+	private static bool IsInvalidEventContact(EventContactResponse item)
+	{
+		return item.UserId == Guid.Empty
+			|| item.Contact is null
+			|| item.IsOrganizer != (item.JoinRequestId is null);
 	}
 
 	private async Task<ResolveJoinRequestResult> ResolveEventJoinRequestAsync(

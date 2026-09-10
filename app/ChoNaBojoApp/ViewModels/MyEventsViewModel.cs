@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Net.Mail;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ChoNaBojo.App.Services;
@@ -86,13 +87,28 @@ public sealed record RequestedEventViewData(
 	string VenueAddress,
 	string SportName,
 	EventJoinRequestStatus Status,
-	DateTimeOffset? UpdatedUtc)
+	DateTimeOffset? UpdatedUtc,
+	bool HasFetchedContactPayload,
+	bool IsContactActionInFlight,
+	IReadOnlyList<ContactMethodViewData> ContactRows)
 {
 	public bool IsEnded => EstimatedEndsAtUtc <= DateTimeOffset.UtcNow;
 	public bool IsFull => ParticipantCount >= ParticipantLimit;
 	public double CardOpacity => IsEnded ? 0.6 : 1;
-	public bool HasRevealedContact => false;
-	public bool IsContactLocked => !HasRevealedContact;
+	public bool HasRevealedContact =>
+		Status == EventJoinRequestStatus.Accepted
+		&& HasFetchedContactPayload;
+	public bool IsContactLocked => Status != EventJoinRequestStatus.Accepted;
+	public bool CanLoadContact =>
+		Status == EventJoinRequestStatus.Accepted
+		&& !HasFetchedContactPayload
+		&& !IsContactActionInFlight;
+	public bool ShowContactLoadAction =>
+		Status == EventJoinRequestStatus.Accepted
+		&& !HasFetchedContactPayload;
+	public string ContactActionLabel => IsContactActionInFlight
+		? "Loading contact..."
+		: "View contact";
 	public string StartsAtDisplay => MyEventsFormatting.FormatLocalDateTime(StartsAtUtc);
 	public string EstimatedEndsAtDisplay => MyEventsFormatting.FormatLocalDateTime(
 		EstimatedEndsAtUtc);
@@ -124,7 +140,10 @@ public sealed record RequestedEventViewData(
 			response.Venue.Address,
 			response.Sport.Name,
 			response.Status,
-			response.UpdatedUtc);
+			response.UpdatedUtc,
+			HasFetchedContactPayload: false,
+			IsContactActionInFlight: false,
+			ContactRows: []);
 	}
 }
 #endregion
@@ -137,14 +156,18 @@ public sealed record EventJoinRequestViewData(
 	DateTimeOffset CreatedUtc,
 	DateTimeOffset? UpdatedUtc,
 	bool AcceptAllowedByEvent,
-	bool IsActionInFlight)
+	bool IsActionInFlight,
+	bool HasFetchedContactPayload,
+	IReadOnlyList<ContactMethodViewData> ContactRows)
 {
 	public bool IsPending => Status == EventJoinRequestStatus.Pending;
 	public bool IsResolved => !IsPending;
 	public bool CanAccept => IsPending && AcceptAllowedByEvent && !IsActionInFlight;
 	public bool CanReject => IsPending && !IsActionInFlight;
-	public bool HasRevealedContact => false;
-	public bool IsContactLocked => !HasRevealedContact;
+	public bool HasRevealedContact =>
+		Status == EventJoinRequestStatus.Accepted
+		&& HasFetchedContactPayload;
+	public bool IsContactLocked => Status != EventJoinRequestStatus.Accepted;
 	public string CreatedDisplay => MyEventsFormatting.FormatLocalDateTime(CreatedUtc);
 	public string StatusLabel => IsActionInFlight
 		? "Updating..."
@@ -169,8 +192,39 @@ public sealed record EventJoinRequestViewData(
 			response.CreatedUtc,
 			response.UpdatedUtc,
 			acceptAllowedByEvent,
-			IsActionInFlight: false);
+			IsActionInFlight: false,
+			HasFetchedContactPayload: false,
+			ContactRows: []);
 	}
+}
+#endregion
+
+#region ContactMethodViewData
+public enum ContactMethodKind
+{
+	Phone,
+	Email,
+	Communicator
+}
+
+public sealed record ContactMethodViewData(
+	ContactMethodKind Kind,
+	string DisplayValue,
+	Uri? LaunchUri,
+	string IconKey)
+{
+	public bool CanLaunch => LaunchUri is not null;
+	public bool IsPhone => Kind == ContactMethodKind.Phone;
+	public bool IsEmail => Kind == ContactMethodKind.Email;
+	public bool IsCommunicator => Kind == ContactMethodKind.Communicator;
+	public string CopySemanticDescription => $"Copy {KindLabel}";
+	public string OpenSemanticDescription => $"Open {KindLabel}";
+	private string KindLabel => Kind switch
+	{
+		ContactMethodKind.Phone => "phone number",
+		ContactMethodKind.Email => "email address",
+		_ => "messenger contact"
+	};
 }
 #endregion
 
@@ -194,6 +248,11 @@ public partial class MyEventsViewModel : ViewModelBase
 	private readonly IFeedbackService _feedbackService;
 	private CancellationTokenSource? _queueCancellation;
 	private CancellationTokenSource? _resolutionCancellation;
+	private CancellationTokenSource? _contactCancellation;
+	private EventContactsResponse? _selectedOrganizerContactPayload;
+	private EventContactsResponse? _selectedRequestedContactPayload;
+	private Guid? _selectedRequestedContactEventId;
+	private long _contactLoadVersion;
 	private bool _isConfirmationInProgress;
 	#endregion
 
@@ -282,6 +341,7 @@ public partial class MyEventsViewModel : ViewModelBase
 		Guid? selectedEventId = SelectedOrganizedEvent?.EventId;
 		IsBusy = true;
 		IsLoading = true;
+		ClearContactState();
 		ClearListError();
 		NotifyCommandStateChanged();
 
@@ -306,6 +366,9 @@ public partial class MyEventsViewModel : ViewModelBase
 						{
 							SelectedOrganizedEvent = refreshedSelection;
 							await LoadRequestQueueAsync(
+								refreshedSelection.EventId,
+								cancellationToken);
+							await LoadOrganizerContactsAsync(
 								refreshedSelection.EventId,
 								cancellationToken);
 						}
@@ -360,6 +423,7 @@ public partial class MyEventsViewModel : ViewModelBase
 		NotifyScreenStateChanged();
 		NotifyCommandStateChanged();
 		await LoadRequestQueueAsync(currentEvent.EventId, cancellationToken);
+		await LoadOrganizerContactsAsync(currentEvent.EventId, cancellationToken);
 	}
 
 	[RelayCommand]
@@ -391,6 +455,159 @@ public partial class MyEventsViewModel : ViewModelBase
 			requiresConfirmation: true,
 			cancellationToken);
 	}
+
+	[RelayCommand(CanExecute = nameof(CanLoadRequestedContact))]
+	private async Task LoadRequestedContactAsync(
+		RequestedEventViewData? eventItem,
+		CancellationToken cancellationToken)
+	{
+		if (!CanLoadRequestedContact(eventItem))
+		{
+			return;
+		}
+
+		RequestedEventViewData? currentEvent = RequestedEvents.SingleOrDefault(
+			item => item.EventId == eventItem!.EventId);
+		if (currentEvent is null)
+		{
+			return;
+		}
+
+		ClearContactState();
+		_selectedRequestedContactEventId = currentEvent.EventId;
+		ReplaceRequestedEvent(
+			currentEvent.EventId,
+			item => item with { IsContactActionInFlight = true });
+		NotifyCommandStateChanged();
+
+		try
+		{
+			(EventContactsResult result, long loadVersion) = await LoadContactsAsync(
+				currentEvent.EventId,
+				cancellationToken);
+			cancellationToken.ThrowIfCancellationRequested();
+			if (loadVersion != Interlocked.Read(ref _contactLoadVersion)
+				|| _selectedRequestedContactEventId != currentEvent.EventId)
+			{
+				return;
+			}
+
+			switch (result.Status)
+			{
+				case EventContactsResultStatus.Success:
+					EventContactResponse? organizer = result.Response!.Contacts
+						.SingleOrDefault(contact => contact.IsOrganizer);
+					if (organizer is null)
+					{
+						await _feedbackService.ShowSnackbarAsync(
+							"The organizer's contact details are unavailable.",
+							cancellationToken);
+						break;
+					}
+
+					_selectedRequestedContactPayload = result.Response;
+					ReplaceRequestedEvent(
+						currentEvent.EventId,
+						item => item with
+						{
+							HasFetchedContactPayload = true,
+							ContactRows = ProjectContactRows(organizer.Contact)
+						});
+					break;
+
+				case EventContactsResultStatus.NotFound:
+					await _feedbackService.ShowSnackbarAsync(
+						"Contact details are not available for this request.",
+						cancellationToken);
+					break;
+
+				case EventContactsResultStatus.Unauthorized:
+					await _feedbackService.ShowSnackbarAsync(
+						"Your session has expired. Please sign in again.",
+						cancellationToken);
+					break;
+
+				case EventContactsResultStatus.Network:
+					await _feedbackService.ShowSnackbarAsync(
+						"Can't load contact details. Check your connection and try again.",
+						cancellationToken);
+					break;
+
+				default:
+					await _feedbackService.ShowSnackbarAsync(
+						"Contact details couldn't be loaded. Please try again.",
+						cancellationToken);
+					break;
+			}
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+		}
+		finally
+		{
+			if (_selectedRequestedContactEventId == currentEvent.EventId)
+			{
+				ReplaceRequestedEvent(
+					currentEvent.EventId,
+					item => item with { IsContactActionInFlight = false });
+			}
+
+			NotifyCommandStateChanged();
+		}
+	}
+
+	[RelayCommand(CanExecute = nameof(CanOpenContact))]
+	private async Task OpenContactAsync(
+		ContactMethodViewData? contact,
+		CancellationToken cancellationToken)
+	{
+		if (!CanOpenContact(contact))
+		{
+			return;
+		}
+
+		try
+		{
+			bool opened = await Launcher.Default.OpenAsync(contact!.LaunchUri!);
+			if (!opened)
+			{
+				await _feedbackService.ShowSnackbarAsync(
+					"This contact app could not be opened.",
+					cancellationToken);
+			}
+		}
+		catch (FeatureNotSupportedException)
+		{
+			await _feedbackService.ShowSnackbarAsync(
+				"Opening this contact method is not supported on this device.",
+				cancellationToken);
+		}
+	}
+
+	[RelayCommand]
+	private async Task CopyContactAsync(
+		ContactMethodViewData? contact,
+		CancellationToken cancellationToken)
+	{
+		if (contact is null)
+		{
+			return;
+		}
+
+		try
+		{
+			await Clipboard.Default.SetTextAsync(contact.DisplayValue);
+			await _feedbackService.ShowSnackbarAsync(
+				"Contact copied.",
+				cancellationToken);
+		}
+		catch (FeatureNotSupportedException)
+		{
+			await _feedbackService.ShowSnackbarAsync(
+				"Copying is not supported on this device.",
+				cancellationToken);
+		}
+	}
 	#endregion
 
 	#region Public methods
@@ -400,6 +617,9 @@ public partial class MyEventsViewModel : ViewModelBase
 		OpenRequestsCommand.Cancel();
 		AcceptRequestCommand.Cancel();
 		RejectRequestCommand.Cancel();
+		LoadRequestedContactCommand.Cancel();
+		OpenContactCommand.Cancel();
+		CopyContactCommand.Cancel();
 		ClearSelectedEvent();
 		IsRefreshing = false;
 	}
@@ -498,6 +718,10 @@ public partial class MyEventsViewModel : ViewModelBase
 							? "Join request accepted."
 							: "Join request rejected.",
 						resolutionToken);
+					if (targetStatus == EventJoinRequestStatus.Accepted)
+					{
+						await LoadOrganizerContactsAsync(eventId, resolutionToken);
+					}
 					break;
 
 				case ResolveJoinRequestResultStatus.NotFound:
@@ -623,6 +847,95 @@ public partial class MyEventsViewModel : ViewModelBase
 		}
 	}
 
+	private async Task LoadOrganizerContactsAsync(
+		Guid eventId,
+		CancellationToken cancellationToken)
+	{
+		if (SelectedOrganizedEvent?.EventId != eventId)
+		{
+			return;
+		}
+
+		(EventContactsResult result, long loadVersion) = await LoadContactsAsync(
+			eventId,
+			cancellationToken);
+		cancellationToken.ThrowIfCancellationRequested();
+		if (loadVersion != Interlocked.Read(ref _contactLoadVersion)
+			|| SelectedOrganizedEvent?.EventId != eventId)
+		{
+			return;
+		}
+
+		switch (result.Status)
+		{
+			case EventContactsResultStatus.Success:
+				_selectedOrganizerContactPayload = result.Response;
+				ApplyOrganizerContacts(result.Response!);
+				break;
+
+			case EventContactsResultStatus.NotFound:
+				ClearOrganizerContactRows();
+				await _feedbackService.ShowSnackbarAsync(
+					"Contact details are no longer available for this event.",
+					cancellationToken);
+				break;
+
+			case EventContactsResultStatus.Unauthorized:
+				ClearOrganizerContactRows();
+				await _feedbackService.ShowSnackbarAsync(
+					"Your session has expired. Please sign in again.",
+					cancellationToken);
+				break;
+
+			case EventContactsResultStatus.Network:
+				ClearOrganizerContactRows();
+				await _feedbackService.ShowSnackbarAsync(
+					"Can't load participant contacts. Refresh to try again.",
+					cancellationToken);
+				break;
+
+			default:
+				ClearOrganizerContactRows();
+				await _feedbackService.ShowSnackbarAsync(
+					"Participant contacts couldn't be loaded. Refresh to try again.",
+					cancellationToken);
+				break;
+		}
+	}
+
+	private async Task<(EventContactsResult Result, long Version)> LoadContactsAsync(
+		Guid eventId,
+		CancellationToken cancellationToken)
+	{
+		long loadVersion = Interlocked.Increment(ref _contactLoadVersion);
+		CancelContactLoad();
+		var contactCancellation =
+			CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		_contactCancellation = contactCancellation;
+
+		try
+		{
+			EventContactsResult result = await _apiService.GetEventContactsAsync(
+				eventId,
+				contactCancellation.Token);
+			return (result, loadVersion);
+		}
+		catch (OperationCanceledException)
+			when (contactCancellation.IsCancellationRequested)
+		{
+			return (EventContactsResult.Unknown(), loadVersion);
+		}
+		finally
+		{
+			if (ReferenceEquals(_contactCancellation, contactCancellation))
+			{
+				_contactCancellation = null;
+			}
+
+			contactCancellation.Dispose();
+		}
+	}
+
 	private async Task RefreshSelectedEventStateAsync(
 		Guid eventId,
 		CancellationToken cancellationToken)
@@ -651,6 +964,7 @@ public partial class MyEventsViewModel : ViewModelBase
 
 		SelectedOrganizedEvent = refreshedSelection;
 		await LoadRequestQueueAsync(eventId, cancellationToken);
+		await LoadOrganizerContactsAsync(eventId, cancellationToken);
 	}
 
 	private void ApplyMyEventsResponse(MyEventsResponse response)
@@ -707,6 +1021,32 @@ public partial class MyEventsViewModel : ViewModelBase
 			});
 		SetAcceptAvailability(canAccept);
 		NotifyScreenStateChanged();
+	}
+
+	private void ApplyOrganizerContacts(EventContactsResponse response)
+	{
+		IReadOnlyDictionary<Guid, EventContactResponse> contactsByRequestId =
+			response.Contacts
+				.Where(contact => !contact.IsOrganizer && contact.JoinRequestId.HasValue)
+				.GroupBy(contact => contact.JoinRequestId!.Value)
+				.ToDictionary(group => group.Key, group => group.First());
+
+		for (int index = 0; index < RequestQueue.Count; index++)
+		{
+			EventJoinRequestViewData request = RequestQueue[index];
+			EventContactResponse? contact = null;
+			bool hasContact = request.Status == EventJoinRequestStatus.Accepted
+				&& contactsByRequestId.TryGetValue(
+					request.RequestId,
+					out contact);
+			RequestQueue[index] = request with
+			{
+				HasFetchedContactPayload = hasContact,
+				ContactRows = hasContact
+					? ProjectContactRows(contact!.Contact)
+					: []
+			};
+		}
 	}
 
 	private void ApplyConflictHint(EventConflictResponse conflict)
@@ -781,6 +1121,10 @@ public partial class MyEventsViewModel : ViewModelBase
 			RequestQueue,
 			responses.Select(response =>
 				EventJoinRequestViewData.FromResponse(response, canAccept)));
+		if (_selectedOrganizerContactPayload is not null)
+		{
+			ApplyOrganizerContacts(_selectedOrganizerContactPayload);
+		}
 		NotifyScreenStateChanged();
 		NotifyCommandStateChanged();
 	}
@@ -819,10 +1163,22 @@ public partial class MyEventsViewModel : ViewModelBase
 		NotifyScreenStateChanged();
 	}
 
+	private void ReplaceRequestedEvent(
+		Guid eventId,
+		Func<RequestedEventViewData, RequestedEventViewData> replace)
+	{
+		int index = FindIndex(RequestedEvents, item => item.EventId == eventId);
+		if (index >= 0)
+		{
+			RequestedEvents[index] = replace(RequestedEvents[index]);
+		}
+	}
+
 	private void ClearSelectedEvent()
 	{
 		CancelQueueLoad();
 		CancelResolution();
+		ClearContactState();
 		SelectedOrganizedEvent = null;
 		RequestQueue.Clear();
 		IsQueueLoading = false;
@@ -847,9 +1203,51 @@ public partial class MyEventsViewModel : ViewModelBase
 		cancellation?.Dispose();
 	}
 
+	private void CancelContactLoad()
+	{
+		CancellationTokenSource? cancellation =
+			Interlocked.Exchange(ref _contactCancellation, null);
+		cancellation?.Cancel();
+		cancellation?.Dispose();
+	}
+
+	private void ClearContactState()
+	{
+		Interlocked.Increment(ref _contactLoadVersion);
+		CancelContactLoad();
+		_selectedOrganizerContactPayload = null;
+		_selectedRequestedContactPayload = null;
+		_selectedRequestedContactEventId = null;
+		ClearOrganizerContactRows();
+
+		for (int index = 0; index < RequestedEvents.Count; index++)
+		{
+			RequestedEvents[index] = RequestedEvents[index] with
+			{
+				HasFetchedContactPayload = false,
+				IsContactActionInFlight = false,
+				ContactRows = []
+			};
+		}
+	}
+
+	private void ClearOrganizerContactRows()
+	{
+		for (int index = 0; index < RequestQueue.Count; index++)
+		{
+			RequestQueue[index] = RequestQueue[index] with
+			{
+				HasFetchedContactPayload = false,
+				ContactRows = []
+			};
+		}
+	}
+
 	private bool CanRefresh()
 	{
-		return !IsBusy && _resolutionCancellation is null;
+		return !IsBusy
+			&& _resolutionCancellation is null
+			&& _contactCancellation is null;
 	}
 
 	private bool CanOpenRequests(OrganizedEventViewData? eventItem)
@@ -858,6 +1256,7 @@ public partial class MyEventsViewModel : ViewModelBase
 			&& !IsBusy
 			&& !IsQueueLoading
 			&& _resolutionCancellation is null
+			&& _contactCancellation is null
 			&& OrganizedEvents.Any(item => item.EventId == eventItem.EventId);
 	}
 
@@ -879,6 +1278,20 @@ public partial class MyEventsViewModel : ViewModelBase
 			&& SelectedOrganizedEvent is not null
 			&& RequestQueue.FirstOrDefault(item => item.RequestId == request.RequestId)
 				is { CanReject: true };
+	}
+
+	private bool CanLoadRequestedContact(RequestedEventViewData? eventItem)
+	{
+		return eventItem is not null
+			&& !IsBusy
+			&& _contactCancellation is null
+			&& RequestedEvents.FirstOrDefault(item => item.EventId == eventItem.EventId)
+				is { CanLoadContact: true };
+	}
+
+	private static bool CanOpenContact(ContactMethodViewData? contact)
+	{
+		return contact?.CanLaunch == true;
 	}
 
 	private void SetListError(string message)
@@ -930,6 +1343,139 @@ public partial class MyEventsViewModel : ViewModelBase
 		OpenRequestsCommand.NotifyCanExecuteChanged();
 		AcceptRequestCommand.NotifyCanExecuteChanged();
 		RejectRequestCommand.NotifyCanExecuteChanged();
+		LoadRequestedContactCommand.NotifyCanExecuteChanged();
+		OpenContactCommand.NotifyCanExecuteChanged();
+	}
+
+	private static IReadOnlyList<ContactMethodViewData> ProjectContactRows(
+		ContactInfoResponse contact)
+	{
+		var rows = new List<ContactMethodViewData>(3);
+
+		if (!string.IsNullOrWhiteSpace(contact.Phone))
+		{
+			string value = contact.Phone.Trim();
+			rows.Add(new(
+				ContactMethodKind.Phone,
+				value,
+				TryBuildPhoneUri(value),
+				"contact_phone.png"));
+		}
+
+		if (!string.IsNullOrWhiteSpace(contact.Email))
+		{
+			string value = contact.Email.Trim();
+			rows.Add(new(
+				ContactMethodKind.Email,
+				value,
+				TryBuildEmailUri(value),
+				"contact_email.png"));
+		}
+
+		if (!string.IsNullOrWhiteSpace(contact.CommunicatorHandle))
+		{
+			string value = contact.CommunicatorHandle.Trim();
+			rows.Add(new(
+				ContactMethodKind.Communicator,
+				value,
+				TryBuildCommunicatorUri(contact.CommunicatorPlatform, value),
+				CommunicatorIconKey(contact.CommunicatorPlatform)));
+		}
+
+		return rows;
+	}
+
+	private static Uri? TryBuildPhoneUri(string value)
+	{
+		if (value.Length < 2 || value[0] != '+')
+		{
+			return null;
+		}
+
+		foreach (char character in value.AsSpan(1))
+		{
+			if (!char.IsAsciiDigit(character)
+				&& character is not ' ' and not '(' and not ')' and not '-')
+			{
+				return null;
+			}
+		}
+
+		string digits = string.Concat(value.Where(char.IsAsciiDigit));
+		return digits.Length is >= 7 and <= 15
+			? new Uri($"tel:+{digits}", UriKind.Absolute)
+			: null;
+	}
+
+	private static Uri? TryBuildEmailUri(string value)
+	{
+		if (!MailAddress.TryCreate(value, out MailAddress? address)
+			|| !string.Equals(address.Address, value, StringComparison.OrdinalIgnoreCase))
+		{
+			return null;
+		}
+
+		return Uri.TryCreate($"mailto:{address.Address}", UriKind.Absolute, out Uri? uri)
+			? uri
+			: null;
+	}
+
+	private static Uri? TryBuildCommunicatorUri(
+		CommunicatorPlatform? platform,
+		string value)
+	{
+		string normalized = value.Trim();
+		if (normalized.StartsWith('@'))
+		{
+			normalized = normalized[1..];
+		}
+
+		if (platform == CommunicatorPlatform.WhatsApp)
+		{
+			string phoneValue = normalized.TrimStart('+');
+			foreach (char character in phoneValue)
+			{
+				if (!char.IsAsciiDigit(character)
+					&& character is not ' ' and not '(' and not ')' and not '-')
+				{
+					return null;
+				}
+			}
+
+			string digits = string.Concat(phoneValue.Where(char.IsAsciiDigit));
+			return digits.Length is >= 7 and <= 15
+				? new Uri($"https://wa.me/{digits}", UriKind.Absolute)
+				: null;
+		}
+
+		if (string.IsNullOrEmpty(normalized)
+			|| normalized.Any(character =>
+				!char.IsAsciiLetterOrDigit(character)
+				&& character is not '.' and not '_'))
+		{
+			return null;
+		}
+
+		string escaped = Uri.EscapeDataString(normalized);
+		return platform switch
+		{
+			CommunicatorPlatform.Messenger =>
+				new Uri($"https://m.me/{escaped}", UriKind.Absolute),
+			CommunicatorPlatform.Instagram =>
+				new Uri($"https://www.instagram.com/{escaped}/", UriKind.Absolute),
+			_ => null
+		};
+	}
+
+	private static string CommunicatorIconKey(CommunicatorPlatform? platform)
+	{
+		return platform switch
+		{
+			CommunicatorPlatform.WhatsApp => "msg_whatsapp.png",
+			CommunicatorPlatform.Messenger => "msg_messenger.png",
+			CommunicatorPlatform.Instagram => "msg_instagram.png",
+			_ => "msg_generic.png"
+		};
 	}
 
 	private static void UpdateCollection<T>(
