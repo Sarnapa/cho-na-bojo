@@ -68,6 +68,14 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 			return Set<EventJoinRequest>();
 		}
 	}
+
+	public DbSet<PushInstallation> PushInstallations
+	{
+		get
+		{
+			return Set<PushInstallation>();
+		}
+	}
 	#endregion
 
 	#region Overrides
@@ -343,6 +351,50 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 				.WithMany(user => user.EventJoinRequests)
 				.HasForeignKey(request => request.RequesterUserId)
 				.OnDelete(DeleteBehavior.Restrict);
+		});
+
+		modelBuilder.Entity<PushInstallation>(entity =>
+		{
+			entity.ToTable(tableBuilder =>
+			{
+				tableBuilder.HasCheckConstraint(
+					"CK_PushInstallations_DeviceRegistrationId_NotBlank",
+					"""
+					BTRIM("DeviceRegistrationId") <> ''
+					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_PushInstallations_LastSeenUtc",
+					"""
+					"LastSeenUtc" >= "CreatedUtc"
+					""");
+			});
+
+			entity.HasKey(installation => installation.Id);
+			entity.Property(installation => installation.Id)
+				.HasDefaultValueSql("gen_random_uuid()");
+			entity.Property(installation => installation.DeviceRegistrationId)
+				.IsRequired()
+				.HasMaxLength(PushPolicy.DeviceRegistrationIdMaxLength);
+			entity.Property(installation => installation.AppVersion)
+				.HasMaxLength(PushPolicy.AppVersionMaxLength);
+			entity.Property(installation => installation.CreatedUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(installation => installation.LastSeenUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(installation => installation.DisabledUtc)
+				.HasColumnType("timestamp with time zone");
+
+			entity.HasIndex(installation => installation.DeviceRegistrationId)
+				.IsUnique();
+			entity.HasIndex(installation => installation.UserId);
+
+			entity.HasOne(installation => installation.User)
+				.WithMany()
+				.HasForeignKey(installation => installation.UserId)
+				.OnDelete(DeleteBehavior.Cascade);
 		});
 	}
 	#endregion

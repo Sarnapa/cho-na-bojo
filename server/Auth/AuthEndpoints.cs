@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using ChoNaBojo.Server.Data;
@@ -170,17 +171,45 @@ public static class AuthEndpoints
 	}
 
 	private static async Task<IResult> LogoutAsync(
-		RefreshRequest request,
+		LogoutRequest request,
 		IRefreshTokenService refreshTokenService,
+		ChoNaBojoContext dbContext,
+		ILoggerFactory loggerFactory,
 		CancellationToken cancellationToken)
 	{
-		var validation = AuthValidation.ValidateRefreshRequest(request);
+		var validation = AuthValidation.ValidateLogoutRequest(request);
 		if (!validation.IsValid)
 		{
 			return ToValidationProblem(validation);
 		}
 
-		await refreshTokenService.RevokeFamilyAsync(request.RefreshToken, cancellationToken);
+		Guid? revokedUserId = await refreshTokenService.RevokeFamilyAsync(
+			request.RefreshToken,
+			cancellationToken);
+		if (revokedUserId.HasValue && !string.IsNullOrWhiteSpace(request.DeviceRegistrationId))
+		{
+			try
+			{
+				await dbContext.PushInstallations
+					.Where(installation =>
+						installation.UserId == revokedUserId.Value
+						&& installation.DeviceRegistrationId == request.DeviceRegistrationId.Trim())
+					.ExecuteUpdateAsync(
+						setters => setters.SetProperty(
+							installation => installation.DisabledUtc,
+							DateTime.UtcNow),
+						cancellationToken);
+			}
+			catch (DbException exception)
+			{
+				loggerFactory
+					.CreateLogger("ChoNaBojo.Server.Auth.Logout")
+					.LogWarning(
+						exception,
+						"Refresh-token family was revoked, but push installation unlinking failed.");
+			}
+		}
+
 		return Results.NoContent();
 	}
 

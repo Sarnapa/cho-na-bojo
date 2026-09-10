@@ -14,6 +14,8 @@ public sealed record RegisterRequest(
 public sealed record LoginRequest(string LoginEmail, string Password);
 
 public sealed record RefreshRequest(string RefreshToken);
+
+public sealed record LogoutRequest(string RefreshToken, string? DeviceRegistrationId);
 #endregion
 
 #region Responses DTOs

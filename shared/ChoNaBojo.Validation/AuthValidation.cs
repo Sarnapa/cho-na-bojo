@@ -88,7 +88,34 @@ public static class AuthValidation
 
 	public static ValidationResult ValidateRefreshRequest(RefreshRequest request)
 	{
-		if (string.IsNullOrWhiteSpace(request.RefreshToken))
+		return ValidateRefreshToken(request.RefreshToken);
+	}
+
+	public static ValidationResult ValidateLogoutRequest(LogoutRequest request)
+	{
+		var validation = ValidateRefreshToken(request.RefreshToken);
+		if (request.DeviceRegistrationId is null
+			|| request.DeviceRegistrationId.Length <= PushPolicy.DeviceRegistrationIdMaxLength)
+		{
+			return validation;
+		}
+
+		var errors = validation.Errors.ToDictionary(
+			pair => pair.Key,
+			pair => pair.Value,
+			StringComparer.Ordinal);
+		errors["deviceRegistrationId"] =
+		[
+			$"Device registration id must not exceed {PushPolicy.DeviceRegistrationIdMaxLength} characters."
+		];
+		return new ValidationResult(errors);
+	}
+	#endregion
+
+	#region Private methods
+	private static ValidationResult ValidateRefreshToken(string refreshToken)
+	{
+		if (string.IsNullOrWhiteSpace(refreshToken))
 		{
 			return new ValidationResult(new Dictionary<string, string[]>(StringComparer.Ordinal)
 			{
@@ -98,9 +125,7 @@ public static class AuthValidation
 
 		return ValidationResult.Valid;
 	}
-	#endregion
 
-	#region Private methods
 	private static void AddValidationError(IDictionary<string, string[]> errors, string key, string message)
 	{
 		if (errors.TryGetValue(key, out string[]? existing))

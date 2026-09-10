@@ -45,7 +45,7 @@ public interface IRefreshTokenService
 {
 	Task<TokenPair> IssueForLoginAsync(User user, string? createdByIp, CancellationToken cancellationToken);
 	Task<RefreshTokenExchangeResult> RotateAsync(string refreshToken, string? createdByIp, CancellationToken cancellationToken);
-	Task RevokeFamilyAsync(string refreshToken, CancellationToken cancellationToken);
+	Task<Guid?> RevokeFamilyAsync(string refreshToken, CancellationToken cancellationToken);
 }
 #endregion
 
@@ -157,7 +157,7 @@ public class RefreshTokenService(
 		return RefreshTokenExchangeResult.Success(issuedPair);
 	}
 
-	public async Task RevokeFamilyAsync(string refreshToken, CancellationToken cancellationToken)
+	public async Task<Guid?> RevokeFamilyAsync(string refreshToken, CancellationToken cancellationToken)
 	{
 		if (string.IsNullOrWhiteSpace(refreshToken))
 		{
@@ -171,11 +171,12 @@ public class RefreshTokenService(
 		if (token is null)
 		{
 			await transaction.CommitAsync(cancellationToken);
-			return;
+			return null;
 		}
 
 		await RevokeFamilyAsync(token.FamilyId, DateTime.UtcNow, cancellationToken);
 		await transaction.CommitAsync(cancellationToken);
+		return token.UserId;
 	}
 	#endregion
 

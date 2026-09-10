@@ -10,6 +10,7 @@ using ChoNaBojo.Server.Auth;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Seeding;
 using ChoNaBojo.Server.Events;
+using ChoNaBojo.Server.Push;
 using ChoNaBojo.Server.Venues;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -125,6 +126,7 @@ var apiGroup = app.MapGroup("/api")
 	.RequireAuthorization();
 apiGroup.MapVenueEndpoints();
 apiGroup.MapEventEndpoints();
+apiGroup.MapPushEndpoints();
 
 app.Run();
 

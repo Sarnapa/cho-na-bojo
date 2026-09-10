@@ -851,20 +851,20 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [ ] 2.1 Solution builds
-- [ ] 2.2 AddPushInstallations migration applies cleanly
-- [ ] 2.3 Shared projects gained no framework dependencies
+- [x] 2.1 Solution builds
+- [x] 2.2 AddPushInstallations migration applies cleanly
+- [x] 2.3 Shared projects gained no framework dependencies
 
 #### Manual
 
-- [ ] 2.4 PUT creates one row and returns an installation id
-- [ ] 2.5 Repeat PUT updates LastSeenUtc without a second row
-- [ ] 2.6 Second user's token reassigns UserId on the same registration id
-- [ ] 2.7 Endpoint returns 401 without a bearer token
-- [ ] 2.8 Logout with deviceRegistrationId sets DisabledUtc and still returns 204
-- [ ] 2.9 Logout with another user's deviceRegistrationId returns 204 and changes nothing
-- [ ] 2.10 Logout with no deviceRegistrationId behaves exactly as before
-- [ ] 2.11 Blank registration id returns 400 as ValidationProblemResponse
+- [x] 2.4 PUT creates one row and returns an installation id
+- [x] 2.5 Repeat PUT updates LastSeenUtc without a second row
+- [x] 2.6 Second user's token reassigns UserId on the same registration id
+- [x] 2.7 Endpoint returns 401 without a bearer token
+- [x] 2.8 Logout with deviceRegistrationId sets DisabledUtc and still returns 204
+- [x] 2.9 Logout with another user's deviceRegistrationId returns 204 and changes nothing
+- [x] 2.10 Logout with no deviceRegistrationId behaves exactly as before
+- [x] 2.11 Blank registration id returns 400 as ValidationProblemResponse
 
 ### Phase 3: Client Registration Lifecycle & Logout Unlink
 
