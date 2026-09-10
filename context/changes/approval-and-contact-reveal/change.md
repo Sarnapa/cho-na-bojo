@@ -38,3 +38,33 @@ Fixed at the source with `Platforms/Android/SafeStatefulButtonHandler.cs`, a
 `DisconnectHandler`, registered for `Button` in `MauiProgram.ConfigureMauiHandlers`
 (after `UseUraniumUI()` so it wins the mapping). The page-level guards stay as defense in
 depth.
+
+### 2026-09-10 — `mailto:` built unescaped behind a round-trip guard (deliberate plan deviation)
+
+Plan Phase 5 §2 specified `mailto:{Uri.EscapeDataString(address)}`. `TryBuildEmailUri`
+(`app/ChoNaBojoApp/ViewModels/MyEventsViewModel.cs:1411-1421`) instead emits
+`mailto:{address.Address}` unescaped, gated by a stricter guard: `MailAddress.TryCreate`
+must succeed **and** the parsed `address.Address` must equal the raw input
+case-insensitively, so only clean round-tripping addresses ever reach the URI.
+
+Rationale: `Uri.EscapeDataString` percent-encodes the `@`, producing a non-standard
+`mailto:` that some Android mail clients reject. The round-trip equality check closes the
+same injection surface the escape was there to close, without breaking the scheme. This is
+a decision, not drift — recorded via `/10x-impl-review` finding F2.
+
+### 2026-09-10 — `MapViewModel` reflects the auto-accept outcome (unplanned but required)
+
+`MapViewModel.cs` is in no phase's "Changes Required" list, but Phase 2 made `AutoAccept`
+real: `POST /api/events/{id}/join-requests` can now return `Accepted` immediately instead
+of always `Pending`. The map's venue-events card is a pre-existing surface that consumes
+that response, so it had to render the new outcome or it would show "Request pending" for
+a request the server had already accepted.
+
+Changes (`MapViewModel.cs:517-539`): on an `Accepted` response the card's
+`ParticipantCount` is incremented once — guarded by `card.CurrentUserRequestStatus !=
+Accepted` so a replay doesn't double-count, and clamped with `Math.Min(..., ParticipantLimit)`
+— and the snackbar says "You've joined this event." (or "You're already part of this
+event." on replay). Status labels for `Accepted`/`Rejected` were added at `:105-125`.
+
+Recorded via `/10x-impl-review` finding F3 so a future reader doesn't read it as untracked
+scope creep.

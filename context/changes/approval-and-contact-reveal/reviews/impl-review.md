@@ -69,7 +69,7 @@ All eight "What We're NOT Doing" boundaries were respected — no push notificat
   - Tradeoff: The hazard survives until someone edits the solution on a case-sensitive machine, at which point the divergence is confusing to diagnose.
   - Confidence: MEDIUM — depends on whether anyone will touch the solution file from Linux/macOS before the hygiene change lands.
   - Blind spot: No estimate of when a case-sensitive checkout will next edit the solution.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — dropped the phantom `Solutions/ChoNaBojo.slnx` index entry with `git update-index --force-remove` (exact index-path match, safer than `git rm --cached` under `core.ignorecase=true`); committed as `3514758`. `git ls-files` now shows only `solutions/ChoNaBojo.slnx`; the on-disk file is untouched.
 
 ### F2 — `mailto:` URI omits the plan-mandated `Uri.EscapeDataString`
 
@@ -79,7 +79,7 @@ All eight "What We're NOT Doing" boundaries were respected — no push notificat
 - **Location**: `app/ChoNaBojoApp/ViewModels/MyEventsViewModel.cs:1410`
 - **Detail**: Plan Phase 5 §2 specifies `mailto:{Uri.EscapeDataString(address)}`. The implementation emits `mailto:{address.Address}` unescaped, but compensates with a stricter guard: `MailAddress.TryCreate` must succeed **and** the parsed `address.Address` must equal the input case-insensitively, so only clean round-tripping addresses ever produce a URI. This is arguably better than the plan — `Uri.EscapeDataString` would percent-encode the `@`, yielding a non-standard `mailto:` that some Android mail clients reject. Recorded so the deviation is a decision rather than silent drift.
 - **Fix**: Leave the code as-is and append a one-line note to `change.md` recording that the `mailto:` contract was deliberately tightened (round-trip equality check) instead of escaped, and why.
-- **Decision**: PENDING
+- **Decision**: FIXED — code left as-is; deviation documented in `change.md` Notes ("2026-09-10 — `mailto:` built unescaped behind a round-trip guard").
 
 ### F3 — Unplanned, undocumented `MapViewModel` auto-accept reflection
 
@@ -89,7 +89,7 @@ All eight "What We're NOT Doing" boundaries were respected — no push notificat
 - **Location**: `app/ChoNaBojoApp/ViewModels/MapViewModel.cs` (+17/−9)
 - **Detail**: When a join request now returns `Accepted` (the auto-accept path Phase 2 made real), the map's event card increments `ParticipantCount` (clamped) and shows "You've joined this event." This is a coherent and necessary client reflection of Phase 2's behaviour on the pre-existing map surface, but `MapViewModel.cs` appears in no phase's "Changes Required" list and, unlike the `SafeStatefulButtonHandler`/`VenueEventsPage` crash fix, it is not recorded in `change.md`'s Notes. Every other unplanned edit in this change was documented; this one is the exception.
 - **Fix**: Add a short entry to `change.md`'s Notes section recording that honouring `AutoAccept` server-side required the map card to render the immediate `Accepted` outcome, so a future reader does not read it as untracked scope creep.
-- **Decision**: PENDING
+- **Decision**: FIXED — documented in `change.md` Notes ("2026-09-10 — `MapViewModel` reflects the auto-accept outcome"), including the replay guard and the `Math.Min` clamp.
 
 ### F4 — Manual accept/reject path does not detach on an unexpected `DbUpdateException`
 
@@ -99,4 +99,4 @@ All eight "What We're NOT Doing" boundaries were respected — no push notificat
 - **Location**: `server/Events/EventEndpoints.cs:800,822` (catch filters in `TransitionJoinRequestAsync`)
 - **Detail**: Both `DbUpdateException` catch filters require `createIfMissing`, i.e. they only cover the auto-accept insert path. On the manual organizer path an unexpected `DbUpdateException` would leave the tracked `joinRequest` in `Modified` state after the `await using` rollback. Unreachable today — the handler always writes constraint-satisfying values (`Status <> 1` always accompanied by a non-null `UpdatedUtc`), and the request-scoped `DbContext` is disposed with no further `SaveChangesAsync`. Noted for defence in depth only; the asymmetry with the well-handled create path is what makes it worth recording.
 - **Fix**: Optionally detach the modified entry in a general `catch`/`finally` around the manual transition so both paths leave the change tracker clean, matching the create path's discipline.
-- **Decision**: PENDING
+- **Decision**: SKIPPED — unreachable on the current write path (the handler always writes constraint-satisfying values and the request-scoped `DbContext` is disposed without a further `SaveChangesAsync`); not worth the edit now.
