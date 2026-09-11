@@ -96,6 +96,20 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddSingleton<IPasswordService, PasswordService>();
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+builder.Services
+	.AddOptions<FirebasePushOptions>()
+	.Bind(builder.Configuration.GetRequiredSection(FirebasePushOptions.SectionName))
+	.ValidateDataAnnotations()
+	.Validate(
+		options => !string.IsNullOrWhiteSpace(options.ProjectId),
+		$"{FirebasePushOptions.SectionName}:ProjectId is required.")
+	.Validate(
+		options => !string.IsNullOrWhiteSpace(options.ServiceAccountJson),
+		$"{FirebasePushOptions.SectionName}:ServiceAccountJson is required.")
+	.ValidateOnStart();
+builder.Services.AddSingleton<IPushGateway, FirebasePushGateway>();
+builder.Services.AddScoped<PushOutboxProcessor>();
+builder.Services.AddHostedService<PushDeliveryWorker>();
 
 var app = builder.Build();
 
