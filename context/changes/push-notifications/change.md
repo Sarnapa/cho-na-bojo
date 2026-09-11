@@ -1,7 +1,7 @@
 ---
 change_id: push-notifications
 title: Push notifications
-status: implemented
+status: impl_reviewed
 created: 2026-09-10
 updated: 2026-09-11
 archived_at: null
