@@ -880,21 +880,21 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [x] 6.1 Solution builds for both TFMs
-- [x] 6.2 Merged manifest shows minSdkVersion 29, POST_NOTIFICATIONS, and the messaging service
+- [x] 6.1 Solution builds for both TFMs — f586d94
+- [x] 6.2 Merged manifest shows minSdkVersion 29, POST_NOTIFICATIONS, and the messaging service — f586d94
 
 #### Manual
 
-- [x] 6.3 Android 13+ prompt appears on first MapPage view after the location prompt resolves; denial leaves the app usable
-- [x] 6.4 Android 10 shows no prompt and still displays notifications
-- [x] 6.5 Foreground delivery refreshes My events without a manual pull
-- [x] 6.6 Background tap opens My events with fresh data
-- [x] 6.7 Cold-start tap restores the session before showing protected content
-- [x] 6.8 Warm SingleTop tap switches to My events
-- [x] 6.9 Duplicate notificationId produces one notification, backgrounded and foregrounded
-- [x] 6.10 Lock-screen content shows no name, contact detail, or event title
-- [x] 6.11 Disabled notification channel causes no crash
-- [x] 6.12 Pending navigation is discarded across a logout and different-account login
+- [x] 6.3 Android 13+ prompt appears on first MapPage view after the location prompt resolves; denial leaves the app usable — f586d94
+- [x] 6.4 Android 10 shows no prompt and still displays notifications — f586d94
+- [x] 6.5 Foreground delivery refreshes My events without a manual pull — f586d94
+- [x] 6.6 Background tap opens My events with fresh data — f586d94
+- [x] 6.7 Cold-start tap restores the session before showing protected content — f586d94
+- [x] 6.8 Warm SingleTop tap switches to My events — f586d94
+- [x] 6.9 Duplicate notificationId produces one notification, backgrounded and foregrounded — f586d94
+- [x] 6.10 Lock-screen content shows no name, contact detail, or event title — f586d94
+- [x] 6.11 Disabled notification channel causes no crash — f586d94
+- [x] 6.12 Pending navigation is discarded across a logout and different-account login — f586d94
 
 ### Phase 7: Deployment, SLO Measurement & Verification Matrix
 
