@@ -3,7 +3,7 @@ project: "ChoNaBojo"
 version: 1
 status: draft
 created: 2026-06-13
-updated: 2026-09-10
+updated: 2026-09-11
 prd_version: 1
 main_goal: speed
 top_blocker: time
@@ -36,7 +36,7 @@ Recreational athletes want to play team sports in their neighborhood but can't g
 | S-03 | event-creation | create an event at a selected venue with date, estimated end time, participant limit (≥ 2, ≤ 300), and optional auto-accept | S-02 | FR-005, US-02 | done |
 | S-04 | event-listing-and-join-request | view the available events at a selected venue (with fill state, not past end time), optionally filter by time availability, and send a join request | S-03 | FR-006, FR-007, US-01 | done |
 | S-05 | approval-and-contact-reveal | (as organizer) accept or reject a join request; on acceptance both parties see each other's contact info — **north star** | S-04 | FR-009, FR-011, US-01, US-02 | done |
-| S-06 | push-notifications | receive a push notification when someone requests to join my event, and when my own request is accepted or rejected | S-05 | FR-008, FR-010, NFR (push < 30s) | proposed |
+| S-06 | push-notifications | receive a push notification when someone requests to join my event, and when my own request is accepted or rejected | S-05 | FR-008, FR-010, NFR (push < 30s) | done |
 | S-07 | event-lifecycle-ops | cancel my own event (participants get a push), remove a participant (participant gets a push), leave an event as a participant (organizer gets a push); past-end events are auto-closed | S-06 | FR-012, FR-013, FR-014 | proposed |
 
 ## Streams
@@ -164,7 +164,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **Unknowns:**
   - Whether the FCM Server Key / Service Account JSON is configured in the Firebase Console + Railway env vars — Owner: user. Block: no (out of skill scope; lands in `/10x-plan push-notifications`).
 - **Risk:** FCM is a standard path, but device-token registration on MAUI Android requires `Plugin.Firebase` or direct `Firebase.Messaging` under `Platforms/Android/`. Validating the NFR (push < 30s) requires external measurement — don't trust a "feels fast" gut check.
-- **Status:** proposed
+- **Status:** done
 
 ### S-07: Event lifecycle — cancel, remove participant, leave event, auto-close
 
@@ -189,7 +189,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 | S-03 | event-creation | Organizer can create an event at a selected venue | yes | Done |
 | S-04 | event-listing-and-join-request | User can view venue events with availability filter and request to join | yes | Done |
 | S-05 | approval-and-contact-reveal | Organizer accepts/rejects a join request; contact info revealed on accept (north star) | yes | Done — north star matchmaking loop implemented |
-| S-06 | push-notifications | Push notifications across the join → accept/reject loop | no | Waiting on S-05 |
+| S-06 | push-notifications | Push notifications across the join → accept/reject loop | yes | Done |
 | S-07 | event-lifecycle-ops | Cancel event, remove participant, leave event, auto-close past events | no | Waiting on S-06 |
 
 ## Open Roadmap Questions
@@ -205,6 +205,7 @@ What's already in the codebase as of `2026-06-13` (auto-researched + user-confir
 - **S-03: A logged-in user opens "Create event" from the map/venue list: picks a sport from those that the chosen venue supports (read from `VenueSports`), date, estimated end time, participant limit (≥ 2, ≤ 300 per Polish gathering rules), and optionally toggles auto-accept; the event is saved (with a foreign key to `Sports`) and visible at the venue.** — Archived 2026-09-06 → `context/archive/2026-09-02-event-creation/`. Lesson: —.
 - **S-04: The user picks a venue on the map and sees a list of current/upcoming events (only non-expired per FR-007 — past estimated end times are hidden on read), with a fill counter (taken vs. limit), optionally filtered by time availability; they can send a request to join a chosen event.** — Archived 2026-09-07 → `context/archive/2026-09-06-event-listing-and-join-request/`. Lesson: —.
 - **S-05: The organizer sees a list of pending join requests for their event and can accept or reject each one; on acceptance, both parties (organizer + participant) see each other's contacts (the ones the other side opted to share in S-01). In this slice, notification is in-app indicator/pull (push arrives in S-06 — does not block hypothesis validation).** — Archived 2026-09-10 → `context/archive/2026-09-07-approval-and-contact-reveal/`. Lesson: —.
+- **S-06: The organizer receives a push within 30s when someone requests to join their event (FR-008); the participant receives a push within 30s when the organizer accepts or rejects their request (FR-010). The slice covers FCM setup (device-token registration as an extension of the S-01-style flow, send service from the API).** — Archived 2026-09-11 → `context/archive/2026-09-10-push-notifications/`. Lesson: —.
 
 ## Parked
 

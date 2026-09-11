@@ -90,6 +90,20 @@
     <File Path="../context/archive/2026-09-07-approval-and-contact-reveal/reviews/impl-review.md" />
     <File Path="../context/archive/2026-09-07-approval-and-contact-reveal/reviews/plan-review.md" />
   </Folder>
+  <Folder Name="/context/archive/2026-09-10-push-notifications/">
+    <File Path="../context/archive/2026-09-10-push-notifications/binding-spike.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/change.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/frame.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/plan-brief.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/plan.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/research.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/xamarin-firebase-messaging-context7.md" />
+  </Folder>
+  <Folder Name="/context/archive/2026-09-10-push-notifications/reviews/">
+    <File Path="../context/archive/2026-09-10-push-notifications/reviews/impl-review.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/reviews/manual-verification.md" />
+    <File Path="../context/archive/2026-09-10-push-notifications/reviews/plan-review.md" />
+  </Folder>
   <Folder Name="/context/archive/bootstrap-verification/">
     <File Path="../context/archive/bootstrap-verification/verification.md" />
   </Folder>
@@ -98,20 +112,6 @@
   </Folder>
   <Folder Name="/context/changes/">
     <File Path="../context/changes/README.md" />
-  </Folder>
-  <Folder Name="/context/changes/push-notifications/">
-    <File Path="../context/changes/push-notifications/binding-spike.md" />
-    <File Path="../context/changes/push-notifications/change.md" />
-    <File Path="../context/changes/push-notifications/frame.md" />
-    <File Path="../context/changes/push-notifications/plan-brief.md" />
-    <File Path="../context/changes/push-notifications/plan.md" />
-    <File Path="../context/changes/push-notifications/research.md" />
-    <File Path="../context/changes/push-notifications/xamarin-firebase-messaging-context7.md" />
-  </Folder>
-  <Folder Name="/context/changes/push-notifications/reviews/">
-    <File Path="../context/changes/push-notifications/reviews/impl-review.md" />
-    <File Path="../context/changes/push-notifications/reviews/manual-verification.md" />
-    <File Path="../context/changes/push-notifications/reviews/plan-review.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
