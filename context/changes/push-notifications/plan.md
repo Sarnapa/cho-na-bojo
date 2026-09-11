@@ -880,21 +880,21 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [ ] 6.1 Solution builds for both TFMs
-- [ ] 6.2 Merged manifest shows minSdkVersion 29, POST_NOTIFICATIONS, and the messaging service
+- [x] 6.1 Solution builds for both TFMs
+- [x] 6.2 Merged manifest shows minSdkVersion 29, POST_NOTIFICATIONS, and the messaging service
 
 #### Manual
 
-- [ ] 6.3 Android 13+ prompt appears on first MapPage view after the location prompt resolves; denial leaves the app usable
-- [ ] 6.4 Android 10 shows no prompt and still displays notifications
-- [ ] 6.5 Foreground delivery refreshes My events without a manual pull
-- [ ] 6.6 Background tap opens My events with fresh data
-- [ ] 6.7 Cold-start tap restores the session before showing protected content
-- [ ] 6.8 Warm SingleTop tap switches to My events
-- [ ] 6.9 Duplicate notificationId produces one notification, backgrounded and foregrounded
-- [ ] 6.10 Lock-screen content shows no name, contact detail, or event title
-- [ ] 6.11 Disabled notification channel causes no crash
-- [ ] 6.12 Pending navigation is discarded across a logout and different-account login
+- [x] 6.3 Android 13+ prompt appears on first MapPage view after the location prompt resolves; denial leaves the app usable
+- [x] 6.4 Android 10 shows no prompt and still displays notifications
+- [x] 6.5 Foreground delivery refreshes My events without a manual pull
+- [x] 6.6 Background tap opens My events with fresh data
+- [x] 6.7 Cold-start tap restores the session before showing protected content
+- [x] 6.8 Warm SingleTop tap switches to My events
+- [x] 6.9 Duplicate notificationId produces one notification, backgrounded and foregrounded
+- [x] 6.10 Lock-screen content shows no name, contact detail, or event title
+- [x] 6.11 Disabled notification channel causes no crash
+- [x] 6.12 Pending navigation is discarded across a logout and different-account login
 
 ### Phase 7: Deployment, SLO Measurement & Verification Matrix
 

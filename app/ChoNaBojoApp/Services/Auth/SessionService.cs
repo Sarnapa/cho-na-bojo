@@ -14,6 +14,7 @@ public class SessionService: ISessionService
 	private readonly ITokenStore _tokenStore;
 	private readonly IAuthTokenClient _authTokenClient;
 	private readonly IPushRegistrationStore _pushRegistrationStore;
+	private readonly IPushNavigationRouter _pushNavigationRouter;
 	private readonly SemaphoreSlim _signOutLock = new(1, 1);
 	private bool _signedOut = true;
 	#endregion
@@ -22,11 +23,13 @@ public class SessionService: ISessionService
 	public SessionService(
 		ITokenStore tokenStore,
 		IAuthTokenClient authTokenClient,
-		IPushRegistrationStore pushRegistrationStore)
+		IPushRegistrationStore pushRegistrationStore,
+		IPushNavigationRouter pushNavigationRouter)
 	{
 		_tokenStore = tokenStore;
 		_authTokenClient = authTokenClient;
 		_pushRegistrationStore = pushRegistrationStore;
+		_pushNavigationRouter = pushNavigationRouter;
 	}
 	#endregion
 
@@ -114,6 +117,7 @@ public class SessionService: ISessionService
 			Current = null;
 			await _tokenStore.ClearAsync();
 			_pushRegistrationStore.ClearUploadedState();
+			_pushNavigationRouter.Clear();
 		}
 		finally
 		{

@@ -1,5 +1,6 @@
 ﻿using Android.App;
 using Android.Runtime;
+using ChoNaBojo.App.Platforms.Android.Push;
 
 namespace ChoNaBojo.App
 {
@@ -12,5 +13,11 @@ namespace ChoNaBojo.App
 		}
 
 		protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
+
+		public override void OnCreate()
+		{
+			base.OnCreate();
+			NotificationChannels.EnsureCreated(this);
+		}
 	}
 }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using ChoNaBojo.App.Services.Navigation;
+using ChoNaBojo.App.Services.Push;
 using ChoNaBojo.App.ViewModels;
 
 namespace ChoNaBojo.App.Views;
@@ -9,16 +10,22 @@ public partial class LoginPage : ContentPage
 	#region Private fields
 	private readonly INavigationRootService _navigationRootService;
 	private readonly IServiceProvider _serviceProvider;
+	private readonly IPushNavigationRouter _pushNavigationRouter;
 	private readonly LoginViewModel _viewModel;
 	#endregion
 
 	#region Constructors
-	public LoginPage(LoginViewModel viewModel, INavigationRootService navigationRootService, IServiceProvider serviceProvider)
+	public LoginPage(
+		LoginViewModel viewModel,
+		INavigationRootService navigationRootService,
+		IServiceProvider serviceProvider,
+		IPushNavigationRouter pushNavigationRouter)
 	{
 		InitializeComponent();
 		BindingContext = viewModel;
 		_navigationRootService = navigationRootService;
 		_serviceProvider = serviceProvider;
+		_pushNavigationRouter = pushNavigationRouter;
 		_viewModel = viewModel;
 	}
 	#endregion
@@ -54,6 +61,7 @@ public partial class LoginPage : ContentPage
 		}
 
 		_navigationRootService.SetAppRoot();
+		await _pushNavigationRouter.ConsumePendingAsync();
 	}
 
 	private async void OnGoToRegisterRequested(object? sender, EventArgs e)

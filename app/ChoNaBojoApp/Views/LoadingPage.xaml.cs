@@ -10,18 +10,21 @@ public partial class LoadingPage : ContentPage
 	private readonly ISessionService _sessionService;
 	private readonly INavigationRootService _navigationRootService;
 	private readonly IPushRegistrationService _pushRegistrationService;
+	private readonly IPushNavigationRouter _pushNavigationRouter;
 	#endregion
 
 	#region Constructors
 	public LoadingPage(
 		ISessionService sessionService,
 		INavigationRootService navigationRootService,
-		IPushRegistrationService pushRegistrationService)
+		IPushRegistrationService pushRegistrationService,
+		IPushNavigationRouter pushNavigationRouter)
 	{
 		InitializeComponent();
 		_sessionService = sessionService;
 		_navigationRootService = navigationRootService;
 		_pushRegistrationService = pushRegistrationService;
+		_pushNavigationRouter = pushNavigationRouter;
 		Loaded += OnLoaded;
 	}
 	#endregion
@@ -48,6 +51,7 @@ public partial class LoadingPage : ContentPage
 		{
 			_navigationRootService.SetAppRoot();
 			_ = _pushRegistrationService.SyncAsync(CancellationToken.None);
+			_ = _pushNavigationRouter.ConsumePendingAsync();
 		}
 		else
 		{

@@ -18,6 +18,22 @@ public partial class MyEventsPage : ContentPage
 	}
 	#endregion
 
+	#region Public methods
+	public async Task RefreshFromPushAsync()
+	{
+		Task? currentRefresh = _viewModel.RefreshCommand.ExecutionTask;
+		if (currentRefresh is { IsCompleted: false })
+		{
+			await currentRefresh;
+		}
+
+		if (_viewModel.RefreshCommand.CanExecute(null))
+		{
+			await _viewModel.RefreshCommand.ExecuteAsync(null);
+		}
+	}
+	#endregion
+
 	#region Overrides
 	protected override async void OnAppearing()
 	{

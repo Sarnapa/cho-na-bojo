@@ -11,6 +11,7 @@ using ChoNaBojo.App.Services.Auth;
 using ChoNaBojo.App.Services.Events;
 using ChoNaBojo.App.Services.Feedback;
 using ChoNaBojo.App.Services.Geocoding;
+using ChoNaBojo.App.Services.Push;
 using ChoNaBojo.App.Services.Venues;
 using ChoNaBojo.App.Views.Maps;
 using ChoNaBojo.Contracts.Consts;
@@ -201,6 +202,7 @@ public partial class MapViewModel : ViewModelBase
 	private readonly ISessionService _sessionService;
 	private readonly IFeedbackService _feedbackService;
 	private readonly IApiService _apiService;
+	private readonly IPushPermissionService _pushPermissionService;
 	private IReadOnlyDictionary<int, string> _sportCodesById = new Dictionary<int, string>();
 	private IReadOnlyDictionary<int, string> _sportNamesById = new Dictionary<int, string>();
 	private bool _hasLoadedMap;
@@ -303,12 +305,14 @@ public partial class MapViewModel : ViewModelBase
 		IVenueCatalog venueCatalog,
 		ISessionService sessionService,
 		IFeedbackService feedbackService,
-		IApiService apiService)
+		IApiService apiService,
+		IPushPermissionService pushPermissionService)
 	{
 		_venueCatalog = venueCatalog;
 		_sessionService = sessionService;
 		_feedbackService = feedbackService;
 		_apiService = apiService;
+		_pushPermissionService = pushPermissionService;
 	}
 	#endregion
 
@@ -368,9 +372,10 @@ public partial class MapViewModel : ViewModelBase
 
 	#region Commmands
 	[RelayCommand]
-	private Task AppearingAsync(CancellationToken cancellationToken)
+	private async Task AppearingAsync(CancellationToken cancellationToken)
 	{
-		return LoadMapAsync(cancellationToken);
+		await LoadMapAsync(cancellationToken);
+		await _pushPermissionService.RequestIfNeededAsync(cancellationToken);
 	}
 
 	[RelayCommand]

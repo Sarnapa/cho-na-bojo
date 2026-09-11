@@ -43,7 +43,37 @@ public sealed class ChoNaBojoMessagingService: FirebaseMessagingService
 
 	public override void OnMessageReceived(RemoteMessage message)
 	{
-		Log.Info(LogTag, "Firebase message received (message id present: {0}).", !string.IsNullOrWhiteSpace(message.MessageId));
+		if (!PushNotificationPayload.TryParse(
+				message.Data,
+				out PushNotificationPayload? payload))
+		{
+			return;
+		}
+
+		IServiceProvider? services = IPlatformApplication.Current?.Services;
+		PushNotificationPresenter? presenter =
+			services?.GetService<PushNotificationPresenter>();
+		IPushNavigationRouter? router =
+			services?.GetService<IPushNavigationRouter>();
+		if (presenter is null || router is null)
+		{
+			return;
+		}
+
+		presenter.Show(this, payload!);
+		MainThread.BeginInvokeOnMainThread(
+			() => _ = router.RefreshVisibleMyEventsAsync());
+	}
+
+	public override void OnDeletedMessages()
+	{
+		IPushNavigationRouter? router = IPlatformApplication.Current?.Services
+			.GetService<IPushNavigationRouter>();
+		if (router is not null)
+		{
+			MainThread.BeginInvokeOnMainThread(
+				() => _ = router.RefreshVisibleMyEventsAsync());
+		}
 	}
 	#endregion
 }

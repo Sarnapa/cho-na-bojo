@@ -14,6 +14,7 @@ using ChoNaBojo.App.ViewModels;
 using ChoNaBojo.App.Views;
 #if ANDROID
 using ChoNaBojo.App.Platforms.Android;
+using ChoNaBojo.App.Platforms.Android.Push;
 #endif
 
 namespace ChoNaBojo.App
@@ -77,10 +78,14 @@ namespace ChoNaBojo.App
 #if ANDROID
 			builder.Services.AddSingleton<IPushRegistrationStore, PushRegistrationStore>();
 			builder.Services.AddSingleton<IPushRegistrationService, PushRegistrationService>();
+			builder.Services.AddSingleton<IPushPermissionService, PushPermissionService>();
+			builder.Services.AddSingleton<PushNotificationPresenter>();
 #else
 			builder.Services.AddSingleton<IPushRegistrationStore, NoOpPushRegistrationStore>();
 			builder.Services.AddSingleton<IPushRegistrationService, NoOpPushRegistrationService>();
+			builder.Services.AddSingleton<IPushPermissionService, NoOpPushPermissionService>();
 #endif
+			builder.Services.AddSingleton<IPushNavigationRouter, PushNavigationRouter>();
 			builder.Services.AddSingleton<ISessionService, SessionService>();
 			builder.Services.AddSingleton<IAuthTokenClient, AuthTokenClient>();
 			builder.Services.AddSingleton<INavigationRootService, NavigationRootService>();
