@@ -847,17 +847,17 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [ ] 4.1 Solution builds
-- [ ] 4.2 AddPushOutbox migration applies cleanly
+- [x] 4.1 Solution builds
+- [x] 4.2 AddPushOutbox migration applies cleanly
 
 #### Manual
 
-- [ ] 4.3 Join request creates exactly one organizer-addressed outbox row
-- [ ] 4.4 Identical repeat request creates no additional row
-- [ ] 4.5 Accept creates one requester-addressed row; repeat accept creates none
-- [ ] 4.6 Reject creates one requester-addressed row
-- [ ] 4.7 Auto-accept join creates one organizer row and none for the requester
-- [ ] 4.8 Failed join (capacity or ended event) creates no row and response is unchanged
+- [x] 4.3 Join request creates exactly one organizer-addressed outbox row
+- [x] 4.4 Identical repeat request creates no additional row
+- [x] 4.5 Accept creates one requester-addressed row; repeat accept creates none
+- [x] 4.6 Reject creates one requester-addressed row
+- [x] 4.7 Auto-accept join creates one organizer row and none for the requester
+- [x] 4.8 Failed join (capacity or ended event) creates no row and response is unchanged
 
 ### Phase 5: Firebase Gateway & Delivery Worker
 

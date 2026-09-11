@@ -1,4 +1,5 @@
 using ChoNaBojo.Contracts.Consts;
+using ChoNaBojo.Contracts.Enums;
 using ChoNaBojo.Server.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -74,6 +75,22 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 		get
 		{
 			return Set<PushInstallation>();
+		}
+	}
+
+	public DbSet<PushOutboxItem> PushOutbox
+	{
+		get
+		{
+			return Set<PushOutboxItem>();
+		}
+	}
+
+	public DbSet<PushDelivery> PushDeliveries
+	{
+		get
+		{
+			return Set<PushDelivery>();
 		}
 	}
 	#endregion
@@ -395,6 +412,97 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 				.WithMany()
 				.HasForeignKey(installation => installation.UserId)
 				.OnDelete(DeleteBehavior.Cascade);
+		});
+
+		modelBuilder.Entity<PushOutboxItem>(entity =>
+		{
+			entity.ToTable("PushOutbox", tableBuilder =>
+			{
+				tableBuilder.HasCheckConstraint(
+					"CK_PushOutbox_Type",
+					"""
+					"Type" IN (1, 2, 3)
+					""");
+			});
+
+			entity.HasKey(item => item.Id);
+			entity.Property(item => item.Id)
+				.HasDefaultValueSql("gen_random_uuid()");
+			entity.Property(item => item.EventKey)
+				.IsRequired();
+			entity.Property(item => item.Type)
+				.IsRequired();
+			entity.Property(item => item.OccurredUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(item => item.NextAttemptUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(item => item.ClaimedUtc)
+				.HasColumnType("timestamp with time zone");
+			entity.Property(item => item.CompletedUtc)
+				.HasColumnType("timestamp with time zone");
+
+			entity.HasIndex(item => item.EventKey)
+				.IsUnique();
+			entity.HasIndex(item => new
+				{
+					item.NextAttemptUtc,
+					item.OccurredUtc
+				})
+				.HasFilter("\"CompletedUtc\" IS NULL");
+
+			entity.HasOne(item => item.RecipientUser)
+				.WithMany()
+				.HasForeignKey(item => item.RecipientUserId)
+				.OnDelete(DeleteBehavior.Restrict);
+			entity.HasOne(item => item.SportsEvent)
+				.WithMany()
+				.HasForeignKey(item => item.SportsEventId)
+				.OnDelete(DeleteBehavior.Restrict);
+			entity.HasOne(item => item.EventJoinRequest)
+				.WithMany()
+				.HasForeignKey(item => item.EventJoinRequestId)
+				.OnDelete(DeleteBehavior.Restrict);
+		});
+
+		modelBuilder.Entity<PushDelivery>(entity =>
+		{
+			entity.ToTable(tableBuilder =>
+			{
+				tableBuilder.HasCheckConstraint(
+					"CK_PushDeliveries_AttemptCount",
+					"""
+					"AttemptCount" >= 0
+					""");
+			});
+
+			entity.HasKey(delivery => delivery.Id);
+			entity.Property(delivery => delivery.Id)
+				.HasDefaultValueSql("gen_random_uuid()");
+			entity.Property(delivery => delivery.NextAttemptUtc)
+				.IsRequired()
+				.HasColumnType("timestamp with time zone");
+			entity.Property(delivery => delivery.AcceptedUtc)
+				.HasColumnType("timestamp with time zone");
+			entity.Property(delivery => delivery.DeadLetteredUtc)
+				.HasColumnType("timestamp with time zone");
+
+			entity.HasIndex(delivery => new
+				{
+					delivery.PushOutboxItemId,
+					delivery.PushInstallationId
+				})
+				.IsUnique();
+
+			entity.HasOne(delivery => delivery.PushOutboxItem)
+				.WithMany(item => item.Deliveries)
+				.HasForeignKey(delivery => delivery.PushOutboxItemId)
+				.OnDelete(DeleteBehavior.Cascade);
+			entity.HasOne(delivery => delivery.PushInstallation)
+				.WithMany()
+				.HasForeignKey(delivery => delivery.PushInstallationId)
+				.OnDelete(DeleteBehavior.Restrict);
 		});
 	}
 	#endregion

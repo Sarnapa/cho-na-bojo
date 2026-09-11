@@ -4,6 +4,7 @@ using ChoNaBojo.Contracts.Enums;
 using ChoNaBojo.Server.Auth;
 using ChoNaBojo.Server.Data;
 using ChoNaBojo.Server.Data.Entities;
+using ChoNaBojo.Server.Push;
 using ChoNaBojo.Utils.Text;
 using ChoNaBojo.Validation;
 using Microsoft.EntityFrameworkCore;
@@ -789,6 +790,25 @@ public static class EventEndpoints
 					$"Unsupported join-request target status: {effectiveTargetStatus}.");
 			}
 
+			await dbContext.SaveChangesAsync(cancellationToken);
+
+			PushIntentDescriptor intent = PushIntentFactory.Create(
+				joinRequest,
+				sportsEvent,
+				actorUserId,
+				effectiveTargetStatus,
+				wasNewlyCreated: createIfMissing);
+			dbContext.PushOutbox.Add(new PushOutboxItem
+			{
+				EventKey = intent.EventKey,
+				RecipientUserId = intent.RecipientUserId,
+				Type = intent.Type,
+				SportsEventId = sportsEvent.Id,
+				EventJoinRequestId = joinRequest.Id,
+				NotificationId = intent.NotificationId,
+				OccurredUtc = resolvedUtc,
+				NextAttemptUtc = resolvedUtc
+			});
 			await dbContext.SaveChangesAsync(cancellationToken);
 			await transaction.CommitAsync(cancellationToken);
 
