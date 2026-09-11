@@ -59,3 +59,19 @@ The Android app needs a Google Maps API key to render the map (S-02+):
 4. CI uses a separate production key restricted to the same package plus the release signing certificate SHA-1, stored as the `GOOGLE_MAPS_API_KEY` GitHub repository secret and passed via `-p:GoogleMapsApiKey=...` in `.github/workflows/android-deploy.yml`.
 
 A fresh clone without `secrets/maps.props` still builds — the key placeholder resolves to empty and the map renders blank instead of failing.
+
+## Firebase Cloud Messaging
+
+Push notifications use one Firebase project for the Android app and the API:
+
+1. In Firebase Console, register an Android app with package name exactly `com.cho_na_bojo` and enable the **Firebase Cloud Messaging API (HTTP v1)**.
+2. Keep the downloaded client configuration at `app/ChoNaBojoApp/Platforms/Android/google-services.json`. This file is committed client configuration embedded in the APK; it is not a server credential.
+3. Create a dedicated service account with only the **Firebase Cloud Messaging API Admin** role. Store its JSON key outside the repository and never pass it to an Android build.
+4. For local API development, configure the development-only key through user-secrets:
+   ```powershell
+   dotnet user-secrets set "Firebase:ProjectId" "<firebase-project-id>" --project server
+   dotnet user-secrets set "Firebase:ServiceAccountJson" (Get-Content -Raw "C:\path\outside\repo\firebase-service-account.json") --project server
+   ```
+5. On Railway, set `Firebase__ProjectId` as a plain API-service variable and `Firebase__ServiceAccountJson` as a **sealed**, multiline API-service variable. Do not expose either variable to PR environments or app-build jobs, and keep the API continuously running because the push worker cannot meet the 30-second target while sleeping or scaled to zero.
+
+The Firebase sender credential is distinct from `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`, which is used only by `.github/workflows/android-deploy.yml` to publish the app. Service-account JSON must never be committed, logged, returned by `/health`, placed in `appsettings.json`, or included in a built artifact.
