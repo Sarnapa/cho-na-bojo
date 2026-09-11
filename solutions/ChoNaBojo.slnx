@@ -118,6 +118,9 @@
     <File Path="../context/changes/event-lifecycle-ops/plan-brief.md" />
     <File Path="../context/changes/event-lifecycle-ops/plan.md" />
   </Folder>
+  <Folder Name="/context/changes/event-lifecycle-ops/reviews/">
+    <File Path="../context/changes/event-lifecycle-ops/reviews/plan-review.md" />
+  </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
     <File Path="../context/foundation/lessons.md" />
