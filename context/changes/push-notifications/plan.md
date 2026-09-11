@@ -863,18 +863,18 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [x] 5.1 Solution builds
-- [x] 5.2 API fails fast with a clear message when Firebase configuration is missing
+- [x] 5.1 Solution builds — d5cf8dd
+- [x] 5.2 API fails fast with a clear message when Firebase configuration is missing — d5cf8dd
 
 #### Manual
 
-- [x] 5.3 Real join request delivers a notification within 30 seconds
-- [x] 5.4 Accept and reject both deliver to the requester's device
-- [x] 5.5 Same account on two devices receives on both
-- [x] 5.6 Corrupted registration id disables that installation without retry
-- [x] 5.7 API restart mid-queue still delivers pending notifications
-- [x] 5.8 Backing-off item is not re-claimed every poll and does not delay a notification queued behind it
-- [x] 5.9 Worker logs show queue age and duration with no credentials, registration ids, or payload bodies
+- [x] 5.3 Real join request delivers a notification within 30 seconds — d5cf8dd
+- [x] 5.4 Accept and reject both deliver to the requester's device — d5cf8dd
+- [x] 5.5 Same account on two devices receives on both — d5cf8dd
+- [x] 5.6 Corrupted registration id disables that installation without retry — d5cf8dd
+- [x] 5.7 API restart mid-queue still delivers pending notifications — d5cf8dd
+- [x] 5.8 Backing-off item is not re-claimed every poll and does not delay a notification queued behind it — d5cf8dd
+- [x] 5.9 Worker logs show queue age and duration with no credentials, registration ids, or payload bodies — d5cf8dd
 
 ### Phase 6: Android Delivery, Permission & Tap Routing
 
