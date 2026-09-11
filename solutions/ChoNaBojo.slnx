@@ -115,6 +115,8 @@
   </Folder>
   <Folder Name="/context/changes/event-lifecycle-ops/">
     <File Path="../context/changes/event-lifecycle-ops/change.md" />
+    <File Path="../context/changes/event-lifecycle-ops/plan-brief.md" />
+    <File Path="../context/changes/event-lifecycle-ops/plan.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />

@@ -1,7 +1,7 @@
 ---
 change_id: event-lifecycle-ops
 title: Event lifecycle ops
-status: new
+status: planned
 created: 2026-09-11
 updated: 2026-09-11
 archived_at: null
