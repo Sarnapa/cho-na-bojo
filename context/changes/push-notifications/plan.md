@@ -900,11 +900,11 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Automated
 
-- [x] 7.1 Solution builds
-- [x] 7.2 Deployed API /health returns healthy with Firebase variables set
+- [x] 7.1 Solution builds — 5f83118
+- [x] 7.2 Deployed API /health returns healthy with Firebase variables set — 5f83118
 
 #### Manual
 
-- [x] 7.3 Measured commit-to-display latency under 30 seconds across all recorded runs
-- [x] 7.4 No Firebase credential appears in logs, health responses, or built artifacts
-- [x] 7.6 AGENTS.md is sufficient for a fresh clone to reach a working push setup
+- [x] 7.3 Measured commit-to-display latency under 30 seconds across all recorded runs — 5f83118
+- [x] 7.4 No Firebase credential appears in logs, health responses, or built artifacts — 5f83118
+- [x] 7.6 AGENTS.md is sufficient for a fresh clone to reach a working push setup — 5f83118
