@@ -15,6 +15,12 @@ public sealed class PushOutboxProcessor(
 {
 	#region Private constants
 	private const int BatchSize = 20;
+
+	/// <summary>
+	/// Keeps a claimed item out of the due set while its sends run outside the
+	/// claim transaction, so a second worker cannot re-claim and double-send it.
+	/// </summary>
+	private static readonly TimeSpan ClaimLease = TimeSpan.FromMinutes(2);
 	#endregion
 
 	#region Public methods
@@ -34,47 +40,26 @@ public sealed class PushOutboxProcessor(
 		int processedCount = 0;
 		foreach (Guid candidateId in candidateIds)
 		{
-			await using var transaction = await dbContext.Database.BeginTransactionAsync(
-				IsolationLevel.ReadCommitted,
-				cancellationToken);
-
 			try
 			{
-				DateTime claimedUtc = DateTime.UtcNow;
-				PushOutboxItem? outboxItem = await dbContext.PushOutbox
-					.FromSqlInterpolated(
-						$"""
-							SELECT *
-							FROM "PushOutbox"
-							WHERE "Id" = {candidateId}
-								AND "CompletedUtc" IS NULL
-								AND "NextAttemptUtc" <= {claimedUtc}
-							FOR UPDATE SKIP LOCKED
-							""")
-					.SingleOrDefaultAsync(cancellationToken);
-				if (outboxItem is null)
+				ClaimedOutboxItem? claim = await ClaimItemAsync(
+					candidateId,
+					cancellationToken);
+				if (claim is null)
 				{
-					await transaction.RollbackAsync(CancellationToken.None);
 					continue;
 				}
 
-				await ProcessItemAsync(
-					outboxItem,
-					claimedUtc,
-					cancellationToken);
-				await dbContext.SaveChangesAsync(cancellationToken);
-				await transaction.CommitAsync(cancellationToken);
+				await ProcessItemAsync(claim, cancellationToken);
 				processedCount++;
 			}
 			catch (OperationCanceledException)
 				when (cancellationToken.IsCancellationRequested)
 			{
-				await transaction.RollbackAsync(CancellationToken.None);
 				throw;
 			}
 			catch (Exception exception)
 			{
-				await transaction.RollbackAsync(CancellationToken.None);
 				logger.LogError(
 					exception,
 					"Push outbox item {OutboxId} failed; sibling items will continue.",
@@ -91,81 +76,150 @@ public sealed class PushOutboxProcessor(
 	#endregion
 
 	#region Private methods
-	private async Task ProcessItemAsync(
+	/// <summary>
+	/// Claims the item and materializes its deliveries in one short transaction,
+	/// leasing the item so that no network round-trip is made under the row lock.
+	/// </summary>
+	private async Task<ClaimedOutboxItem?> ClaimItemAsync(
+		Guid candidateId,
+		CancellationToken cancellationToken)
+	{
+		await using var transaction = await dbContext.Database.BeginTransactionAsync(
+			IsolationLevel.ReadCommitted,
+			cancellationToken);
+
+		try
+		{
+			DateTime claimedUtc = DateTime.UtcNow;
+			PushOutboxItem? outboxItem = await dbContext.PushOutbox
+				.FromSqlInterpolated(
+					$"""
+						SELECT *
+						FROM "PushOutbox"
+						WHERE "Id" = {candidateId}
+							AND "CompletedUtc" IS NULL
+							AND "NextAttemptUtc" <= {claimedUtc}
+						FOR UPDATE SKIP LOCKED
+						""")
+				.SingleOrDefaultAsync(cancellationToken);
+			if (outboxItem is null)
+			{
+				await transaction.RollbackAsync(CancellationToken.None);
+				return null;
+			}
+
+			outboxItem.ClaimedUtc = claimedUtc;
+			outboxItem.NextAttemptUtc = claimedUtc.Add(ClaimLease);
+
+			double queueAgeMilliseconds =
+				Math.Max(0, (claimedUtc - outboxItem.OccurredUtc).TotalMilliseconds);
+			logger.LogInformation(
+				"Claimed push outbox item {OutboxId} of type {NotificationType} with queue age {QueueAgeMilliseconds} ms.",
+				outboxItem.Id,
+				outboxItem.Type,
+				queueAgeMilliseconds);
+
+			List<PushDelivery> deliveries = await LoadOrCreateDeliveriesAsync(
+				outboxItem,
+				claimedUtc,
+				cancellationToken);
+
+			await dbContext.SaveChangesAsync(cancellationToken);
+			await transaction.CommitAsync(cancellationToken);
+
+			return new ClaimedOutboxItem(outboxItem, deliveries, claimedUtc);
+		}
+		catch
+		{
+			await transaction.RollbackAsync(CancellationToken.None);
+			throw;
+		}
+	}
+
+	private async Task<List<PushDelivery>> LoadOrCreateDeliveriesAsync(
 		PushOutboxItem outboxItem,
 		DateTime claimedUtc,
 		CancellationToken cancellationToken)
 	{
-		outboxItem.ClaimedUtc = claimedUtc;
-		double queueAgeMilliseconds =
-			Math.Max(0, (claimedUtc - outboxItem.OccurredUtc).TotalMilliseconds);
-		logger.LogInformation(
-			"Claimed push outbox item {OutboxId} of type {NotificationType} with queue age {QueueAgeMilliseconds} ms.",
-			outboxItem.Id,
-			outboxItem.Type,
-			queueAgeMilliseconds);
-
 		List<PushDelivery> deliveries = await dbContext.PushDeliveries
 			.Include(delivery => delivery.PushInstallation)
 			.Where(delivery => delivery.PushOutboxItemId == outboxItem.Id)
 			.ToListAsync(cancellationToken);
 
-		if (deliveries.Count == 0)
+		if (deliveries.Count > 0)
 		{
-			List<PushInstallation> installations = await dbContext.PushInstallations
-				.Where(installation =>
-					installation.UserId == outboxItem.RecipientUserId
-					&& installation.DisabledUtc == null)
-				.ToListAsync(cancellationToken);
-
-			deliveries = installations
-				.Select(installation => new PushDelivery
-				{
-					PushOutboxItemId = outboxItem.Id,
-					PushInstallationId = installation.Id,
-					PushOutboxItem = outboxItem,
-					PushInstallation = installation,
-					NextAttemptUtc = claimedUtc
-				})
-				.ToList();
-
-			dbContext.PushDeliveries.AddRange(deliveries);
-			await dbContext.SaveChangesAsync(cancellationToken);
+			return deliveries;
 		}
 
-		if (deliveries.Count == 0)
-		{
-			outboxItem.CompletedUtc = claimedUtc;
-			logger.LogInformation(
-				"Completed push outbox item {OutboxId} with no active installations.",
-				outboxItem.Id);
-			return;
-		}
+		List<PushInstallation> installations = await dbContext.PushInstallations
+			.Where(installation =>
+				installation.UserId == outboxItem.RecipientUserId
+				&& installation.DisabledUtc == null)
+			.ToListAsync(cancellationToken);
 
-		foreach (PushDelivery delivery in deliveries.Where(delivery =>
+		deliveries = installations
+			.Select(installation => new PushDelivery
+			{
+				PushOutboxItemId = outboxItem.Id,
+				PushInstallationId = installation.Id,
+				PushOutboxItem = outboxItem,
+				PushInstallation = installation,
+				NextAttemptUtc = claimedUtc
+			})
+			.ToList();
+
+		dbContext.PushDeliveries.AddRange(deliveries);
+		return deliveries;
+	}
+
+	/// <summary>
+	/// Sends the due deliveries outside any transaction, persisting each outcome on
+	/// its own so an accepted send is durable the moment FCM accepts it.
+	/// </summary>
+	private async Task ProcessItemAsync(
+		ClaimedOutboxItem claim,
+		CancellationToken cancellationToken)
+	{
+		foreach (PushDelivery delivery in claim.Deliveries.Where(delivery =>
 			delivery.AcceptedUtc == null
 			&& delivery.DeadLetteredUtc == null
-			&& delivery.NextAttemptUtc <= claimedUtc))
+			&& delivery.NextAttemptUtc <= claim.ClaimedUtc))
 		{
 			await ProcessDeliveryAsync(
-				outboxItem,
+				claim.Item,
 				delivery,
 				cancellationToken);
+			await dbContext.SaveChangesAsync(CancellationToken.None);
 		}
 
-		List<PushDelivery> pendingDeliveries = deliveries
+		await FinalizeItemAsync(claim);
+	}
+
+	private async Task FinalizeItemAsync(ClaimedOutboxItem claim)
+	{
+		List<PushDelivery> pendingDeliveries = claim.Deliveries
 			.Where(delivery =>
 				delivery.AcceptedUtc == null
 				&& delivery.DeadLetteredUtc == null)
 			.ToList();
+
 		if (pendingDeliveries.Count == 0)
 		{
-			outboxItem.CompletedUtc = DateTime.UtcNow;
-			return;
+			claim.Item.CompletedUtc = DateTime.UtcNow;
+			if (claim.Deliveries.Count == 0)
+			{
+				logger.LogInformation(
+					"Completed push outbox item {OutboxId} with no active installations.",
+					claim.Item.Id);
+			}
+		}
+		else
+		{
+			claim.Item.NextAttemptUtc = pendingDeliveries.Min(
+				delivery => delivery.NextAttemptUtc);
 		}
 
-		outboxItem.NextAttemptUtc = pendingDeliveries.Min(
-			delivery => delivery.NextAttemptUtc);
+		await dbContext.SaveChangesAsync(CancellationToken.None);
 	}
 
 	private async Task ProcessDeliveryAsync(
@@ -205,10 +259,32 @@ public sealed class PushOutboxProcessor(
 		}
 
 		var stopwatch = Stopwatch.StartNew();
-		PushSendOutcome outcome = await pushGateway.SendAsync(
-			message,
-			cancellationToken);
-		stopwatch.Stop();
+		PushSendOutcome outcome;
+		try
+		{
+			outcome = await pushGateway.SendAsync(
+				message,
+				cancellationToken);
+		}
+		catch (OperationCanceledException)
+			when (cancellationToken.IsCancellationRequested)
+		{
+			throw;
+		}
+		catch (Exception exception)
+		{
+			logger.LogError(
+				exception,
+				"Unexpected failure sending push delivery {DeliveryId} for outbox {OutboxId}; retrying under the standard backoff.",
+				delivery.Id,
+				outboxItem.Id);
+			outcome = PushSendOutcome.Retryable("UnexpectedSendFailure", null);
+		}
+		finally
+		{
+			stopwatch.Stop();
+		}
+
 		outcomeUtc = DateTime.UtcNow;
 
 		switch (outcome.Kind)
@@ -270,5 +346,12 @@ public sealed class PushOutboxProcessor(
 		byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(deviceRegistrationId));
 		return Convert.ToHexString(hash)[..12];
 	}
+	#endregion
+
+	#region ClaimedOutboxItem record
+	private sealed record ClaimedOutboxItem(
+		PushOutboxItem Item,
+		List<PushDelivery> Deliveries,
+		DateTime ClaimedUtc);
 	#endregion
 }

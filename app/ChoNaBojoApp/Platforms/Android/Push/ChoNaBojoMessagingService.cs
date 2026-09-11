@@ -28,9 +28,11 @@ public sealed class ChoNaBojoMessagingService: FirebaseMessagingService
 			services?.GetService<IPushRegistrationService>();
 		if (registrationService is not null)
 		{
-			_ = registrationService.OnRegistrationIdChangedAsync(
-				installationId,
-				CancellationToken.None);
+			_ = ObserveAsync(
+				() => registrationService.OnRegistrationIdChangedAsync(
+					installationId,
+					CancellationToken.None),
+				"Push registration identifier update");
 		}
 
 		Log.Info(LogTag, "Firebase registration identifier received (length {0}).", installationId.Length);
@@ -62,7 +64,9 @@ public sealed class ChoNaBojoMessagingService: FirebaseMessagingService
 
 		presenter.Show(this, payload!);
 		MainThread.BeginInvokeOnMainThread(
-			() => _ = router.RefreshVisibleMyEventsAsync());
+			() => _ = ObserveAsync(
+				router.RefreshVisibleMyEventsAsync,
+				"Refresh of the visible My Events page after a received message"));
 	}
 
 	public override void OnDeletedMessages()
@@ -72,7 +76,29 @@ public sealed class ChoNaBojoMessagingService: FirebaseMessagingService
 		if (router is not null)
 		{
 			MainThread.BeginInvokeOnMainThread(
-				() => _ = router.RefreshVisibleMyEventsAsync());
+				() => _ = ObserveAsync(
+					router.RefreshVisibleMyEventsAsync,
+					"Refresh of the visible My Events page after dropped messages"));
+		}
+	}
+	#endregion
+
+	#region Private methods
+	/// <summary>
+	/// Awaits a fire-and-forget operation so its failure is logged instead of
+	/// surfacing as an unobserved task exception on a background thread.
+	/// </summary>
+	private static async Task ObserveAsync(
+		Func<Task> operation,
+		string description)
+	{
+		try
+		{
+			await operation();
+		}
+		catch (Exception exception)
+		{
+			Log.Warn(LogTag, $"{description} failed: {exception}");
 		}
 	}
 	#endregion

@@ -788,6 +788,22 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 - Session restoration boundary: `app/ChoNaBojoApp/Views/LoadingPage.xaml.cs:26-44`
 - `SingleTop` activity: `app/ChoNaBojoApp/Platforms/Android/MainActivity.cs:7`
 
+## Addenda
+
+Changes that landed outside the "Changes Required" file lists, recorded so a later reviewer does not re-investigate them. Each is a necessary consequence of a planned change, not new scope.
+
+- **`server/Auth/RefreshTokenService.cs`** — `RevokeFamilyAsync` changed `Task` → `Task<Guid?>`. Phase 3 change 7b's logout-unlink ownership check needs the revoked user id, which only this method knows.
+- **`app/ChoNaBojoApp/ChoNaBojoApp.csproj`** — `Xamarin.AndroidX.Fragment.Ktx` pinned to `1.9.0` to resolve a duplicate `FragmentKt` D8 failure surfaced by the Firebase Messaging package. Diagnosis recorded in `binding-spike.md`.
+- **`app/ChoNaBojoApp/Views/MyEventsPage.xaml.cs`** — `RefreshFromPushAsync()` added to back Phase 6's "forces a server refresh" requirement.
+- **`app/ChoNaBojoApp/Views/LoginPage.xaml.cs`** — post-login `ConsumePendingAsync()` landed here after `SetAppRoot()` rather than in `LoginViewModel.cs` as Phase 6 change 7 specified. Behaviourally equivalent, and this is where the authenticated Shell root actually becomes available.
+- **`app/ChoNaBojoApp/Services/Push/PushRegistrationResults.cs`, `server/Push/PushMessage.cs`** — supporting types for APIs the plan contracts.
+- **`context/foundation/todo.md`, `solutions/ChoNaBojo.slnx`** — housekeeping (deferred-work tracking and the solution file list).
+
+Post-review changes from `reviews/impl-review.md`:
+
+- **`server/Push/PushOutboxProcessor.cs`** — F1 fix. Split into claim / send / finalize phases so FCM round-trips no longer run inside the transaction holding the outbox row lock. The claim transaction writes a 2-minute lease into `NextAttemptUtc` to preserve the double-send guard, each delivery outcome commits on its own, and an unexpected `SendAsync` exception becomes a retryable outcome so `MaxAttempts` bounds it.
+- **`app/ChoNaBojoApp/Platforms/Android/Push/ChoNaBojoMessagingService.cs`** — F5 fix. Fire-and-forget tasks now run through an `ObserveAsync` helper that logs failures instead of discarding them.
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles. See `references/progress-format.md`.
@@ -905,6 +921,7 @@ Post-MVP, the accepted route to closing this is proof-of-possession on registrat
 
 #### Manual
 
-- [x] 7.3 Measured commit-to-display latency under 30 seconds across all recorded runs — 5f83118
+- [ ] 7.3 Measured commit-to-display latency under 30 seconds across all recorded runs — the under-30s behaviour was confirmed in use, but the contracted five recorded runs were not captured; folded into the deferred verification item in `context/foundation/todo.md`
 - [x] 7.4 No Firebase credential appears in logs, health responses, or built artifacts — 5f83118
+- [ ] 7.5 Full device/state matrix recorded with outcomes — deferred as an optional extra verification step (not a release blocker), tracked in `context/foundation/todo.md`
 - [x] 7.6 AGENTS.md is sufficient for a fresh clone to reach a working push setup — 5f83118
