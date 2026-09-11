@@ -113,6 +113,9 @@
   <Folder Name="/context/changes/">
     <File Path="../context/changes/README.md" />
   </Folder>
+  <Folder Name="/context/changes/event-lifecycle-ops/">
+    <File Path="../context/changes/event-lifecycle-ops/change.md" />
+  </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
     <File Path="../context/foundation/lessons.md" />
