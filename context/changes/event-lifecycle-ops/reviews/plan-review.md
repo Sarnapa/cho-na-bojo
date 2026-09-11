@@ -4,18 +4,18 @@
 - **Plan**: `context/changes/event-lifecycle-ops/plan.md`
 - **Mode**: Deep
 - **Date**: 2026-09-11
-- **Verdict**: RETHINK
+- **Verdict**: REVISE
 - **Findings**: 4 critical, 3 warnings, 1 observation
 
 ## Verdicts
 
 | Dimension | Verdict |
 |-----------|---------|
-| End-State Alignment | FAIL |
+| End-State Alignment | PASS |
 | Lean Execution | PASS |
 | Architectural Fitness | PASS |
-| Blind Spots | FAIL |
-| Plan Completeness | FAIL |
+| Blind Spots | WARNING |
+| Plan Completeness | WARNING |
 
 ## Grounding
 
@@ -35,7 +35,7 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
   - Tradeoff: The organizer is returned from detail to the list after cancel.
   - Confidence: HIGH — `ClearSelectedEvent`/`ClearContactState` already clear both organizer and participant contact payloads.
   - Blind spot: Reopening a cancelled detail must not re-enable contact actions.
-- **Decision**: PENDING
+- **Decision**: FIXED — applied the proposed fix
 
 ### F2 — RequestedEventResponse cannot contain the planned Status member
 
@@ -45,7 +45,7 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
 - **Location**: Phase 1 — Response contracts; Phase 6 — View data
 - **Detail**: `RequestedEventResponse` already has `EventJoinRequestStatus Status` (`shared/ChoNaBojo.Contracts/DTOs/EventDTOs.cs:55-68`), and `RequestedEventViewData` uses `response.Status` as that request state (`app/ChoNaBojoApp/ViewModels/MyEventsViewModel.cs:75-146`). Appending `EventStatus Status` creates a duplicate positional member and cannot compile.
 - **Fix**: Name the new member `EventStatus EventStatus` in both response DTOs and view-data records, then use `EventStatus` only for event lifecycle logic.
-- **Decision**: PENDING
+- **Decision**: FIXED — applied the proposed fix
 
 ### F3 — Leave and removal do not move request cards out of the live section
 
@@ -59,7 +59,7 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
   - Tradeoff: The section should be renamed from "Past & cancelled" to cover inactive participation on otherwise-live events.
   - Confidence: HIGH — the API already returns all terminal request rows.
   - Blind spot: Product wording for the broader history section needs approval.
-- **Decision**: PENDING
+- **Decision**: FIXED — applied the proposed fix
 
 ### F4 — Re-request notification key has no implementable contract
 
@@ -78,7 +78,7 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
   - Tradeoff: Adds a column, migration and state invariant for one replay case.
   - Confidence: HIGH — a monotonic generation makes each legitimate rejoin unique.
   - Blind spot: The counter increment must occur under the event lock.
-- **Decision**: PENDING
+- **Decision**: FIXED — applied Fix A
 
 ### F5 — ParticipantLimit does not bound cancellation fan-out
 
@@ -97,7 +97,7 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
   - Tradeoff: Cancellation remains linearly expensive and not strictly bounded.
   - Confidence: MEDIUM — safe scale depends on measured PostgreSQL/Railway limits.
   - Blind spot: No production transaction-time budget is documented.
-- **Decision**: PENDING
+- **Decision**: ACCEPTED — deferred to `context/foundation/todo.md`
 
 ### F6 — Missing event status silently deserializes as enum value 0
 
@@ -111,7 +111,7 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
   - Tradeoff: My events becomes unavailable during a bad deploy pairing.
   - Confidence: HIGH — current serialization has no required-member validation.
   - Blind spot: None significant.
-- **Decision**: PENDING
+- **Decision**: FIXED — applied the proposed fix
 
 ### F7 — “Automated” endpoint criteria have no executable harness
 
@@ -121,7 +121,7 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
 - **Location**: Phase 3/4 Automated Verification; Testing Strategy
 - **Detail**: The plan explicitly excludes test infrastructure, and `server/server.http` contains only a health request. Yet Phases 3 and 4 classify authenticated, stateful HTTP/DB assertions as automated without a command or script capable of running them. `/10x-implement` cannot verify those checks as written.
 - **Fix**: Reclassify the endpoint assertions as manual and add concrete setup, authenticated HTTP requests and SQL observations to `server/server.http` or the phase instructions; keep build/migration commands as automated.
-- **Decision**: PENDING
+- **Decision**: SKIPPED
 
 ### F8 — Drift verification creates an unwanted empty migration
 
@@ -131,4 +131,4 @@ Grounding: 14/14 existing paths ✓, 8/8 existing symbols ✓, brief↔plan ✓,
 - **Location**: Phase 1 Automated Verification
 - **Detail**: A second `dotnet ef migrations add` emits another migration artifact; the plan gives no cleanup step and may leave it to be committed.
 - **Fix**: Replace it with `dotnet ef migrations has-pending-model-changes --project server`.
-- **Decision**: PENDING
+- **Decision**: FIXED — applied the proposed fix

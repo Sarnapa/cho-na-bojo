@@ -36,15 +36,15 @@ The domain has a well-shaped transactional core and no lifecycle concept at all.
 - The unique index `(SportsEventId, RequesterUserId)` on `EventJoinRequests` (`server/Data/ChoNaBojoContext.cs:314`) means one user holds at most one request row per event forever. Re-requesting after leaving therefore has to **reuse** the existing row, not insert a second one.
 - `CK_EventJoinRequests_StatusUpdatedUtc` (`server/Data/ChoNaBojoContext.cs:302-311`) encodes `Pending ⇒ UpdatedUtc IS NULL, otherwise NOT NULL`. Flipping a `Left` row back to `Pending` must therefore **reset `UpdatedUtc` to NULL** or the write is rejected by the database.
 - `PushOutboxItem.EventJoinRequestId` is non-nullable, but every cancellation recipient is the owner of a join-request row, so per-recipient outbox rows satisfy the FK with no schema loosening.
-- The outbox `EventKey` format `join-request:{requestId}:{type}:{recipientUserId}` (`server/Push/PushIntentFactory.cs:91-95`) is already unique across the new types without any change, because both type and recipient are part of the key.
+- The outbox `EventKey` format `join-request:{requestId}:{type}:{recipientUserId}` (`server/Push/PushIntentFactory.cs:91-95`) is unique across the new lifecycle notification types because type and recipient are part of the key. A revived `Left` request emits `JoinRequestCreated` for the same request, type and recipient, so that specific path needs a per-attempt discriminator.
 - Capacity is computed as `1 + acceptedCount` against `ParticipantLimit` (`server/Events/EventEndpoints.cs:886-902`). Because `Left`, `Removed` and `Cancelled` are all simply "not `Accepted`", a departure frees a slot with no arithmetic change.
-- `ParticipantLimit` is capped at 300 by `CK_SportsEvents_ParticipantLimit`, so a cancellation fan-out writes at most 300 outbox rows — a bounded, single-transaction workload.
+- `ParticipantLimit` caps accepted participants at 300 but does not cap pending requests. Cancellation fan-out is therefore linear in the full pending-plus-accepted roster and is not strictly bounded; adding an outstanding-request cap is deferred in `context/foundation/todo.md`.
 - Railway runs the API as a long-lived container, so `IHostedService` works natively with no external scheduler (`context/foundation/infrastructure.md:17,38`).
 - The database is never migrated automatically by the app; `dotnet ef database update` is a deliberate deployment step.
 
 ## Desired End State
 
-An organizer opens **My events**, taps **Cancel event**, confirms, and the event moves into a *Past & cancelled* section marked `Cancelled`. Every person who had asked to join or been accepted receives a push within 30 seconds, and their copy of the event moves into the same section. Nobody can join it, and the contact details it had unlocked are no longer served by the API.
+An organizer opens **My events**, taps **Cancel event**, confirms, and the event moves into a collapsed *History* section marked `Cancelled`. Every person who had asked to join or been accepted receives a push within 30 seconds, and their copy of the event moves into the same section. Nobody can join it, and the contact details it had unlocked are no longer served by the API.
 
 An organizer viewing their request queue can **Remove** an accepted participant; that participant is notified, their slot returns to the pool, and neither side can read the other's contact details any more. A participant viewing an event they were accepted into can **Leave**; the organizer is notified, and the participant may ask to join again later if they change their mind — someone who was *removed* may not.
 
@@ -60,6 +60,7 @@ Meanwhile a background loop quietly marks finished events `Closed`, so "this eve
 - **No organizer hand-over.** An organizer cannot transfer their event to someone else before cancelling.
 - **No test infrastructure.** Per the Q14 decision this slice keeps the repository's existing verification model (build, migration apply, scripted manual matrix). No xUnit project is introduced.
 - **No bulk or admin tooling** for cancelling events, and no retention/purge job for old rows.
+- **No outstanding-request cap.** Pending requests remain unlimited in this slice; the cancellation fan-out risk and a future locked-path cap are tracked in `context/foundation/todo.md`.
 - **No in-app notification history** and no deep link to a specific event — push taps continue to route to My events, as S-06 established.
 - **No change to the reject flow**, the contact-reveal endpoint's shape, or the venue map.
 - **RF-1** (the Uranium UI date/time field migration in `context/foundation/review-fixes.md`) stays deferred; it is unrelated to lifecycle.
@@ -79,6 +80,8 @@ Phases 1–2 are schema and plumbing; 3–4 are the API; 5–6 are the client; 7
 ## Critical Implementation Details
 
 **The `Pending ⇒ UpdatedUtc IS NULL` constraint bites on re-request.** `CK_EventJoinRequests_StatusUpdatedUtc` rejects a `Pending` row that carries an `UpdatedUtc`. When a `Left` row is flipped back to `Pending` by a re-request, `UpdatedUtc` must be set back to `NULL` in the same write, otherwise the transaction fails with a constraint violation that surfaces as a 500.
+
+**`CreatedUtc` identifies the current request attempt.** Reviving a `Left` row resets `CreatedUtc` to the new attempt time and `UpdatedUtc` to `NULL`. The revived `JoinRequestCreated` outbox key includes that same `CreatedUtc.UtcTicks`, so a legitimate new attempt cannot collide with the original notification while duplicate retries still replay the now-`Pending` row without enqueuing again.
 
 **Ordering inside the cancel transaction.** The accepted-and-pending roster must be read *after* the `FOR UPDATE` lock is taken and *before* the status rewrite, because the rewrite is what makes those rows no longer match "pending or accepted". Read the roster into memory first, then rewrite, then build outbox rows from the in-memory roster.
 
@@ -132,7 +135,7 @@ Introduce both state machines, guard them at the application and database layers
 
 #### 4. Read-path gating
 
-**File**: `server/Events/EventEndpoints.cs`
+**Files**: `server/Events/EventEndpoints.cs`, `server/Push/PushIntentFactory.cs`
 
 **Intent**: Make every existing read and write path respect the new states before any code can produce them.
 
@@ -144,11 +147,11 @@ Introduce both state machines, guard them at the application and database layers
 
 #### 5. Response contracts
 
-**File**: `shared/ChoNaBojo.Contracts/DTOs/EventDTOs.cs`
+**Files**: `shared/ChoNaBojo.Contracts/DTOs/EventDTOs.cs`, `app/ChoNaBojoApp/Services/ApiService.cs`
 
 **Intent**: Carry event status to the client so it can group and badge events without inferring state from timestamps alone.
 
-**Contract**: append `EventStatus Status` to both `OrganizedEventResponse` and `RequestedEventResponse`. Append as the last positional member so existing construction sites fail loudly at compile time rather than silently binding to the wrong argument. `EventListItemResponse` is unchanged — the venue listing only ever contains active events now.
+**Contract**: append `EventStatus EventStatus` to both `OrganizedEventResponse` and `RequestedEventResponse`. Use the same `EventStatus` member name in `OrganizedEventViewData` and `RequestedEventViewData`, reserving the existing `RequestedEventResponse.Status` and `RequestedEventViewData.Status` members for join-request lifecycle state. Append the response member as the last positional member so existing construction sites fail loudly at compile time rather than silently binding to the wrong argument. Extend `IsInvalidOrganizedEvent` and `IsInvalidRequestedEvent`, used by `ApiService.GetMyEventsAsync`, to reject `EventStatus` values for which `Enum.IsDefined` is false; this includes the zero produced when an older API omits the property. Invalid lifecycle values return the existing `MyEventsResult.Unknown()` outcome, so the view model shows its failure state rather than treating unknown data as active. `EventListItemResponse` is unchanged — the venue listing only ever contains active events now.
 
 #### 6. Conflict codes
 
@@ -165,7 +168,7 @@ Introduce both state machines, guard them at the application and database layers
 - Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
 - Migration is generated with no model-vs-snapshot drift: `dotnet ef migrations add AddEventLifecycleStates --project server`
 - Migration applies cleanly against the dev database: `dotnet ef database update --project server`
-- A second `dotnet ef migrations add` run produces an empty migration, proving the model and snapshot agree
+- EF reports no model/snapshot drift: `dotnet ef migrations has-pending-model-changes --project server`
 
 #### Manual Verification:
 
@@ -174,6 +177,7 @@ Introduce both state machines, guard them at the application and database layers
 - Updating an `EventJoinRequests` row to `Status = 6` succeeds, and to `Status = 7` is rejected
 - All pre-existing events read back as `Status = 1` with `StatusChangedUtc` NULL
 - Venue listing, join, accept, reject and contacts all still behave exactly as before on active events
+- A `/me/events` payload with missing, zero or unknown `EventStatus` maps to `MyEventsResult.Unknown()` and renders no lifecycle actions
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for manual confirmation before proceeding.
 
@@ -335,7 +339,7 @@ Validation common to both: the event must be `Active` (409 `event_cancelled` if 
 
 **Intent**: Honour the Q4 decision — someone who left may ask again; someone who was removed may not.
 
-**Contract**: in `TransitionJoinRequestAsync`'s `createIfMissing` branch, the existing-row path at `:680-689` currently short-circuits to a replay for *any* existing row. It must now branch on status: a `Left` row is revived to `Pending` with **`UpdatedUtc` reset to `NULL`** (required by `CK_EventJoinRequests_StatusUpdatedUtc`) and a fresh `JoinRequestCreated` notification to the organizer; a `Removed` row returns 409 `request_already_resolved`; a `Cancelled` row is unreachable because the event-status gate rejects first; `Pending` and `Accepted` keep today's replay behaviour. Because the revived row keeps its original `Id`, the outbox `EventKey` for the new notification would collide with the first join's key — derive a fresh key by including the new `UpdatedUtc`-era discriminator, or accept the unique-violation replay path already handled at `:827-849`. Choose the former; a silently swallowed notification is worse than a longer key.
+**Contract**: in `TransitionJoinRequestAsync`'s `createIfMissing` branch, the existing-row path at `:680-689` currently short-circuits to a replay for *any* existing row. It must now branch on status: under the event lock, a `Left` row is revived to `Pending`, `CreatedUtc` is reset to the current request-attempt time, and **`UpdatedUtc` is reset to `NULL`** (required by `CK_EventJoinRequests_StatusUpdatedUtc`); a `Removed` row returns 409 `request_already_resolved`; a `Cancelled` row is unreachable because the event-status gate rejects first; `Pending` and `Accepted` keep today's replay behaviour. Treat `CreatedUtc` in the request DTO as the current attempt's creation time, not the immutable first-ever creation time. Add a dedicated `PushIntentFactory` path for the revived `JoinRequestCreated` notification whose key is `join-request:{requestId}:{(int)type}:{recipientUserId}:{createdUtc.UtcTicks}` using the same timestamp written to the row. Do not change keys for initial joins or the three new lifecycle types. Duplicate retries encounter the row as `Pending` under the same event lock and return the existing replay without creating another outbox occurrence.
 
 ### Success Criteria:
 
@@ -354,7 +358,7 @@ Validation common to both: the event must be `Active` (409 `event_cancelled` if 
 
 - After a removal, the removed participant's device receives the notification within 30 seconds, and `GET /events/{id}/contacts` returns 404 for them while the organizer's contact list no longer includes them
 - After a leave, the organizer's device receives the notification within 30 seconds and the freed slot is immediately visible as a lower participant count in the venue listing
-- A user who left can request to join the same event again, the row returns to `Status = 1` with `UpdatedUtc` NULL, and the organizer receives a fresh join-request notification
+- A user who left can request to join the same event again, the row returns to `Status = 1` with a refreshed `CreatedUtc` and `UpdatedUtc` NULL, and the organizer receives one fresh join-request notification whose `EventKey` ends with that attempt's UTC ticks
 - A user who was removed attempting to request again is refused
 - Removing a participant while a second join request is being accepted from another session produces a final accepted count that never exceeds `ParticipantLimit`
 
@@ -384,7 +388,7 @@ Surface cancel and remove on `MyEventsPage`, reusing the confirmation, snackbar 
 
 **Intent**: Add the two organizer commands with the same in-flight guarding, confirmation and conflict handling that `ResolveRequestAsync` (`:637-778`) uses.
 
-**Contract**: `[RelayCommand]` `CancelEventAsync(OrganizedEventViewData)` and `RemoveParticipantAsync(EventJoinRequestViewData)`. Both are destructive, so both confirm via `_feedbackService.ShowConfirmAsync` before any network call, using the `_isConfirmationInProgress` guard at `:676`. On success, mutate the affected record in place with a `with { }` expression as `ApplySuccessfulResolution` does — no full reload. On conflict, show the server's `ConflictMessage` in a snackbar and call `RefreshSelectedEventStateAsync` (`:939`) so the UI reconciles with reality. `OrganizedEventViewData` gains a status field and a `CanCancel` computed flag; `EventJoinRequestViewData` gains `CanRemove`, true only while the row is `Accepted` and the event is active.
+**Contract**: `[RelayCommand]` `CancelEventAsync(OrganizedEventViewData)` and `RemoveParticipantAsync(EventJoinRequestViewData)`. Both are destructive, so both confirm via `_feedbackService.ShowConfirmAsync` before any network call, using the `_isConfirmationInProgress` guard at `:676`. On successful cancel, mutate the organizer card in place with a `with { }` expression, then call the existing `ClearSelectedEvent` path so the selected request queue and all revealed contact payloads are purged without a refetch; returning to the list is intentional. On successful removal, mutate the affected request row in place as `ApplySuccessfulResolution` does. On conflict, show the server's `ConflictMessage` in a snackbar and call `RefreshSelectedEventStateAsync` (`:939`) so the UI reconciles with reality. `OrganizedEventViewData` gains a status field and a `CanCancel` computed flag; `EventJoinRequestViewData` gains `CanRemove`, true only while the row is `Accepted` and the event is active. Every contact visibility and contact-load guard must additionally require the event status to be `Active`, so reopening a cancelled event cannot reveal or fetch contacts.
 
 Confirmation copy: cancel — *"Cancel this event? Everyone who asked to join or was accepted will be notified. This cannot be undone."*; remove — *"Remove this participant? They will be notified and cannot request this event again."*
 
@@ -406,7 +410,7 @@ Confirmation copy: cancel — *"Cancel this event? Everyone who asked to join or
 #### Manual Verification:
 
 - Cancelling from My events shows the confirm dialog; dismissing it makes no network call and leaves the card untouched
-- Confirming shows a success snackbar and the card immediately reflects the cancelled state without a manual refresh
+- Confirming shows a success snackbar, the card immediately reflects the cancelled state, selected detail closes, and previously revealed contacts disappear without a refetch
 - The Cancel button is absent or disabled on an event that is already cancelled or finished
 - Removing a participant shows the confirm dialog, then the row updates in place to a removed state and the Remove button disappears
 - Removing a participant whom the server has already removed shows the server's conflict message and the queue reconciles
@@ -421,7 +425,7 @@ Confirmation copy: cancel — *"Cancel this event? Everyone who asked to join or
 
 ### Overview
 
-The participant-side action, plus the presentation changes that make cancelled and finished events legible instead of confusing: status badges and a separate collapsed *Past & cancelled* section.
+The participant-side action, plus the presentation changes that make cancelled, finished and inactive participation legible instead of confusing: status badges and a separate collapsed *History* section.
 
 ### Changes Required:
 
@@ -433,13 +437,13 @@ The participant-side action, plus the presentation changes that make cancelled a
 
 **Contract**: a `[RelayCommand]` `LeaveEventAsync(RequestedEventViewData)` mirroring the Phase 5 commands, confirming with *"Leave this event? The organizer will be notified. You can ask to join again later."* — wording that reflects the Q4 decision that leaving is reversible. A **Leave** button with `DestructiveButtonStyle` on the My-requests card, gated on a `CanLeave` flag that is true only while the request is `Accepted` and the event is active.
 
-#### 2. Status badges and the Past & cancelled section
+#### 2. Status badges and the History section
 
 **File**: `app/ChoNaBojoApp/ViewModels/MyEventsViewModel.cs`, `app/ChoNaBojoApp/Views/MyEventsPage.xaml`
 
 **Intent**: Separate live events from dead ones so a participant is never left guessing whether a game is still on.
 
-**Contract**: `OrganizedEventViewData` and `RequestedEventViewData` gain a display label and an `IsPast` flag. **`IsPast` is derived as `Status == Cancelled || Status == Closed || EstimatedEndsAtUtc <= now`** — the trailing time comparison is essential, because the auto-close job lags and may not exist at all if Phase 7 is cut. The list partitions into the existing live sections plus one collapsed *Past & cancelled* section, expanded by a bound `IsPastSectionExpanded` toggle, defaulting to collapsed. Badges: `Cancelled` uses `ErrorColor`; `Finished` uses a neutral surface tone; live events keep today's presentation. All lifecycle commands are hidden or disabled for anything in the past section.
+**Contract**: `OrganizedEventViewData` and `RequestedEventViewData` gain a display label and an `IsHistory` flag. For organized events, **`IsHistory` is derived as `EventStatus == Cancelled || EventStatus == Closed || EstimatedEndsAtUtc <= now`**. For requested events, the live collection contains only active, unexpired events whose request `Status` is `Pending` or `Accepted`; `Rejected`, `Left`, `Removed` and `Cancelled` request rows are routed to history even when the event itself remains active. The trailing time comparison is essential because the auto-close job lags and may not exist at all if Phase 7 is cut. The list partitions into the existing live sections plus one collapsed *History* section, expanded by a bound `IsHistorySectionExpanded` toggle, defaulting to collapsed. Resolve the badge from event lifecycle first (`Cancelled` with `ErrorColor`, `Finished` with a neutral surface tone), then from terminal request state (`Rejected`, `Left`, `Removed`, or `Event cancelled`) so every inactive reason is explicit. Live events keep today's presentation. All lifecycle commands are hidden or disabled for anything in history.
 
 #### 3. Push-triggered refresh
 
@@ -458,12 +462,13 @@ The participant-side action, plus the presentation changes that make cancelled a
 
 #### Manual Verification:
 
-- An accepted participant can leave; the organizer's device is notified within 30 seconds and the card moves out of the live section
+- An accepted participant can leave; the organizer's device is notified within 30 seconds and the card moves to *History* with a `Left` badge
 - A pending requester sees no Leave button
 - Having left, the same user can find the event in the venue listing and request to join again
-- A cancelled event appears under *Past & cancelled* with an error-toned `Cancelled` badge and no action buttons
+- Rejected and removed request cards appear in *History* with explicit `Rejected` and `Removed` badges even while the event remains active
+- A cancelled event appears under *History* with an error-toned `Cancelled` badge and no action buttons
 - An event whose end time has passed shows as `Finished` even with the Phase 7 job stopped, proving the client-side time derivation works
-- The past section starts collapsed and its expansion state survives a pull-to-refresh
+- The History section starts collapsed and its expansion state survives a pull-to-refresh
 - A cancellation push arriving while My events is open re-partitions the list without a manual refresh
 - Accept, reject and join flows are unregressed
 
@@ -516,7 +521,7 @@ The background tidy-up that turns "finished" into a persisted fact. Deliberately
 - An event seeded with a past `EstimatedEndsAtUtc` flips to `Status = 3` with a non-null `StatusChangedUtc` within roughly one poll interval
 - A cancelled event with a past end time stays `Status = 2` and is never overwritten to `Closed`
 - Running two API instances against the same database produces no errors and no duplicated state
-- A closed event disappears from the venue listing and appears under *Past & cancelled* on My events
+- A closed event disappears from the venue listing and appears under *History* on My events
 - Stopping the worker and restarting it after a gap closes the accumulated backlog on the first pass
 - Join, accept, reject, cancel, remove and leave are all unaffected while the worker runs
 
@@ -545,9 +550,9 @@ Per the Q14 decision, this slice introduces no test infrastructure. Verification
 ### Manual device matrix (two accounts, one physical device plus a second device or emulator):
 
 1. Organizer creates an event; user B requests; user C requests and is accepted.
-2. Organizer cancels. **Expect**: both B and C notified within 30s; both see the event under *Past & cancelled* with a `Cancelled` badge; contacts return 404 for everyone; the event is gone from the venue listing.
-3. Repeat the setup. Organizer removes C. **Expect**: C notified; C's contact access revoked; the freed slot visible in the venue listing; C cannot request again.
-4. Repeat the setup. C leaves. **Expect**: organizer notified; slot freed; C can request again and the organizer receives a fresh join-request notification.
+2. Organizer cancels. **Expect**: both B and C notified within 30s; both see the event under *History* with a `Cancelled` badge; contacts return 404 for everyone; the event is gone from the venue listing.
+3. Repeat the setup. Organizer removes C. **Expect**: C notified; C's request appears under *History* with a `Removed` badge; C's contact access is revoked; the freed slot is visible in the venue listing; C cannot request again.
+4. Repeat the setup. C leaves. **Expect**: organizer notified; C's request appears under *History* with a `Left` badge; the slot is freed; C can request again and the organizer receives a fresh join-request notification.
 5. Seed an event with a past end time. **Expect**: it shows as `Finished` on My events before the worker runs, and reads `Status = 3` after.
 6. Concurrency: from two sessions, accept one request while removing another. **Expect**: accepted count never exceeds `ParticipantLimit`.
 7. Offline and conflict paths for all three client actions.
@@ -558,7 +563,7 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 ## Performance Considerations
 
-- A cancellation fan-out writes at most 300 join-request updates and 300 outbox rows in one transaction, bounded by `CK_SportsEvents_ParticipantLimit`. That is comfortably within a single round of `SaveChangesAsync` at MVP scale.
+- A cancellation fan-out writes one join-request update and one outbox row per pending or accepted request. `ParticipantLimit` bounds accepted rows but pending rows are currently unlimited, so transaction cost is linear in the full roster and not strictly bounded. This risk is accepted for the MVP slice; `context/foundation/todo.md` tracks adding a locked-path outstanding-request cap before broader rollout.
 - The event lock serializes all mutations on one event. This is already true for join, accept and reject; cancel holds it marginally longer because of the roster rewrite, but contention is per-event, not global.
 - The auto-close sweep is a single indexed `UPDATE` on a 60-second cadence, served by the new `(Status, EstimatedEndsAtUtc)` index. Cost is proportional to events closing in that window, not to table size.
 - Adding a `Status` filter to the venue listing narrows the existing `(VenueId, EstimatedEndsAtUtc)` index scan; no new index is warranted there at MVP volumes.
@@ -567,8 +572,8 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 - **Two migrations**, one per plumbing phase, applied with `dotnet ef database update --project server`. The app never migrates itself.
 - Existing `SportsEvents` rows backfill to `Status = 1` (`Active`) with `StatusChangedUtc` NULL via the column default. Existing `EventJoinRequests` rows are untouched — the widened CHECK only admits new values.
-- **Deploy order matters**: apply migrations before the API build that writes the new values, and ship the API before the app build that reads `Status` from `/me/events`. An older client receiving the new field ignores it; a newer client against an older API would not find it.
-- **Rollback**: both migrations are reversible, but reverting Phase 1 after any event has been cancelled or closed loses that state irrecoverably. Prefer rolling the API back and leaving the schema in place.
+- **Deploy order matters**: apply migrations before the API build that writes the new values, and ship the API before the app build that reads `EventStatus` from `/me/events`. An older client receiving the new field ignores it; a newer client against an older API receives enum value `0`, rejects the payload through `MyEventsResult.Unknown()`, and exposes no lifecycle actions.
+- **Rollback**: both migrations are reversible, but reverting Phase 1 after any event has been cancelled or closed loses that state irrecoverably. API rollback while the new app is deployed is not wire-compatible: My events deliberately fails closed until the matching API returns. Prefer leaving the schema and compatible API contract in place.
 
 ## References
 
@@ -592,7 +597,7 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 - [ ] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
 - [ ] 1.2 Migration is generated with no model-vs-snapshot drift
 - [ ] 1.3 Migration applies cleanly against the dev database
-- [ ] 1.4 A second migrations add run produces an empty migration
+- [ ] 1.4 `dotnet ef migrations has-pending-model-changes --project server` reports no drift
 
 #### Manual
 
@@ -601,6 +606,7 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 - [ ] 1.7 `EventJoinRequests.Status = 6` accepted, 7 rejected
 - [ ] 1.8 Pre-existing events read back as Active with NULL `StatusChangedUtc`
 - [ ] 1.9 Listing, join, accept, reject and contacts unregressed on active events
+- [ ] 1.10 Missing, zero or unknown event status fails closed as `MyEventsResult.Unknown()`
 
 ### Phase 2: Lifecycle Push Types and Intents
 
@@ -650,7 +656,7 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 - [ ] 4.9 Removed participant notified within 30s and contact access revoked both ways
 - [ ] 4.10 Leave notifies the organizer within 30s and frees the slot in the venue listing
-- [ ] 4.11 Re-request after leave revives the row to Pending with NULL `UpdatedUtc` and notifies the organizer
+- [ ] 4.11 Re-request after leave refreshes `CreatedUtc`, revives the row to Pending with NULL `UpdatedUtc`, and emits one attempt-keyed notification
 - [ ] 4.12 Re-request after removal is refused
 - [ ] 4.13 Concurrent remove and accept never exceed `ParticipantLimit`
 
@@ -664,7 +670,7 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 #### Manual
 
 - [ ] 5.3 Cancel confirm dialog; dismissal makes no network call
-- [ ] 5.4 Confirmed cancel shows a snackbar and updates the card in place
+- [ ] 5.4 Confirmed cancel updates the card, closes selected detail, and removes revealed contacts without a refetch
 - [ ] 5.5 Cancel hidden or disabled on an already cancelled or finished event
 - [ ] 5.6 Remove confirms, updates the row in place, and hides the button
 - [ ] 5.7 Server-side conflict surfaces its message and the queue reconciles
@@ -680,14 +686,15 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Manual
 
-- [ ] 6.3 Accepted participant leaves; organizer notified within 30s and card moves out of the live section
+- [ ] 6.3 Accepted participant leaves; organizer notified within 30s and card moves to History with a Left badge
 - [ ] 6.4 Pending requester sees no Leave button
 - [ ] 6.5 A user who left can request to join again from the venue listing
-- [ ] 6.6 Cancelled event appears under Past & cancelled with an error-toned badge and no actions
-- [ ] 6.7 Past-end event shows as Finished with the Phase 7 worker stopped
-- [ ] 6.8 Past section starts collapsed and its state survives a pull-to-refresh
-- [ ] 6.9 Cancellation push while My events is open re-partitions the list without manual refresh
-- [ ] 6.10 Accept, reject and join flows unregressed
+- [ ] 6.6 Rejected and removed requests appear in History with explicit badges while the event remains active
+- [ ] 6.7 Cancelled event appears under History with an error-toned badge and no actions
+- [ ] 6.8 Past-end event shows as Finished with the Phase 7 worker stopped
+- [ ] 6.9 History starts collapsed and its state survives a pull-to-refresh
+- [ ] 6.10 Cancellation push while My events is open re-partitions the list without manual refresh
+- [ ] 6.11 Accept, reject and join flows unregressed
 
 ### Phase 7: Auto-Close Hosted Service
 
@@ -702,6 +709,6 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 - [ ] 7.4 Past-end event flips to Status 3 with `StatusChangedUtc` within one poll interval
 - [ ] 7.5 Cancelled past-end event stays Status 2 and is never overwritten
 - [ ] 7.6 Two API instances produce no errors and no duplicated state
-- [ ] 7.7 Closed event leaves the venue listing and appears under Past & cancelled
+- [ ] 7.7 Closed event leaves the venue listing and appears under History
 - [ ] 7.8 Restart after a gap closes the accumulated backlog on the first pass
 - [ ] 7.9 Join, accept, reject, cancel, remove and leave unaffected while the worker runs
