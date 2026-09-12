@@ -58,6 +58,12 @@ public sealed record JoinRequestResponse(
 	DateTimeOffset CreatedUtc,
 	DateTimeOffset? UpdatedUtc);
 
+public sealed record CancelEventResponse(
+	Guid EventId,
+	EventStatus Status,
+	DateTimeOffset StatusChangedUtc,
+	int NotifiedParticipantCount);
+
 public sealed record OrganizedEventResponse(
 	Guid EventId,
 	string Title,

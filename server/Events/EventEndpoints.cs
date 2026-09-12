@@ -47,6 +47,9 @@ public static class EventEndpoints
 				RejectJoinRequestAsync)
 			.WithName("EventsJoinRequestsReject");
 
+		endpoints.MapPost("/events/{eventId:guid}/cancel", CancelEventAsync)
+			.WithName("EventsCancel");
+
 		endpoints.MapGet("/me/events", GetMyEventsAsync)
 			.WithName("MeEventsList");
 
@@ -365,6 +368,95 @@ public static class EventEndpoints
 			httpContext.GetUserId(),
 			EventJoinRequestStatus.Rejected,
 			cancellationToken);
+	}
+
+	private static async Task<IResult> CancelEventAsync(
+		Guid eventId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		Guid organizerUserId = httpContext.GetUserId();
+		await using var transaction = await dbContext.Database.BeginTransactionAsync(
+			cancellationToken);
+
+		await dbContext.Database.ExecuteSqlAsync(
+			$"""SELECT 1 FROM "SportsEvents" WHERE "Id" = {eventId} FOR UPDATE""",
+			cancellationToken);
+
+		SportsEvent? sportsEvent = await dbContext.SportsEvents
+			.SingleOrDefaultAsync(
+				entity => entity.Id == eventId
+					&& entity.OrganizerUserId == organizerUserId,
+				cancellationToken);
+		if (sportsEvent is null)
+		{
+			await transaction.RollbackAsync(cancellationToken);
+			return Results.NotFound(new EventConflictResponse(
+				EventConflictCodes.EventNotFound,
+				"eventId",
+				"The event is no longer available."));
+		}
+
+		if (sportsEvent.Status == EventStatus.Cancelled)
+		{
+			await transaction.CommitAsync(cancellationToken);
+			return Results.Ok(ToCancelResponse(sportsEvent, notifiedParticipantCount: 0));
+		}
+
+		DateTime cancelledUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+		if (sportsEvent.Status == EventStatus.Closed
+			|| sportsEvent.EstimatedEndsAtUtc <= cancelledUtc)
+		{
+			await transaction.RollbackAsync(cancellationToken);
+			return Results.Conflict(new EventConflictResponse(
+				EventConflictCodes.EventEnded,
+				"eventId",
+				"This event has already ended."));
+		}
+
+		List<EventJoinRequest> affectedJoinRequests = await dbContext.EventJoinRequests
+			.Where(request => request.SportsEventId == eventId
+				&& (request.Status == EventJoinRequestStatus.Pending
+					|| request.Status == EventJoinRequestStatus.Accepted))
+			.ToListAsync(cancellationToken);
+
+		foreach (EventJoinRequest joinRequest in affectedJoinRequests)
+		{
+			joinRequest.Status = EventJoinRequestStatus.Cancelled;
+			joinRequest.UpdatedUtc = cancelledUtc;
+		}
+
+		sportsEvent.Status = EventStatus.Cancelled;
+		sportsEvent.StatusChangedUtc = cancelledUtc;
+
+		IReadOnlyList<PushIntentDescriptor> intents =
+			PushIntentFactory.CreateLifecycleIntents(
+				sportsEvent,
+				affectedJoinRequests,
+				organizerUserId);
+		Dictionary<Guid, Guid> requestIdsByRecipient = affectedJoinRequests
+			.ToDictionary(
+				request => request.RequesterUserId,
+				request => request.Id);
+		dbContext.PushOutbox.AddRange(intents.Select(intent => new PushOutboxItem
+		{
+			EventKey = intent.EventKey,
+			RecipientUserId = intent.RecipientUserId,
+			Type = intent.Type,
+			SportsEventId = sportsEvent.Id,
+			EventJoinRequestId = requestIdsByRecipient[intent.RecipientUserId],
+			NotificationId = intent.NotificationId,
+			OccurredUtc = cancelledUtc,
+			NextAttemptUtc = cancelledUtc
+		}));
+
+		await dbContext.SaveChangesAsync(cancellationToken);
+		await transaction.CommitAsync(cancellationToken);
+
+		return Results.Ok(ToCancelResponse(
+			sportsEvent,
+			affectedJoinRequests.Count));
 	}
 
 	private static async Task<IResult> GetMyEventsAsync(
@@ -984,6 +1076,21 @@ public static class EventEndpoints
 			joinRequest.UpdatedUtc.HasValue
 				? new DateTimeOffset(joinRequest.UpdatedUtc.Value, TimeSpan.Zero)
 				: null);
+	}
+
+	private static CancelEventResponse ToCancelResponse(
+		SportsEvent sportsEvent,
+		int notifiedParticipantCount)
+	{
+		DateTime statusChangedUtc = sportsEvent.StatusChangedUtc
+			?? throw new InvalidOperationException(
+				"A cancelled event must have a status-change timestamp.");
+
+		return new CancelEventResponse(
+			sportsEvent.Id,
+			sportsEvent.Status,
+			new DateTimeOffset(statusChangedUtc, TimeSpan.Zero),
+			notifiedParticipantCount);
 	}
 
 	private static IResult RequestNotFound()
