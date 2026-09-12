@@ -47,6 +47,16 @@ public static class EventEndpoints
 				RejectJoinRequestAsync)
 			.WithName("EventsJoinRequestsReject");
 
+		endpoints.MapPost(
+				"/events/{eventId:guid}/join-requests/{requestId:guid}/remove",
+				RemoveParticipantAsync)
+			.WithName("EventsJoinRequestsRemove");
+
+		endpoints.MapPost(
+				"/events/{eventId:guid}/join-requests/mine/leave",
+				LeaveEventAsync)
+			.WithName("EventsJoinRequestsLeave");
+
 		endpoints.MapPost("/events/{eventId:guid}/cancel", CancelEventAsync)
 			.WithName("EventsCancel");
 
@@ -314,18 +324,6 @@ public static class EventEndpoints
 	{
 		Guid requesterUserId = httpContext.GetUserId();
 
-		// Look up any existing request before applying dynamic expiry/capacity/organizer checks so an
-		// exact retry replays the stored outcome even if the event ended or filled meanwhile.
-		EventJoinRequest? existingRequest = await FindJoinRequestAsync(
-			dbContext,
-			eventId,
-			requesterUserId,
-			cancellationToken);
-		if (existingRequest is not null)
-		{
-			return Results.Ok(ToJoinResponse(existingRequest));
-		}
-
 		JoinRequestTransitionResult transition = await TransitionJoinRequestAsync(
 			dbContext,
 			eventId,
@@ -368,6 +366,41 @@ public static class EventEndpoints
 			httpContext.GetUserId(),
 			EventJoinRequestStatus.Rejected,
 			cancellationToken);
+	}
+
+	private static async Task<IResult> RemoveParticipantAsync(
+		Guid eventId,
+		Guid requestId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		ParticipationTransitionResult transition = await TransitionParticipationAsync(
+			dbContext,
+			eventId,
+			httpContext.GetUserId(),
+			requestId,
+			EventJoinRequestStatus.Removed,
+			cancellationToken);
+
+		return ToParticipationTransitionResult(transition);
+	}
+
+	private static async Task<IResult> LeaveEventAsync(
+		Guid eventId,
+		ChoNaBojoContext dbContext,
+		HttpContext httpContext,
+		CancellationToken cancellationToken)
+	{
+		ParticipationTransitionResult transition = await TransitionParticipationAsync(
+			dbContext,
+			eventId,
+			httpContext.GetUserId(),
+			requestId: null,
+			EventJoinRequestStatus.Left,
+			cancellationToken);
+
+		return ToParticipationTransitionResult(transition);
 	}
 
 	private static async Task<IResult> CancelEventAsync(
@@ -754,6 +787,8 @@ public static class EventEndpoints
 		await using var transaction = await dbContext.Database.BeginTransactionAsync(
 			cancellationToken);
 		EventJoinRequest? joinRequest = null;
+		bool isNewJoinRequest = false;
+		bool isRevivedJoinRequest = false;
 
 		try
 		{
@@ -782,28 +817,56 @@ public static class EventEndpoints
 						cancellationToken);
 				if (joinRequest is not null)
 				{
-					await transaction.CommitAsync(cancellationToken);
-					return JoinRequestTransitionResult.Succeeded(
-						joinRequest,
-						wasCreated: false);
-				}
+					switch (joinRequest.Status)
+					{
+						case EventJoinRequestStatus.Pending:
+						case EventJoinRequestStatus.Accepted:
+						case EventJoinRequestStatus.Rejected:
+							await transaction.CommitAsync(cancellationToken);
+							return JoinRequestTransitionResult.Succeeded(
+								joinRequest,
+								wasCreated: false);
 
-				if (sportsEvent.OrganizerUserId == actorUserId)
+						case EventJoinRequestStatus.Left:
+							isRevivedJoinRequest = true;
+							break;
+
+						case EventJoinRequestStatus.Removed:
+							await transaction.RollbackAsync(cancellationToken);
+							return JoinRequestTransitionResult.Failed(
+								JoinRequestTransitionFailure.RequestAlreadyResolved);
+
+						case EventJoinRequestStatus.Cancelled:
+							await transaction.RollbackAsync(cancellationToken);
+							return JoinRequestTransitionResult.Failed(
+								sportsEvent.Status == EventStatus.Cancelled
+									? JoinRequestTransitionFailure.EventCancelled
+									: JoinRequestTransitionFailure.RequestAlreadyResolved);
+
+						default:
+							throw new InvalidOperationException(
+								$"Unsupported existing join-request status: {joinRequest.Status}.");
+					}
+				}
+				else if (sportsEvent.OrganizerUserId == actorUserId)
 				{
 					await transaction.RollbackAsync(cancellationToken);
 					return JoinRequestTransitionResult.Failed(
 						JoinRequestTransitionFailure.OrganizerCannotJoin);
 				}
-
-				DateTime createdUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
-				joinRequest = new EventJoinRequest
+				else
 				{
-					SportsEventId = eventId,
-					RequesterUserId = actorUserId,
-					Status = EventJoinRequestStatus.Pending,
-					CreatedUtc = createdUtc
-				};
-				dbContext.EventJoinRequests.Add(joinRequest);
+					DateTime createdUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+					joinRequest = new EventJoinRequest
+					{
+						SportsEventId = eventId,
+						RequesterUserId = actorUserId,
+						Status = EventJoinRequestStatus.Pending,
+						CreatedUtc = createdUtc
+					};
+					dbContext.EventJoinRequests.Add(joinRequest);
+					isNewJoinRequest = true;
+				}
 			}
 			else
 			{
@@ -858,12 +921,17 @@ public static class EventEndpoints
 				if (failure.HasValue)
 				{
 					await transaction.RollbackAsync(cancellationToken);
-					if (createIfMissing)
+					if (isNewJoinRequest)
 					{
 						dbContext.Entry(joinRequest).State = EntityState.Detached;
 					}
 
 					return JoinRequestTransitionResult.Failed(failure.Value);
+				}
+
+				if (isRevivedJoinRequest)
+				{
+					joinRequest.CreatedUtc = resolvedUtc;
 				}
 			}
 			else if (effectiveTargetStatus == EventJoinRequestStatus.Rejected)
@@ -883,8 +951,19 @@ public static class EventEndpoints
 				if (failure.HasValue)
 				{
 					await transaction.RollbackAsync(cancellationToken);
-					dbContext.Entry(joinRequest).State = EntityState.Detached;
+					if (isNewJoinRequest)
+					{
+						dbContext.Entry(joinRequest).State = EntityState.Detached;
+					}
+
 					return JoinRequestTransitionResult.Failed(failure.Value);
+				}
+
+				joinRequest.Status = EventJoinRequestStatus.Pending;
+				joinRequest.UpdatedUtc = null;
+				if (isRevivedJoinRequest)
+				{
+					joinRequest.CreatedUtc = resolvedUtc;
 				}
 			}
 			else
@@ -956,6 +1035,117 @@ public static class EventEndpoints
 			return JoinRequestTransitionResult.Failed(
 				JoinRequestTransitionFailure.EventNotFound);
 		}
+	}
+
+	private static async Task<ParticipationTransitionResult> TransitionParticipationAsync(
+		ChoNaBojoContext dbContext,
+		Guid eventId,
+		Guid actorUserId,
+		Guid? requestId,
+		EventJoinRequestStatus targetStatus,
+		CancellationToken cancellationToken)
+	{
+		if (targetStatus is not (
+			EventJoinRequestStatus.Removed
+			or EventJoinRequestStatus.Left))
+		{
+			throw new ArgumentOutOfRangeException(
+				nameof(targetStatus),
+				targetStatus,
+				"Only removal and departure participation transitions are supported.");
+		}
+
+		await using var transaction = await dbContext.Database.BeginTransactionAsync(
+			cancellationToken);
+
+		await dbContext.Database.ExecuteSqlAsync(
+			$"""SELECT 1 FROM "SportsEvents" WHERE "Id" = {eventId} FOR UPDATE""",
+			cancellationToken);
+
+		EventJoinRequest? joinRequest;
+		if (targetStatus == EventJoinRequestStatus.Removed)
+		{
+			Guid existingRequestId = requestId
+				?? throw new InvalidOperationException(
+					"A request id is required to remove a participant.");
+			joinRequest = await dbContext.EventJoinRequests
+				.Include(request => request.SportsEvent)
+				.SingleOrDefaultAsync(
+					request => request.Id == existingRequestId
+						&& request.SportsEventId == eventId
+						&& request.SportsEvent.OrganizerUserId == actorUserId,
+					cancellationToken);
+		}
+		else
+		{
+			if (requestId.HasValue)
+			{
+				throw new InvalidOperationException(
+					"A request id cannot be supplied when leaving an event.");
+			}
+
+			joinRequest = await dbContext.EventJoinRequests
+				.Include(request => request.SportsEvent)
+				.SingleOrDefaultAsync(
+					request => request.SportsEventId == eventId
+						&& request.RequesterUserId == actorUserId,
+					cancellationToken);
+		}
+
+		if (joinRequest is null)
+		{
+			await transaction.RollbackAsync(cancellationToken);
+			return ParticipationTransitionResult.Failed(
+				ParticipationTransitionFailure.RequestNotFound);
+		}
+
+		SportsEvent sportsEvent = joinRequest.SportsEvent;
+		DateTime transitionedUtc = NormalizeUtcTimestamp(DateTimeOffset.UtcNow);
+		if (sportsEvent.Status == EventStatus.Cancelled)
+		{
+			await transaction.RollbackAsync(cancellationToken);
+			return ParticipationTransitionResult.Failed(
+				ParticipationTransitionFailure.EventCancelled);
+		}
+
+		if (sportsEvent.Status == EventStatus.Closed
+			|| sportsEvent.EstimatedEndsAtUtc <= transitionedUtc)
+		{
+			await transaction.RollbackAsync(cancellationToken);
+			return ParticipationTransitionResult.Failed(
+				ParticipationTransitionFailure.EventEnded);
+		}
+
+		if (joinRequest.Status != EventJoinRequestStatus.Accepted)
+		{
+			await transaction.RollbackAsync(cancellationToken);
+			return ParticipationTransitionResult.Failed(
+				ParticipationTransitionFailure.ParticipantNotAccepted);
+		}
+
+		joinRequest.Status = targetStatus;
+		joinRequest.UpdatedUtc = transitionedUtc;
+
+		PushIntentDescriptor intent = PushIntentFactory.CreateLifecycleIntents(
+			sportsEvent,
+			[joinRequest],
+			actorUserId).Single();
+		dbContext.PushOutbox.Add(new PushOutboxItem
+		{
+			EventKey = intent.EventKey,
+			RecipientUserId = intent.RecipientUserId,
+			Type = intent.Type,
+			SportsEventId = sportsEvent.Id,
+			EventJoinRequestId = joinRequest.Id,
+			NotificationId = intent.NotificationId,
+			OccurredUtc = transitionedUtc,
+			NextAttemptUtc = transitionedUtc
+		});
+
+		await dbContext.SaveChangesAsync(cancellationToken);
+		await transaction.CommitAsync(cancellationToken);
+
+		return ParticipationTransitionResult.Succeeded(joinRequest);
 	}
 
 	private static async Task<JoinRequestTransitionFailure?>
@@ -1047,8 +1237,48 @@ public static class EventEndpoints
 					EventConflictCodes.OrganizerCannotJoin,
 					"eventId",
 					"You cannot join an event you are organizing.")),
+			JoinRequestTransitionFailure.RequestAlreadyResolved =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.RequestAlreadyResolved,
+					"requestId",
+					"The join request has already been resolved.")),
 			_ => throw new InvalidOperationException(
 				$"Unexpected join-request creation failure: {transition.Failure}.")
+		};
+	}
+
+	private static IResult ToParticipationTransitionResult(
+		ParticipationTransitionResult transition)
+	{
+		if (transition.Request is not null)
+		{
+			return Results.Ok(ToJoinResponse(transition.Request));
+		}
+
+		return transition.Failure switch
+		{
+			ParticipationTransitionFailure.RequestNotFound =>
+				Results.NotFound(new EventConflictResponse(
+					EventConflictCodes.RequestNotFound,
+					"requestId",
+					"The join request is no longer available.")),
+			ParticipationTransitionFailure.ParticipantNotAccepted =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.ParticipantNotAccepted,
+					"requestId",
+					"The participant is not currently accepted for this event.")),
+			ParticipationTransitionFailure.EventEnded =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventEnded,
+					"eventId",
+					"This event has already ended.")),
+			ParticipationTransitionFailure.EventCancelled =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventCancelled,
+					"eventId",
+					"This event has been cancelled.")),
+			_ => throw new InvalidOperationException(
+				$"Unexpected participation transition failure: {transition.Failure}.")
 		};
 	}
 
@@ -1240,6 +1470,31 @@ public static class EventEndpoints
 			JoinRequestTransitionFailure failure)
 		{
 			return new(null, failure, false);
+		}
+	}
+
+	private enum ParticipationTransitionFailure
+	{
+		RequestNotFound,
+		ParticipantNotAccepted,
+		EventEnded,
+		EventCancelled
+	}
+
+	private sealed record ParticipationTransitionResult(
+		EventJoinRequest? Request,
+		ParticipationTransitionFailure? Failure)
+	{
+		public static ParticipationTransitionResult Succeeded(
+			EventJoinRequest request)
+		{
+			return new(request, null);
+		}
+
+		public static ParticipationTransitionResult Failed(
+			ParticipationTransitionFailure failure)
+		{
+			return new(null, failure);
 		}
 	}
 	#endregion

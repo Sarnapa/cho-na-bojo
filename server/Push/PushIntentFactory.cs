@@ -1,3 +1,4 @@
+using System.Globalization;
 using ChoNaBojo.Contracts.Enums;
 using ChoNaBojo.Server.Data.Entities;
 
@@ -88,7 +89,7 @@ public static class PushIntentFactory
 		return new PushIntentDescriptor(
 			recipientUserId,
 			type,
-			$"join-request:{joinRequest.Id}:{(int)type}:{recipientUserId}",
+			BuildEventKey(joinRequest, type, recipientUserId),
 			Guid.NewGuid());
 	}
 
@@ -215,10 +216,37 @@ public static class PushIntentFactory
 				return new PushIntentDescriptor(
 					recipientUserId,
 					type,
-					$"join-request:{joinRequest.Id}:{(int)type}:{recipientUserId}",
+					BuildEventKey(joinRequest, type, recipientUserId),
 					Guid.NewGuid());
 			})
 			.ToList();
+	}
+
+	/// <summary>
+	/// Builds the outbox de-duplication key for a notification about one join-request attempt.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="EventJoinRequest.CreatedUtc"/> identifies the <em>current attempt</em>, not the
+	/// first-ever creation: a row revived after its requester left replays the whole lifecycle and
+	/// can therefore emit a second created / accepted / rejected / left notification for the same
+	/// request id. Without the attempt stamp those keys collide with the previous attempt's and the
+	/// unique index on <c>PushOutbox.EventKey</c> rejects the write.
+	/// </remarks>
+	private static string BuildEventKey(
+		EventJoinRequest joinRequest,
+		PushNotificationType type,
+		Guid recipientUserId)
+	{
+		if (joinRequest.CreatedUtc == default)
+		{
+			throw new ArgumentException(
+				"The join request must carry its current attempt timestamp.",
+				nameof(joinRequest));
+		}
+
+		return string.Create(
+			CultureInfo.InvariantCulture,
+			$"join-request:{joinRequest.Id}:{(int)type}:{recipientUserId}:{joinRequest.CreatedUtc.Ticks}");
 	}
 }
 

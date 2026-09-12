@@ -89,8 +89,15 @@ public sealed record EventCardViewData(
 {
 	public bool HasDescription => !string.IsNullOrEmpty(Description);
 	public bool IsFull => ParticipantCount >= ParticipantLimit;
+
+	/// <summary>
+	/// A participant who left may ask to join again; being rejected or removed is terminal.
+	/// </summary>
+	public bool IsRequestable => CurrentUserRequestStatus is null
+		or EventJoinRequestStatus.Left;
+
 	public bool CanJoin => !IsOrganizer
-		&& CurrentUserRequestStatus is null
+		&& IsRequestable
 		&& !IsFull
 		&& !IsJoinInFlight;
 	public bool IsJoinButtonVisible => CanJoin || IsJoinInFlight;
@@ -109,6 +116,8 @@ public sealed record EventCardViewData(
 				EventJoinRequestStatus.Pending => "Request pending",
 				EventJoinRequestStatus.Accepted => "Joined",
 				EventJoinRequestStatus.Rejected => "Request rejected",
+				EventJoinRequestStatus.Removed => "Removed from event",
+				EventJoinRequestStatus.Cancelled => "Event cancelled",
 				_ when IsFull => "Full",
 				_ => "Join"
 			};
@@ -121,6 +130,8 @@ public sealed record EventCardViewData(
 				EventJoinRequestStatus.Pending => $"Join request pending for {Title}",
 				EventJoinRequestStatus.Accepted => $"Joined {Title}",
 				EventJoinRequestStatus.Rejected => $"Join request rejected for {Title}",
+				EventJoinRequestStatus.Removed => $"You were removed from {Title}",
+				EventJoinRequestStatus.Cancelled => $"{Title} was cancelled",
 				_ when IsFull => $"{Title} is full",
 				_ => $"Request to join {Title}"
 			};
