@@ -664,18 +664,18 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Automated
 
-- [x] 5.1 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
-- [x] 5.2 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 5.1 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android` — 918c70a
+- [x] 5.2 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — 918c70a
 
 #### Manual
 
-- [x] 5.3 Cancel confirm dialog; dismissal makes no network call
-- [x] 5.4 Confirmed cancel updates the card, closes selected detail, and removes revealed contacts without a refetch
-- [x] 5.5 Cancel hidden or disabled on an already cancelled or finished event
-- [x] 5.6 Remove confirms, updates the row in place, and hides the button
-- [x] 5.7 Server-side conflict surfaces its message and the queue reconciles
-- [x] 5.8 Offline attempts show the network snackbar and leave the UI unchanged
-- [x] 5.9 Double-tap does not issue two requests
+- [x] 5.3 Cancel confirm dialog; dismissal makes no network call — 918c70a
+- [x] 5.4 Confirmed cancel updates the card, closes selected detail, and removes revealed contacts without a refetch — 918c70a
+- [x] 5.5 Cancel hidden or disabled on an already cancelled or finished event — 918c70a
+- [x] 5.6 Remove confirms, updates the row in place, and hides the button — 918c70a
+- [x] 5.7 Server-side conflict surfaces its message and the queue reconciles — 918c70a
+- [x] 5.8 Offline attempts show the network snackbar and leave the UI unchanged — 918c70a
+- [x] 5.9 Double-tap does not issue two requests — 918c70a
 
 ### Phase 6: Client — Leave Event and Lifecycle Visibility
 
