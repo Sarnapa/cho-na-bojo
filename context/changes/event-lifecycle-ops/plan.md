@@ -681,20 +681,20 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Automated
 
-- [x] 6.1 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android`
-- [x] 6.2 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 6.1 Android app builds: `dotnet build app/ChoNaBojoApp -f net10.0-android` — 827b545
+- [x] 6.2 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — 827b545
 
 #### Manual
 
-- [x] 6.3 Accepted participant leaves; organizer notified within 30s and card moves to History with a Left badge
-- [x] 6.4 Pending requester sees no Leave button
-- [x] 6.5 A user who left can request to join again from the venue listing
-- [x] 6.6 Rejected and removed requests appear in History with explicit badges while the event remains active
-- [x] 6.7 Cancelled event appears under History with an error-toned badge and no actions
-- [x] 6.8 Past-end event shows as Finished with the Phase 7 worker stopped
-- [x] 6.9 History starts collapsed and its state survives a pull-to-refresh
-- [x] 6.10 Cancellation push while My events is open re-partitions the list without manual refresh
-- [x] 6.11 Accept, reject and join flows unregressed
+- [x] 6.3 Accepted participant leaves; organizer notified within 30s and card moves to History with a Left badge — 827b545
+- [x] 6.4 Pending requester sees no Leave button — 827b545
+- [x] 6.5 A user who left can request to join again from the venue listing — 827b545
+- [x] 6.6 Rejected and removed requests appear in History with explicit badges while the event remains active — 827b545
+- [x] 6.7 Cancelled event appears under History with an error-toned badge and no actions — 827b545
+- [x] 6.8 Past-end event shows as Finished with the Phase 7 worker stopped — 827b545
+- [x] 6.9 History starts collapsed and its state survives a pull-to-refresh — 827b545
+- [x] 6.10 Cancellation push while My events is open re-partitions the list without manual refresh — 827b545
+- [x] 6.11 Accept, reject and join flows unregressed — 827b545
 
 ### Phase 7: Auto-Close Hosted Service
 
