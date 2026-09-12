@@ -612,14 +612,14 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Automated
 
-- [ ] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 2.2 Migration applies cleanly
+- [x] 2.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 2.2 Migration applies cleanly
 
 #### Manual
 
-- [ ] 2.3 `PushOutbox.Type = 6` accepted, 7 rejected by `CK_PushOutbox_Type`
-- [ ] 2.4 Manually inserted lifecycle row delivers to a device with a generic body
-- [ ] 2.5 Existing join, accept and reject notifications unchanged
+- [x] 2.3 `PushOutbox.Type = 6` accepted, 7 rejected by `CK_PushOutbox_Type`
+- [x] 2.4 Manually inserted lifecycle row delivers to a device with a generic body
+- [x] 2.5 Existing join, accept and reject notifications unchanged
 
 ### Phase 3: Cancel Event Endpoint
 

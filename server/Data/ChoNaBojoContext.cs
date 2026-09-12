@@ -449,7 +449,7 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 				tableBuilder.HasCheckConstraint(
 					"CK_PushOutbox_Type",
 					"""
-					"Type" IN (1, 2, 3)
+					"Type" IN (1, 2, 3, 4, 5, 6)
 					""");
 			});
 

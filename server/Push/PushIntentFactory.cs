@@ -91,6 +91,135 @@ public static class PushIntentFactory
 			$"join-request:{joinRequest.Id}:{(int)type}:{recipientUserId}",
 			Guid.NewGuid());
 	}
+
+	public static IReadOnlyList<PushIntentDescriptor> CreateLifecycleIntents(
+		SportsEvent sportsEvent,
+		IReadOnlyCollection<EventJoinRequest> affectedJoinRequests,
+		Guid actorUserId)
+	{
+		ArgumentNullException.ThrowIfNull(sportsEvent);
+		ArgumentNullException.ThrowIfNull(affectedJoinRequests);
+
+		if (!Enum.IsDefined(sportsEvent.Status))
+		{
+			throw new ArgumentOutOfRangeException(
+				nameof(sportsEvent),
+				sportsEvent.Status,
+				"The sports event has an undefined status.");
+		}
+
+		if (actorUserId == Guid.Empty)
+		{
+			throw new ArgumentException(
+				"The lifecycle actor cannot be empty.",
+				nameof(actorUserId));
+		}
+
+		List<EventJoinRequest> joinRequests = affectedJoinRequests.ToList();
+		foreach (EventJoinRequest joinRequest in joinRequests)
+		{
+			if (joinRequest is null)
+			{
+				throw new ArgumentException(
+					"The affected join requests cannot contain null values.",
+					nameof(affectedJoinRequests));
+			}
+
+			if (!Enum.IsDefined(joinRequest.Status))
+			{
+				throw new ArgumentOutOfRangeException(
+					nameof(affectedJoinRequests),
+					joinRequest.Status,
+					"An affected join request has an undefined status.");
+			}
+
+			if (joinRequest.SportsEventId != sportsEvent.Id)
+			{
+				throw new ArgumentException(
+					"An affected join request does not belong to the sports event.",
+					nameof(affectedJoinRequests));
+			}
+		}
+
+		PushNotificationType type;
+		Func<EventJoinRequest, Guid> recipientSelector;
+		if (sportsEvent.Status == EventStatus.Cancelled)
+		{
+			if (sportsEvent.OrganizerUserId != actorUserId
+				|| joinRequests.Any(joinRequest =>
+					joinRequest.Status != EventJoinRequestStatus.Cancelled))
+			{
+				throw new ArgumentException(
+					"The event cancellation does not match the organizer or affected request states.",
+					nameof(actorUserId));
+			}
+
+			type = PushNotificationType.EventCancelled;
+			recipientSelector = joinRequest => joinRequest.RequesterUserId;
+		}
+		else
+		{
+			if (sportsEvent.Status != EventStatus.Active
+				|| joinRequests.Count != 1)
+			{
+				throw new ArgumentException(
+					"A participation lifecycle transition requires one request on an active event.",
+					nameof(affectedJoinRequests));
+			}
+
+			EventJoinRequest joinRequest = joinRequests[0];
+			switch (joinRequest.Status)
+			{
+				case EventJoinRequestStatus.Removed:
+					if (sportsEvent.OrganizerUserId != actorUserId)
+					{
+						throw new ArgumentException(
+							"The participant removal actor is not the event organizer.",
+							nameof(actorUserId));
+					}
+
+					type = PushNotificationType.ParticipantRemoved;
+					recipientSelector = request => request.RequesterUserId;
+					break;
+
+				case EventJoinRequestStatus.Left:
+					if (joinRequest.RequesterUserId != actorUserId)
+					{
+						throw new ArgumentException(
+							"The participant departure actor is not the requester.",
+							nameof(actorUserId));
+					}
+
+					type = PushNotificationType.ParticipantLeft;
+					recipientSelector = _ => sportsEvent.OrganizerUserId;
+					break;
+
+				default:
+					throw new ArgumentOutOfRangeException(
+						nameof(affectedJoinRequests),
+						joinRequest.Status,
+						"Only cancelled, removed, or left requests produce lifecycle notifications.");
+			}
+		}
+
+		if (!Enum.IsDefined(type))
+		{
+			throw new InvalidOperationException(
+				$"The generated push notification type '{type}' is undefined.");
+		}
+
+		return joinRequests
+			.Select(joinRequest =>
+			{
+				Guid recipientUserId = recipientSelector(joinRequest);
+				return new PushIntentDescriptor(
+					recipientUserId,
+					type,
+					$"join-request:{joinRequest.Id}:{(int)type}:{recipientUserId}",
+					Guid.NewGuid());
+			})
+			.ToList();
+	}
 }
 
 public sealed record PushIntentDescriptor(

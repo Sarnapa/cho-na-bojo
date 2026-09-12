@@ -45,6 +45,12 @@ public static class PushPayloadFactory
 				"Your join request was accepted.",
 			PushNotificationType.JoinRequestRejected =>
 				"Your join request was declined.",
+			PushNotificationType.EventCancelled =>
+				"An event you joined was cancelled.",
+			PushNotificationType.ParticipantRemoved =>
+				"You were removed from an event.",
+			PushNotificationType.ParticipantLeft =>
+				"A participant left your event.",
 			_ => throw new ArgumentOutOfRangeException(
 				nameof(outboxItem),
 				outboxItem.Type,

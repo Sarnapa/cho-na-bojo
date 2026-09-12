@@ -15,6 +15,9 @@ public sealed record PushNotificationPayload(
 		Type is PushNotificationType.JoinRequestCreated
 			or PushNotificationType.JoinRequestAccepted
 			or PushNotificationType.JoinRequestRejected
+			or PushNotificationType.EventCancelled
+			or PushNotificationType.ParticipantRemoved
+			or PushNotificationType.ParticipantLeft
 		&& EventId != Guid.Empty
 		&& JoinRequestId != Guid.Empty
 		&& NotificationId != Guid.Empty;
