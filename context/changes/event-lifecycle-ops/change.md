@@ -3,7 +3,7 @@ change_id: event-lifecycle-ops
 title: Event lifecycle ops
 status: implementing
 created: 2026-09-11
-updated: 2026-09-11
+updated: 2026-09-12
 archived_at: null
 ---
 
