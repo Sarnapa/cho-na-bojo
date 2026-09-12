@@ -266,6 +266,24 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 					"EstimatedEndsAtUtc" > "StartsAtUtc"
 					AND "EstimatedEndsAtUtc" <= "StartsAtUtc" + INTERVAL '{EventPolicy.MaximumDuration.TotalHours:0} hours'
 					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_SportsEvents_Status",
+					"""
+					"Status" IN (1, 2, 3)
+					""");
+
+				tableBuilder.HasCheckConstraint(
+					"CK_SportsEvents_StatusChangedUtc",
+					"""
+					(
+						"Status" = 1 AND "StatusChangedUtc" IS NULL
+					)
+					OR
+					(
+						"Status" <> 1 AND "StatusChangedUtc" IS NOT NULL
+					)
+					""");
 			});
 
 			entity.HasKey(sportsEvent => sportsEvent.Id);
@@ -285,6 +303,11 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 			entity.Property(sportsEvent => sportsEvent.CreatedUtc)
 				.IsRequired()
 				.HasColumnType("timestamp with time zone");
+			entity.Property(sportsEvent => sportsEvent.Status)
+				.IsRequired()
+				.HasDefaultValue(EventStatus.Active);
+			entity.Property(sportsEvent => sportsEvent.StatusChangedUtc)
+				.HasColumnType("timestamp with time zone");
 
 			entity.HasIndex(sportsEvent => new
 				{
@@ -295,6 +318,11 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 			entity.HasIndex(sportsEvent => new
 				{
 					sportsEvent.VenueId,
+					sportsEvent.EstimatedEndsAtUtc
+				});
+			entity.HasIndex(sportsEvent => new
+				{
+					sportsEvent.Status,
 					sportsEvent.EstimatedEndsAtUtc
 				});
 
@@ -320,7 +348,7 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 				tableBuilder.HasCheckConstraint(
 					"CK_EventJoinRequests_Status",
 					"""
-					"Status" IN (1, 2, 3)
+					"Status" IN (1, 2, 3, 4, 5, 6)
 					""");
 
 				tableBuilder.HasCheckConstraint(

@@ -602,7 +602,8 @@ public class ApiService: IApiService
 			|| string.IsNullOrWhiteSpace(item.Sport.Name)
 			|| item.ParticipantCount < 1
 			|| item.ParticipantCount > item.ParticipantLimit
-			|| item.PendingRequestCount < 0;
+			|| item.PendingRequestCount < 0
+			|| !Enum.IsDefined(item.EventStatus);
 	}
 
 	private static bool IsInvalidRequestedEvent(RequestedEventResponse item)
@@ -618,7 +619,8 @@ public class ApiService: IApiService
 			|| string.IsNullOrWhiteSpace(item.Sport.Name)
 			|| item.ParticipantCount < 1
 			|| item.ParticipantCount > item.ParticipantLimit
-			|| !Enum.IsDefined(item.Status);
+			|| !Enum.IsDefined(item.Status)
+			|| !Enum.IsDefined(item.EventStatus);
 	}
 
 	private static bool IsInvalidJoinRequestQueueItem(

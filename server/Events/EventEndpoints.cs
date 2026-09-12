@@ -221,6 +221,7 @@ public static class EventEndpoints
 		var rows = await dbContext.SportsEvents
 			.AsNoTracking()
 			.Where(sportsEvent => sportsEvent.VenueId == venueId)
+			.Where(sportsEvent => sportsEvent.Status == EventStatus.Active)
 			.Where(sportsEvent => sportsEvent.EstimatedEndsAtUtc > nowUtc)
 			.Where(sportsEvent => query.SportId == null || sportsEvent.SportId == query.SportId)
 			.Where(sportsEvent => availableFromUtc == null || availableToUtc == null
@@ -390,6 +391,7 @@ public static class EventEndpoints
 				VenueName = sportsEvent.VenueSport.Venue.Name,
 				VenueAddress = sportsEvent.VenueSport.Venue.Address,
 				sportsEvent.SportId,
+				sportsEvent.Status,
 				SportCode = sportsEvent.VenueSport.Sport.Code,
 				SportName = sportsEvent.VenueSport.Sport.Name,
 				AcceptedCount = sportsEvent.EventJoinRequests
@@ -417,6 +419,7 @@ public static class EventEndpoints
 				VenueName = request.SportsEvent.VenueSport.Venue.Name,
 				VenueAddress = request.SportsEvent.VenueSport.Venue.Address,
 				request.SportsEvent.SportId,
+				EventStatus = request.SportsEvent.Status,
 				SportCode = request.SportsEvent.VenueSport.Sport.Code,
 				SportName = request.SportsEvent.VenueSport.Sport.Name,
 				request.Status,
@@ -438,7 +441,8 @@ public static class EventEndpoints
 				row.AutoAccept,
 				new EventVenueSummary(row.VenueId, row.VenueName, row.VenueAddress),
 				new EventSportSummary(row.SportId, row.SportCode, row.SportName),
-				row.PendingRequestCount))
+				row.PendingRequestCount,
+				row.Status))
 			.ToList();
 
 		var requestedEvents = requestedRows
@@ -456,7 +460,8 @@ public static class EventEndpoints
 				row.Status,
 				row.UpdatedUtc.HasValue
 					? new DateTimeOffset(row.UpdatedUtc.Value, TimeSpan.Zero)
-					: null))
+					: null,
+				row.EventStatus))
 			.ToList();
 
 		return Results.Ok(new MyEventsResponse(organizedEvents, requestedEvents));
@@ -521,7 +526,8 @@ public static class EventEndpoints
 		Guid callerUserId = httpContext.GetUserId();
 		var entitlement = await dbContext.SportsEvents
 			.AsNoTracking()
-			.Where(sportsEvent => sportsEvent.Id == eventId)
+			.Where(sportsEvent => sportsEvent.Id == eventId
+				&& sportsEvent.Status == EventStatus.Active)
 			.Select(sportsEvent => new
 			{
 				IsOrganizer = sportsEvent.OrganizerUserId == callerUserId,
@@ -629,6 +635,11 @@ public static class EventEndpoints
 					EventConflictCodes.EventEnded,
 					"eventId",
 					"This event has already ended.")),
+			JoinRequestTransitionFailure.EventCancelled =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventCancelled,
+					"eventId",
+					"This event has been cancelled.")),
 			JoinRequestTransitionFailure.EventFull =>
 				Results.Conflict(new EventConflictResponse(
 					EventConflictCodes.EventFull,
@@ -886,7 +897,13 @@ public static class EventEndpoints
 			DateTime nowUtc,
 			CancellationToken cancellationToken)
 	{
-		if (sportsEvent.EstimatedEndsAtUtc <= nowUtc)
+		if (sportsEvent.Status == EventStatus.Cancelled)
+		{
+			return JoinRequestTransitionFailure.EventCancelled;
+		}
+
+		if (sportsEvent.Status == EventStatus.Closed
+			|| sportsEvent.EstimatedEndsAtUtc <= nowUtc)
 		{
 			return JoinRequestTransitionFailure.EventEnded;
 		}
@@ -923,6 +940,11 @@ public static class EventEndpoints
 					EventConflictCodes.EventEnded,
 					"eventId",
 					"This event has already ended.")),
+			JoinRequestTransitionFailure.EventCancelled =>
+				Results.Conflict(new EventConflictResponse(
+					EventConflictCodes.EventCancelled,
+					"eventId",
+					"This event has been cancelled.")),
 			JoinRequestTransitionFailure.EventFull =>
 				Results.Conflict(new EventConflictResponse(
 					EventConflictCodes.EventFull,
@@ -1088,6 +1110,7 @@ public static class EventEndpoints
 	{
 		EventNotFound,
 		EventEnded,
+		EventCancelled,
 		EventFull,
 		OrganizerCannotJoin,
 		RequestNotFound,

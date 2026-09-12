@@ -594,19 +594,19 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Automated
 
-- [ ] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [ ] 1.2 Migration is generated with no model-vs-snapshot drift
-- [ ] 1.3 Migration applies cleanly against the dev database
-- [ ] 1.4 `dotnet ef migrations has-pending-model-changes --project server` reports no drift
+- [x] 1.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
+- [x] 1.2 Migration is generated with no model-vs-snapshot drift
+- [x] 1.3 Migration applies cleanly against the dev database
+- [x] 1.4 `dotnet ef migrations has-pending-model-changes --project server` reports no drift
 
 #### Manual
 
-- [ ] 1.5 `SportsEvents.Status = 4` rejected by `CK_SportsEvents_Status`
-- [ ] 1.6 `Status = 2` with NULL `StatusChangedUtc` rejected
-- [ ] 1.7 `EventJoinRequests.Status = 6` accepted, 7 rejected
-- [ ] 1.8 Pre-existing events read back as Active with NULL `StatusChangedUtc`
-- [ ] 1.9 Listing, join, accept, reject and contacts unregressed on active events
-- [ ] 1.10 Missing, zero or unknown event status fails closed as `MyEventsResult.Unknown()`
+- [x] 1.5 `SportsEvents.Status = 4` rejected by `CK_SportsEvents_Status`
+- [x] 1.6 `Status = 2` with NULL `StatusChangedUtc` rejected
+- [x] 1.7 `EventJoinRequests.Status = 6` accepted, 7 rejected
+- [x] 1.8 Pre-existing events read back as Active with NULL `StatusChangedUtc`
+- [x] 1.9 Listing, join, accept, reject and contacts unregressed on active events
+- [x] 1.10 Missing, zero or unknown event status fails closed as `MyEventsResult.Unknown()`
 
 ### Phase 2: Lifecycle Push Types and Intents
 

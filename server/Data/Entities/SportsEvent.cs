@@ -1,3 +1,5 @@
+using ChoNaBojo.Contracts.Enums;
+
 namespace ChoNaBojo.Server.Data.Entities;
 
 /// <summary>
@@ -31,6 +33,10 @@ public class SportsEvent
 	public int ParticipantLimit { get; set; }
 
 	public bool AutoAccept { get; set; }
+
+	public EventStatus Status { get; set; } = EventStatus.Active;
+
+	public DateTime? StatusChangedUtc { get; set; }
 
 	public User Organizer { get; set; } = null!;
 

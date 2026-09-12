@@ -25,6 +25,7 @@ public sealed record OrganizedEventViewData(
 	string VenueAddress,
 	string SportName,
 	int PendingRequestCount,
+	EventStatus EventStatus,
 	bool IsEndedByServer)
 {
 	public bool IsEnded => IsEndedByServer || EstimatedEndsAtUtc <= DateTimeOffset.UtcNow;
@@ -68,6 +69,7 @@ public sealed record OrganizedEventViewData(
 			response.Venue.Address,
 			response.Sport.Name,
 			response.PendingRequestCount,
+			response.EventStatus,
 			IsEndedByServer: false);
 	}
 }
@@ -88,6 +90,7 @@ public sealed record RequestedEventViewData(
 	string SportName,
 	EventJoinRequestStatus Status,
 	DateTimeOffset? UpdatedUtc,
+	EventStatus EventStatus,
 	bool HasFetchedContactPayload,
 	bool IsContactActionInFlight,
 	IReadOnlyList<ContactMethodViewData> ContactRows)
@@ -141,6 +144,7 @@ public sealed record RequestedEventViewData(
 			response.Sport.Name,
 			response.Status,
 			response.UpdatedUtc,
+			response.EventStatus,
 			HasFetchedContactPayload: false,
 			IsContactActionInFlight: false,
 			ContactRows: []);

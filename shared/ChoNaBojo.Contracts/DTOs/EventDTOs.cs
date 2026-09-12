@@ -68,7 +68,8 @@ public sealed record OrganizedEventResponse(
 	bool AutoAccept,
 	EventVenueSummary Venue,
 	EventSportSummary Sport,
-	int PendingRequestCount);
+	int PendingRequestCount,
+	EventStatus EventStatus);
 
 public sealed record RequestedEventResponse(
 	Guid EventId,
@@ -82,7 +83,8 @@ public sealed record RequestedEventResponse(
 	EventVenueSummary Venue,
 	EventSportSummary Sport,
 	EventJoinRequestStatus Status,
-	DateTimeOffset? UpdatedUtc);
+	DateTimeOffset? UpdatedUtc,
+	EventStatus EventStatus);
 
 public sealed record MyEventsResponse(
 	IReadOnlyList<OrganizedEventResponse> OrganizedEvents,
