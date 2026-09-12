@@ -700,15 +700,15 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Automated
 
-- [x] 7.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 7.2 API starts cleanly with both hosted services: `dotnet run --project server`
-- [x] 7.3 `GET /health` responds while both workers run
+- [x] 7.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — 2f703f9
+- [x] 7.2 API starts cleanly with both hosted services: `dotnet run --project server` — 2f703f9
+- [x] 7.3 `GET /health` responds while both workers run — 2f703f9
 
 #### Manual
 
-- [x] 7.4 Past-end event flips to Status 3 with `StatusChangedUtc` within one poll interval
-- [x] 7.5 Cancelled past-end event stays Status 2 and is never overwritten
-- [x] 7.6 Two API instances produce no errors and no duplicated state
-- [x] 7.7 Closed event leaves the venue listing and appears under History
-- [x] 7.8 Restart after a gap closes the accumulated backlog on the first pass
-- [x] 7.9 Join, accept, reject, cancel, remove and leave unaffected while the worker runs
+- [x] 7.4 Past-end event flips to Status 3 with `StatusChangedUtc` within one poll interval — 2f703f9
+- [x] 7.5 Cancelled past-end event stays Status 2 and is never overwritten — 2f703f9
+- [x] 7.6 Two API instances produce no errors and no duplicated state — 2f703f9
+- [x] 7.7 Closed event leaves the venue listing and appears under History — 2f703f9
+- [x] 7.8 Restart after a gap closes the accumulated backlog on the first pass — 2f703f9
+- [x] 7.9 Join, accept, reject, cancel, remove and leave unaffected while the worker runs — 2f703f9
