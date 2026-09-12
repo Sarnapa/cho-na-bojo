@@ -43,7 +43,7 @@ public class FeedbackService : IFeedbackService
 
 		var popup = new ConfirmDialog(title, message, confirmText, cancelText);
 		IPopupResult<bool> result = await page.ShowPopupAsync<bool>(popup, PopupOptions.Empty, cancellationToken);
-		return !result.WasDismissedByTappingOutsideOfPopup && result.Result;
+		return !result.WasDismissedByTappingOutsideOfPopup && popup.WasConfirmed;
 	}
 	#endregion
 

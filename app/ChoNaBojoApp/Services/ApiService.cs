@@ -517,6 +517,67 @@ public class ApiService: IApiService
 		}
 	}
 
+	public async Task<CancelEventResult> CancelEventAsync(
+		Guid eventId,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			using HttpResponseMessage response = await _httpClient.PostAsync(
+				$"/api/events/{eventId:D}/cancel",
+				content: null,
+				cancellationToken);
+
+			switch (response.StatusCode)
+			{
+				case HttpStatusCode.OK:
+					var cancelledEvent = await response.Content.ReadFromJsonAsync<CancelEventResponse>(
+						JsonOptions,
+						cancellationToken);
+					return cancelledEvent is null
+						|| cancelledEvent.EventId != eventId
+						|| cancelledEvent.Status != EventStatus.Cancelled
+						|| cancelledEvent.NotifiedParticipantCount < 0
+						? CancelEventResult.Unknown()
+						: CancelEventResult.Success(cancelledEvent);
+
+				case HttpStatusCode.NotFound:
+					var notFound = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return notFound is null
+						? CancelEventResult.Unknown()
+						: CancelEventResult.NotFound(notFound);
+
+				case HttpStatusCode.Conflict:
+					var conflict = await response.Content.ReadFromJsonAsync<EventConflictResponse>(
+						JsonOptions,
+						cancellationToken);
+					return conflict is null
+						? CancelEventResult.Unknown()
+						: CancelEventResult.Conflict(conflict);
+
+				case HttpStatusCode.Unauthorized:
+					return CancelEventResult.Unauthorized();
+
+				default:
+					return CancelEventResult.Unknown();
+			}
+		}
+		catch (HttpRequestException)
+		{
+			return CancelEventResult.Network();
+		}
+		catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+		{
+			return CancelEventResult.Network();
+		}
+		catch (Exception ex) when (ex is JsonException or NotSupportedException)
+		{
+			return CancelEventResult.Unknown();
+		}
+	}
+
 	public Task<ResolveJoinRequestResult> AcceptEventJoinRequestAsync(
 		Guid eventId,
 		Guid requestId,
@@ -540,6 +601,31 @@ public class ApiService: IApiService
 			requestId,
 			"reject",
 			EventJoinRequestStatus.Rejected,
+			cancellationToken);
+	}
+
+	public Task<ResolveJoinRequestResult> RemoveEventParticipantAsync(
+		Guid eventId,
+		Guid requestId,
+		CancellationToken cancellationToken)
+	{
+		return ResolveEventJoinRequestAsync(
+			eventId,
+			requestId,
+			"remove",
+			EventJoinRequestStatus.Removed,
+			cancellationToken);
+	}
+
+	public Task<ResolveJoinRequestResult> LeaveEventAsync(
+		Guid eventId,
+		CancellationToken cancellationToken)
+	{
+		return PostParticipationTransitionAsync(
+			$"/api/events/{eventId:D}/join-requests/mine/leave",
+			eventId,
+			requestId: null,
+			EventJoinRequestStatus.Left,
 			cancellationToken);
 	}
 	#endregion
@@ -638,17 +724,32 @@ public class ApiService: IApiService
 			|| item.IsOrganizer != (item.JoinRequestId is null);
 	}
 
-	private async Task<ResolveJoinRequestResult> ResolveEventJoinRequestAsync(
+	private Task<ResolveJoinRequestResult> ResolveEventJoinRequestAsync(
 		Guid eventId,
 		Guid requestId,
 		string action,
 		EventJoinRequestStatus expectedStatus,
 		CancellationToken cancellationToken)
 	{
+		return PostParticipationTransitionAsync(
+			$"/api/events/{eventId:D}/join-requests/{requestId:D}/{action}",
+			eventId,
+			requestId,
+			expectedStatus,
+			cancellationToken);
+	}
+
+	private async Task<ResolveJoinRequestResult> PostParticipationTransitionAsync(
+		string path,
+		Guid eventId,
+		Guid? requestId,
+		EventJoinRequestStatus expectedStatus,
+		CancellationToken cancellationToken)
+	{
 		try
 		{
 			using HttpResponseMessage response = await _httpClient.PostAsync(
-				$"/api/events/{eventId:D}/join-requests/{requestId:D}/{action}",
+				path,
 				content: null,
 				cancellationToken);
 
@@ -660,7 +761,9 @@ public class ApiService: IApiService
 						cancellationToken);
 					return joinRequest is null
 						|| joinRequest.EventId != eventId
-						|| joinRequest.RequestId != requestId
+						|| joinRequest.RequestId == Guid.Empty
+						|| requestId.HasValue
+							&& joinRequest.RequestId != requestId.Value
 						|| joinRequest.Status != expectedStatus
 						? ResolveJoinRequestResult.Unknown()
 						: ResolveJoinRequestResult.Success(joinRequest);

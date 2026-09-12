@@ -308,6 +308,15 @@
                         <Label
                             Style="{StaticResource LabelStyle}"
                             Text="{Binding SelectedOrganizedEvent.StateLabel}" />
+                        <Button
+                            Style="{StaticResource DestructiveButtonStyle}"
+                            Margin="0,8,0,0"
+                            HorizontalOptions="Start"
+                            Text="Cancel event"
+                            Command="{Binding CancelEventCommand}"
+                            CommandParameter="{Binding SelectedOrganizedEvent}"
+                            IsVisible="{Binding SelectedOrganizedEvent.CanCancel}"
+                            SemanticProperties.Description="Cancel this event" />
                     </VerticalStackLayout>
                 </Border>
 
@@ -371,6 +380,16 @@
                                             IsEnabled="{Binding CanReject}"
                                             SemanticProperties.Description="{Binding RequesterDisplayKey, StringFormat='Reject {0}'}" />
                                     </Grid>
+
+                                    <Button
+                                        Style="{StaticResource DestructiveButtonStyle}"
+                                        Margin="0,8"
+                                        HorizontalOptions="Start"
+                                        Text="Remove"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=RemoveParticipantCommand}"
+                                        CommandParameter="{Binding .}"
+                                        IsVisible="{Binding CanRemove}"
+                                        SemanticProperties.Description="{Binding RequesterDisplayKey, StringFormat='Remove {0} from this event'}" />
 
                                     <views:ContactRevealView
                                         IsLocked="{Binding IsContactLocked}"

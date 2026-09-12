@@ -335,6 +335,76 @@ public sealed record EventContactsResult
 }
 #endregion
 
+#region CancelEventResultStatus
+public enum CancelEventResultStatus
+{
+	Success,
+	Conflict,
+	NotFound,
+	Unauthorized,
+	Network,
+	Unknown
+}
+#endregion
+
+#region CancelEventResult
+/// <summary>
+/// Typed client outcome for <c>POST /api/events/{eventId}/cancel</c>.
+/// </summary>
+public sealed record CancelEventResult
+{
+	#region Properties
+	public CancelEventResultStatus Status { get; }
+	public CancelEventResponse? Response { get; }
+	public EventConflictResponse? ConflictResponse { get; }
+	#endregion
+
+	#region Constructors
+	private CancelEventResult(
+		CancelEventResultStatus status,
+		CancelEventResponse? response,
+		EventConflictResponse? conflictResponse)
+	{
+		Status = status;
+		Response = response;
+		ConflictResponse = conflictResponse;
+	}
+	#endregion
+
+	#region Public methods
+	public static CancelEventResult Success(CancelEventResponse response)
+	{
+		return new(CancelEventResultStatus.Success, response, null);
+	}
+
+	public static CancelEventResult Conflict(EventConflictResponse conflict)
+	{
+		return new(CancelEventResultStatus.Conflict, null, conflict);
+	}
+
+	public static CancelEventResult NotFound(EventConflictResponse conflict)
+	{
+		return new(CancelEventResultStatus.NotFound, null, conflict);
+	}
+
+	public static CancelEventResult Unauthorized()
+	{
+		return new(CancelEventResultStatus.Unauthorized, null, null);
+	}
+
+	public static CancelEventResult Network()
+	{
+		return new(CancelEventResultStatus.Network, null, null);
+	}
+
+	public static CancelEventResult Unknown()
+	{
+		return new(CancelEventResultStatus.Unknown, null, null);
+	}
+	#endregion
+}
+#endregion
+
 #region ResolveJoinRequestResultStatus
 public enum ResolveJoinRequestResultStatus
 {

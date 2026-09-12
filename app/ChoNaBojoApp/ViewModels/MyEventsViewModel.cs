@@ -28,9 +28,13 @@ public sealed record OrganizedEventViewData(
 	EventStatus EventStatus,
 	bool IsEndedByServer)
 {
-	public bool IsEnded => IsEndedByServer || EstimatedEndsAtUtc <= DateTimeOffset.UtcNow;
+	public bool IsEnded =>
+		EventStatus == EventStatus.Closed
+		|| IsEndedByServer
+		|| EstimatedEndsAtUtc <= DateTimeOffset.UtcNow;
+	public bool CanCancel => EventStatus == EventStatus.Active && !IsEnded;
 	public bool IsFull => ParticipantCount >= ParticipantLimit;
-	public double CardOpacity => IsEnded ? 0.6 : 1;
+	public double CardOpacity => EventStatus != EventStatus.Active || IsEnded ? 0.6 : 1;
 	public string StartsAtDisplay => MyEventsFormatting.FormatLocalDateTime(StartsAtUtc);
 	public string EstimatedEndsAtDisplay => MyEventsFormatting.FormatLocalDateTime(
 		EstimatedEndsAtUtc);
@@ -42,11 +46,14 @@ public sealed record OrganizedEventViewData(
 		: string.Create(
 			CultureInfo.CurrentCulture,
 			$"{PendingRequestCount} pending requests");
-	public string StateLabel => IsEnded
-		? "Ended"
-		: IsFull
-			? "Full"
-			: "Open";
+	public string StateLabel => EventStatus switch
+	{
+		EventStatus.Cancelled => "Cancelled",
+		EventStatus.Closed => "Finished",
+		_ when IsEnded => "Ended",
+		_ when IsFull => "Full",
+		_ => "Open"
+	};
 	public string OpenRequestsLabel => PendingRequestCount == 0
 		? "View requests"
 		: string.Create(
@@ -99,14 +106,22 @@ public sealed record RequestedEventViewData(
 	public bool IsFull => ParticipantCount >= ParticipantLimit;
 	public double CardOpacity => IsEnded ? 0.6 : 1;
 	public bool HasRevealedContact =>
+		EventStatus == EventStatus.Active
+		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& HasFetchedContactPayload;
-	public bool IsContactLocked => Status != EventJoinRequestStatus.Accepted;
+	public bool IsContactLocked =>
+		EventStatus != EventStatus.Active
+		|| Status != EventJoinRequestStatus.Accepted;
 	public bool CanLoadContact =>
+		EventStatus == EventStatus.Active
+		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& !HasFetchedContactPayload
 		&& !IsContactActionInFlight;
 	public bool ShowContactLoadAction =>
+		EventStatus == EventStatus.Active
+		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& !HasFetchedContactPayload;
 	public string ContactActionLabel => IsContactActionInFlight
@@ -160,18 +175,38 @@ public sealed record EventJoinRequestViewData(
 	DateTimeOffset CreatedUtc,
 	DateTimeOffset? UpdatedUtc,
 	bool AcceptAllowedByEvent,
+	EventStatus EventStatus,
+	bool IsEventEnded,
 	bool IsActionInFlight,
 	bool HasFetchedContactPayload,
 	IReadOnlyList<ContactMethodViewData> ContactRows)
 {
 	public bool IsPending => Status == EventJoinRequestStatus.Pending;
 	public bool IsResolved => !IsPending;
-	public bool CanAccept => IsPending && AcceptAllowedByEvent && !IsActionInFlight;
-	public bool CanReject => IsPending && !IsActionInFlight;
+	public bool IsEventActive => EventStatus == EventStatus.Active;
+	public bool CanAccept =>
+		IsPending
+		&& IsEventActive
+		&& !IsEventEnded
+		&& AcceptAllowedByEvent
+		&& !IsActionInFlight;
+	public bool CanReject =>
+		IsPending
+		&& IsEventActive
+		&& !IsEventEnded
+		&& !IsActionInFlight;
+	public bool CanRemove =>
+		Status == EventJoinRequestStatus.Accepted
+		&& IsEventActive
+		&& !IsEventEnded
+		&& !IsActionInFlight;
 	public bool HasRevealedContact =>
+		IsEventActive
+		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& HasFetchedContactPayload;
-	public bool IsContactLocked => Status != EventJoinRequestStatus.Accepted;
+	public bool IsContactLocked =>
+		!IsEventActive || Status != EventJoinRequestStatus.Accepted;
 	public string CreatedDisplay => MyEventsFormatting.FormatLocalDateTime(CreatedUtc);
 	public string StatusLabel => IsActionInFlight
 		? "Updating..."
@@ -180,6 +215,9 @@ public sealed record EventJoinRequestViewData(
 			EventJoinRequestStatus.Pending => "Pending",
 			EventJoinRequestStatus.Accepted => "Accepted",
 			EventJoinRequestStatus.Rejected => "Rejected",
+			EventJoinRequestStatus.Left => "Left",
+			EventJoinRequestStatus.Removed => "Removed",
+			EventJoinRequestStatus.Cancelled => "Event cancelled",
 			_ => "Status unavailable"
 		};
 	public string SemanticDescription =>
@@ -187,7 +225,7 @@ public sealed record EventJoinRequestViewData(
 
 	public static EventJoinRequestViewData FromResponse(
 		EventJoinRequestQueueItemResponse response,
-		bool acceptAllowedByEvent)
+		OrganizedEventViewData organizedEvent)
 	{
 		return new(
 			response.RequestId,
@@ -195,7 +233,9 @@ public sealed record EventJoinRequestViewData(
 			response.Status,
 			response.CreatedUtc,
 			response.UpdatedUtc,
-			acceptAllowedByEvent,
+			!organizedEvent.IsFull,
+			organizedEvent.EventStatus,
+			organizedEvent.IsEnded,
 			IsActionInFlight: false,
 			HasFetchedContactPayload: false,
 			ContactRows: []);
@@ -448,6 +488,142 @@ public partial class MyEventsViewModel : ViewModelBase
 			cancellationToken);
 	}
 
+	[RelayCommand(CanExecute = nameof(CanCancelEvent))]
+	private async Task CancelEventAsync(
+		OrganizedEventViewData? eventItem,
+		CancellationToken cancellationToken)
+	{
+		if (!CanCancelEvent(eventItem))
+		{
+			return;
+		}
+
+		OrganizedEventViewData? currentEvent = OrganizedEvents.SingleOrDefault(
+			item => item.EventId == eventItem!.EventId);
+		if (currentEvent is null)
+		{
+			return;
+		}
+
+		var resolutionCancellation =
+			CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		CancellationToken resolutionToken = resolutionCancellation.Token;
+		_resolutionCancellation = resolutionCancellation;
+		_isConfirmationInProgress = true;
+		NotifyCommandStateChanged();
+
+		try
+		{
+			bool confirmed;
+			try
+			{
+				confirmed = await _feedbackService.ShowConfirmAsync(
+					"Cancel this event?",
+					"Everyone who asked to join or was accepted will be notified. This cannot be undone.",
+					"Confirm cancellation",
+					"Cancel",
+					CancellationToken.None);
+			}
+			finally
+			{
+				_isConfirmationInProgress = false;
+				NotifyCommandStateChanged();
+			}
+
+			if (!confirmed)
+			{
+				return;
+			}
+
+			CancelEventResult result = await _apiService.CancelEventAsync(
+				currentEvent.EventId,
+				resolutionToken);
+			resolutionToken.ThrowIfCancellationRequested();
+
+			if (SelectedOrganizedEvent?.EventId != currentEvent.EventId
+				|| !ReferenceEquals(_resolutionCancellation, resolutionCancellation))
+			{
+				return;
+			}
+
+			switch (result.Status)
+			{
+				case CancelEventResultStatus.Success:
+					ReplaceOrganizedEvent(currentEvent with
+					{
+						EventStatus = result.Response!.Status
+					});
+					ClearSelectedEvent(cancelResolution: false);
+					await _feedbackService.ShowSnackbarAsync(
+						"Event cancelled.",
+						CancellationToken.None);
+					break;
+
+				case CancelEventResultStatus.NotFound:
+					await _feedbackService.ShowSnackbarAsync(
+						"This event is no longer available.",
+						resolutionToken);
+					await RefreshSelectedEventStateAsync(
+						currentEvent.EventId,
+						resolutionToken);
+					break;
+
+				case CancelEventResultStatus.Conflict:
+					ApplyConflictHint(result.ConflictResponse!);
+					await _feedbackService.ShowSnackbarAsync(
+						ConflictMessage(result.ConflictResponse!),
+						resolutionToken);
+					await RefreshSelectedEventStateAsync(
+						currentEvent.EventId,
+						resolutionToken);
+					break;
+
+				case CancelEventResultStatus.Unauthorized:
+					await _feedbackService.ShowSnackbarAsync(
+						"Your session has expired. Please sign in again.",
+						resolutionToken);
+					break;
+
+				case CancelEventResultStatus.Network:
+					await _feedbackService.ShowSnackbarAsync(
+						"The cancellation could not be confirmed. Check your connection and try again.",
+						resolutionToken);
+					break;
+
+				default:
+					await _feedbackService.ShowSnackbarAsync(
+						"The server response could not be confirmed. Please try again.",
+						resolutionToken);
+					break;
+			}
+		}
+		catch (OperationCanceledException) when (resolutionToken.IsCancellationRequested)
+		{
+		}
+		finally
+		{
+			if (ReferenceEquals(_resolutionCancellation, resolutionCancellation))
+			{
+				_resolutionCancellation = null;
+				NotifyCommandStateChanged();
+			}
+
+			resolutionCancellation.Dispose();
+		}
+	}
+
+	[RelayCommand(CanExecute = nameof(CanRemoveParticipant))]
+	private Task RemoveParticipantAsync(
+		EventJoinRequestViewData? request,
+		CancellationToken cancellationToken)
+	{
+		return ResolveRequestAsync(
+			request,
+			EventJoinRequestStatus.Removed,
+			requiresConfirmation: true,
+			cancellationToken);
+	}
+
 	[RelayCommand(CanExecute = nameof(CanRejectRequest))]
 	private Task RejectRequestAsync(
 		EventJoinRequestViewData? request,
@@ -621,6 +797,8 @@ public partial class MyEventsViewModel : ViewModelBase
 		OpenRequestsCommand.Cancel();
 		AcceptRequestCommand.Cancel();
 		RejectRequestCommand.Cancel();
+		CancelEventCommand.Cancel();
+		RemoveParticipantCommand.Cancel();
 		LoadRequestedContactCommand.Cancel();
 		OpenContactCommand.Cancel();
 		CopyContactCommand.Cancel();
@@ -646,7 +824,9 @@ public partial class MyEventsViewModel : ViewModelBase
 	{
 		bool canResolve = targetStatus == EventJoinRequestStatus.Accepted
 			? CanAcceptRequest(request)
-			: CanRejectRequest(request);
+			: targetStatus == EventJoinRequestStatus.Removed
+				? CanRemoveParticipant(request)
+				: CanRejectRequest(request);
 		if (!canResolve || SelectedOrganizedEvent is null)
 		{
 			return;
@@ -674,19 +854,24 @@ public partial class MyEventsViewModel : ViewModelBase
 			if (requiresConfirmation)
 			{
 				_isConfirmationInProgress = true;
+				NotifyCommandStateChanged();
 				bool confirmed;
 				try
 				{
+					bool isRemoval = targetStatus == EventJoinRequestStatus.Removed;
 					confirmed = await _feedbackService.ShowConfirmAsync(
-						"Reject request?",
-						"This requester will not be able to request this event again.",
-						"Reject",
+						isRemoval ? "Remove this participant?" : "Reject request?",
+						isRemoval
+							? "They will be notified and cannot request this event again."
+							: "This requester will not be able to request this event again.",
+						isRemoval ? "Remove" : "Reject",
 						"Cancel",
 						CancellationToken.None);
 				}
 				finally
 				{
 					_isConfirmationInProgress = false;
+					NotifyCommandStateChanged();
 				}
 
 				if (!confirmed)
@@ -701,10 +886,15 @@ public partial class MyEventsViewModel : ViewModelBase
 						eventId,
 						currentRequest.RequestId,
 						resolutionToken)
-					: await _apiService.RejectEventJoinRequestAsync(
-						eventId,
-						currentRequest.RequestId,
-						resolutionToken);
+					: targetStatus == EventJoinRequestStatus.Removed
+						? await _apiService.RemoveEventParticipantAsync(
+							eventId,
+							currentRequest.RequestId,
+							resolutionToken)
+						: await _apiService.RejectEventJoinRequestAsync(
+							eventId,
+							currentRequest.RequestId,
+							resolutionToken);
 			resolutionToken.ThrowIfCancellationRequested();
 
 			if (SelectedOrganizedEvent?.EventId != eventId
@@ -720,7 +910,9 @@ public partial class MyEventsViewModel : ViewModelBase
 					await _feedbackService.ShowSnackbarAsync(
 						targetStatus == EventJoinRequestStatus.Accepted
 							? "Join request accepted."
-							: "Join request rejected.",
+							: targetStatus == EventJoinRequestStatus.Removed
+								? "Participant removed."
+								: "Join request rejected.",
 						resolutionToken);
 					if (targetStatus == EventJoinRequestStatus.Accepted)
 					{
@@ -855,8 +1047,15 @@ public partial class MyEventsViewModel : ViewModelBase
 		Guid eventId,
 		CancellationToken cancellationToken)
 	{
-		if (SelectedOrganizedEvent?.EventId != eventId)
+		if (SelectedOrganizedEvent is not
+			{
+				EventId: var selectedEventId,
+				EventStatus: EventStatus.Active
+			}
+			|| selectedEventId != eventId)
 		{
+			_selectedOrganizerContactPayload = null;
+			ClearOrganizerContactRows();
 			return;
 		}
 
@@ -997,10 +1196,13 @@ public partial class MyEventsViewModel : ViewModelBase
 		}
 
 		bool wasPending = currentRequest.Status == EventJoinRequestStatus.Pending;
-		int acceptedDelta = wasPending
-			&& response.Status == EventJoinRequestStatus.Accepted
+		int acceptedDelta =
+			wasPending && response.Status == EventJoinRequestStatus.Accepted
 				? 1
-				: 0;
+				: currentRequest.Status == EventJoinRequestStatus.Accepted
+					&& response.Status != EventJoinRequestStatus.Accepted
+					? -1
+					: 0;
 		int pendingDelta = wasPending ? -1 : 0;
 		OrganizedEventViewData updatedEvent = SelectedOrganizedEvent with
 		{
@@ -1012,7 +1214,18 @@ public partial class MyEventsViewModel : ViewModelBase
 				SelectedOrganizedEvent.PendingRequestCount + pendingDelta)
 		};
 		ReplaceOrganizedEvent(updatedEvent);
-		bool canAccept = !updatedEvent.IsEnded && !updatedEvent.IsFull;
+		bool canAccept = updatedEvent.EventStatus == EventStatus.Active
+			&& !updatedEvent.IsEnded
+			&& !updatedEvent.IsFull;
+
+		if (response.Status == EventJoinRequestStatus.Removed
+			&& _selectedOrganizerContactPayload is not null)
+		{
+			_selectedOrganizerContactPayload = new EventContactsResponse(
+				_selectedOrganizerContactPayload.Contacts
+					.Where(contact => contact.JoinRequestId != response.RequestId)
+					.ToList());
+		}
 
 		ReplaceRequestRow(
 			response.RequestId,
@@ -1021,7 +1234,13 @@ public partial class MyEventsViewModel : ViewModelBase
 				Status = response.Status,
 				UpdatedUtc = response.UpdatedUtc,
 				AcceptAllowedByEvent = canAccept,
-				IsActionInFlight = false
+				IsActionInFlight = false,
+				HasFetchedContactPayload =
+					response.Status == EventJoinRequestStatus.Accepted
+						&& item.HasFetchedContactPayload,
+				ContactRows = response.Status == EventJoinRequestStatus.Accepted
+					? item.ContactRows
+					: []
 			});
 		SetAcceptAvailability(canAccept);
 		NotifyScreenStateChanged();
@@ -1039,7 +1258,8 @@ public partial class MyEventsViewModel : ViewModelBase
 		{
 			EventJoinRequestViewData request = RequestQueue[index];
 			EventContactResponse? contact = null;
-			bool hasContact = request.Status == EventJoinRequestStatus.Accepted
+			bool hasContact = request.IsEventActive
+				&& request.Status == EventJoinRequestStatus.Accepted
 				&& contactsByRequestId.TryGetValue(
 					request.RequestId,
 					out contact);
@@ -1070,6 +1290,10 @@ public partial class MyEventsViewModel : ViewModelBase
 			{
 				IsEndedByServer = true
 			},
+			EventConflictCodes.EventCancelled => SelectedOrganizedEvent with
+			{
+				EventStatus = EventStatus.Cancelled
+			},
 			_ => SelectedOrganizedEvent
 		};
 
@@ -1078,9 +1302,22 @@ public partial class MyEventsViewModel : ViewModelBase
 			ReplaceOrganizedEvent(updatedEvent);
 		}
 
-		if (conflict.Code is EventConflictCodes.EventFull or EventConflictCodes.EventEnded)
+		if (conflict.Code is EventConflictCodes.EventFull
+			or EventConflictCodes.EventEnded
+			or EventConflictCodes.EventCancelled)
 		{
 			SetAcceptAvailability(false);
+		}
+
+		if (conflict.Code == EventConflictCodes.EventCancelled)
+		{
+			SetRequestEventState(EventStatus.Cancelled, isEnded: false);
+			_selectedOrganizerContactPayload = null;
+			ClearOrganizerContactRows();
+		}
+		else if (conflict.Code == EventConflictCodes.EventEnded)
+		{
+			SetRequestEventState(SelectedOrganizedEvent.EventStatus, isEnded: true);
 		}
 	}
 
@@ -1113,18 +1350,30 @@ public partial class MyEventsViewModel : ViewModelBase
 		NotifyCommandStateChanged();
 	}
 
+	private void SetRequestEventState(EventStatus eventStatus, bool isEnded)
+	{
+		for (int index = 0; index < RequestQueue.Count; index++)
+		{
+			RequestQueue[index] = RequestQueue[index] with
+			{
+				EventStatus = eventStatus,
+				IsEventEnded = isEnded
+			};
+		}
+
+		NotifyCommandStateChanged();
+	}
+
 	private void UpdateRequestQueue(
 		IEnumerable<EventJoinRequestQueueItemResponse> responses)
 	{
-		bool canAccept = SelectedOrganizedEvent is
-		{
-			IsEnded: false,
-			IsFull: false
-		};
+		OrganizedEventViewData selectedEvent = SelectedOrganizedEvent
+			?? throw new InvalidOperationException(
+				"An organized event must be selected before loading its request queue.");
 		UpdateCollection(
 			RequestQueue,
 			responses.Select(response =>
-				EventJoinRequestViewData.FromResponse(response, canAccept)));
+				EventJoinRequestViewData.FromResponse(response, selectedEvent)));
 		if (_selectedOrganizerContactPayload is not null)
 		{
 			ApplyOrganizerContacts(_selectedOrganizerContactPayload);
@@ -1178,10 +1427,13 @@ public partial class MyEventsViewModel : ViewModelBase
 		}
 	}
 
-	private void ClearSelectedEvent()
+	private void ClearSelectedEvent(bool cancelResolution = true)
 	{
 		CancelQueueLoad();
-		CancelResolution();
+		if (cancelResolution)
+		{
+			CancelResolution();
+		}
 		ClearContactState();
 		SelectedOrganizedEvent = null;
 		RequestQueue.Clear();
@@ -1274,6 +1526,17 @@ public partial class MyEventsViewModel : ViewModelBase
 				is { CanAccept: true };
 	}
 
+	private bool CanCancelEvent(OrganizedEventViewData? eventItem)
+	{
+		return eventItem is not null
+			&& !IsBusy
+			&& !_isConfirmationInProgress
+			&& _resolutionCancellation is null
+			&& SelectedOrganizedEvent?.EventId == eventItem.EventId
+			&& OrganizedEvents.FirstOrDefault(item => item.EventId == eventItem.EventId)
+				is { CanCancel: true };
+	}
+
 	private bool CanRejectRequest(EventJoinRequestViewData? request)
 	{
 		return request is not null
@@ -1282,6 +1545,17 @@ public partial class MyEventsViewModel : ViewModelBase
 			&& SelectedOrganizedEvent is not null
 			&& RequestQueue.FirstOrDefault(item => item.RequestId == request.RequestId)
 				is { CanReject: true };
+	}
+
+	private bool CanRemoveParticipant(EventJoinRequestViewData? request)
+	{
+		return request is not null
+			&& !IsBusy
+			&& !_isConfirmationInProgress
+			&& _resolutionCancellation is null
+			&& SelectedOrganizedEvent is not null
+			&& RequestQueue.FirstOrDefault(item => item.RequestId == request.RequestId)
+				is { CanRemove: true };
 	}
 
 	private bool CanLoadRequestedContact(RequestedEventViewData? eventItem)
@@ -1347,6 +1621,8 @@ public partial class MyEventsViewModel : ViewModelBase
 		OpenRequestsCommand.NotifyCanExecuteChanged();
 		AcceptRequestCommand.NotifyCanExecuteChanged();
 		RejectRequestCommand.NotifyCanExecuteChanged();
+		CancelEventCommand.NotifyCanExecuteChanged();
+		RemoveParticipantCommand.NotifyCanExecuteChanged();
 		LoadRequestedContactCommand.NotifyCanExecuteChanged();
 		OpenContactCommand.NotifyCanExecuteChanged();
 	}
@@ -1534,6 +1810,10 @@ public partial class MyEventsViewModel : ViewModelBase
 				"This event is full. Pending requests remain available.",
 			EventConflictCodes.EventEnded =>
 				"This event has ended and can no longer accept participants.",
+			EventConflictCodes.EventCancelled =>
+				"This event has been cancelled.",
+			EventConflictCodes.ParticipantNotAccepted =>
+				"This participant is no longer accepted. The queue will be refreshed.",
 			EventConflictCodes.RequestAlreadyResolved =>
 				"This request was already resolved. The queue will be refreshed.",
 			EventConflictCodes.RequestNotFound =>
