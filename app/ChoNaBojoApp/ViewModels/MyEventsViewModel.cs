@@ -32,9 +32,12 @@ public sealed record OrganizedEventViewData(
 		EventStatus == EventStatus.Closed
 		|| IsEndedByServer
 		|| EstimatedEndsAtUtc <= DateTimeOffset.UtcNow;
+	public bool IsHistory =>
+		EventStatus is EventStatus.Cancelled or EventStatus.Closed || IsEnded;
+	public bool IsCancelled => EventStatus == EventStatus.Cancelled;
 	public bool CanCancel => EventStatus == EventStatus.Active && !IsEnded;
 	public bool IsFull => ParticipantCount >= ParticipantLimit;
-	public double CardOpacity => EventStatus != EventStatus.Active || IsEnded ? 0.6 : 1;
+	public double CardOpacity => IsHistory ? 0.6 : 1;
 	public string StartsAtDisplay => MyEventsFormatting.FormatLocalDateTime(StartsAtUtc);
 	public string EstimatedEndsAtDisplay => MyEventsFormatting.FormatLocalDateTime(
 		EstimatedEndsAtUtc);
@@ -46,11 +49,11 @@ public sealed record OrganizedEventViewData(
 		: string.Create(
 			CultureInfo.CurrentCulture,
 			$"{PendingRequestCount} pending requests");
-	public string StateLabel => EventStatus switch
+	public string DisplayLabel => EventStatus switch
 	{
 		EventStatus.Cancelled => "Cancelled",
 		EventStatus.Closed => "Finished",
-		_ when IsEnded => "Ended",
+		_ when IsEnded => "Finished",
 		_ when IsFull => "Full",
 		_ => "Open"
 	};
@@ -60,7 +63,7 @@ public sealed record OrganizedEventViewData(
 			CultureInfo.CurrentCulture,
 			$"View requests ({PendingRequestCount})");
 	public string SemanticDescription =>
-		$"{Title}, {StateLabel}, {ParticipantDisplay} participants, {PendingRequestDisplay}";
+		$"{Title}, {DisplayLabel}, {ParticipantDisplay} participants, {PendingRequestDisplay}";
 
 	public static OrganizedEventViewData FromResponse(OrganizedEventResponse response)
 	{
@@ -98,13 +101,28 @@ public sealed record RequestedEventViewData(
 	EventJoinRequestStatus Status,
 	DateTimeOffset? UpdatedUtc,
 	EventStatus EventStatus,
+	bool IsActionInFlight,
 	bool HasFetchedContactPayload,
 	bool IsContactActionInFlight,
 	IReadOnlyList<ContactMethodViewData> ContactRows)
 {
-	public bool IsEnded => EstimatedEndsAtUtc <= DateTimeOffset.UtcNow;
+	public bool IsEnded =>
+		EventStatus == EventStatus.Closed
+		|| EstimatedEndsAtUtc <= DateTimeOffset.UtcNow;
+	public bool IsHistory =>
+		EventStatus is EventStatus.Cancelled or EventStatus.Closed
+		|| IsEnded
+		|| Status is not (
+			EventJoinRequestStatus.Pending or EventJoinRequestStatus.Accepted);
+	public bool IsCancelled =>
+		EventStatus == EventStatus.Cancelled
+		|| Status == EventJoinRequestStatus.Cancelled;
 	public bool IsFull => ParticipantCount >= ParticipantLimit;
-	public double CardOpacity => IsEnded ? 0.6 : 1;
+	public double CardOpacity => IsHistory ? 0.6 : 1;
+	public bool CanLeave =>
+		!IsHistory
+		&& Status == EventJoinRequestStatus.Accepted
+		&& !IsActionInFlight;
 	public bool HasRevealedContact =>
 		EventStatus == EventStatus.Active
 		&&
@@ -133,15 +151,25 @@ public sealed record RequestedEventViewData(
 	public string ParticipantDisplay => string.Create(
 		CultureInfo.CurrentCulture,
 		$"{ParticipantCount} / {ParticipantLimit}");
-	public string StatusLabel => Status switch
+	public string DisplayLabel => EventStatus switch
 	{
-		EventJoinRequestStatus.Pending => "Request pending",
-		EventJoinRequestStatus.Accepted => "Joined",
-		EventJoinRequestStatus.Rejected => "Request rejected",
-		_ => "Status unavailable"
+		EventStatus.Cancelled => "Cancelled",
+		EventStatus.Closed => "Finished",
+		_ when IsEnded => "Finished",
+		_ => Status switch
+		{
+			EventJoinRequestStatus.Pending => "Request pending",
+			EventJoinRequestStatus.Accepted => "Joined",
+			EventJoinRequestStatus.Rejected => "Rejected",
+			EventJoinRequestStatus.Left => "Left",
+			EventJoinRequestStatus.Removed => "Removed",
+			EventJoinRequestStatus.Cancelled => "Event cancelled",
+			_ => "Status unavailable"
+		}
 	};
+	public string ActionLabel => IsActionInFlight ? "Leaving..." : "Leave";
 	public string SemanticDescription =>
-		$"{Title}, {StatusLabel}, {ParticipantDisplay} participants";
+		$"{Title}, {DisplayLabel}, {ParticipantDisplay} participants";
 
 	public static RequestedEventViewData FromResponse(RequestedEventResponse response)
 	{
@@ -160,9 +188,66 @@ public sealed record RequestedEventViewData(
 			response.Status,
 			response.UpdatedUtc,
 			response.EventStatus,
+			IsActionInFlight: false,
 			HasFetchedContactPayload: false,
 			IsContactActionInFlight: false,
 			ContactRows: []);
+	}
+}
+#endregion
+
+#region HistoryEventViewData
+public sealed record HistoryEventViewData(
+	Guid EventId,
+	bool IsOrganized,
+	string Title,
+	DateTimeOffset StartsAtUtc,
+	DateTimeOffset EstimatedEndsAtUtc,
+	string VenueName,
+	string VenueAddress,
+	string SportName,
+	string ParticipantDisplay,
+	string DisplayLabel,
+	bool IsCancelled)
+{
+	public double CardOpacity => 0.6;
+	public string RoleLabel => IsOrganized ? "Organized" : "Requested";
+	public string StartsAtDisplay => MyEventsFormatting.FormatLocalDateTime(StartsAtUtc);
+	public string EstimatedEndsAtDisplay => MyEventsFormatting.FormatLocalDateTime(
+		EstimatedEndsAtUtc);
+	public string SemanticDescription =>
+		$"{Title}, {RoleLabel}, {DisplayLabel}, {ParticipantDisplay} participants";
+
+	public static HistoryEventViewData FromOrganized(OrganizedEventViewData item)
+	{
+		return new(
+			item.EventId,
+			IsOrganized: true,
+			item.Title,
+			item.StartsAtUtc,
+			item.EstimatedEndsAtUtc,
+			item.VenueName,
+			item.VenueAddress,
+			item.SportName,
+			item.ParticipantDisplay,
+			item.DisplayLabel,
+			item.IsCancelled);
+	}
+
+	public static HistoryEventViewData FromRequested(RequestedEventViewData item)
+	{
+		return new(
+			item.EventId,
+			IsOrganized: false,
+			item.Title,
+			item.StartsAtUtc,
+			item.EstimatedEndsAtUtc,
+			item.VenueName,
+			item.VenueAddress,
+			item.SportName,
+			item.ParticipantDisplay,
+			item.DisplayLabel,
+			item.IsCancelled);
 	}
 }
 #endregion
@@ -308,6 +393,12 @@ public partial class MyEventsViewModel : ViewModelBase
 	private ObservableCollection<RequestedEventViewData> requestedEvents = [];
 
 	[ObservableProperty]
+	private ObservableCollection<HistoryEventViewData> historyEvents = [];
+
+	[ObservableProperty]
+	private bool isHistorySectionExpanded;
+
+	[ObservableProperty]
 	private ObservableCollection<EventJoinRequestViewData> requestQueue = [];
 
 	[ObservableProperty]
@@ -354,11 +445,21 @@ public partial class MyEventsViewModel : ViewModelBase
 	public bool IsDetailVisible => SelectedOrganizedEvent is not null;
 	public bool HasOrganizedEvents => OrganizedEvents.Count > 0;
 	public bool HasRequestedEvents => RequestedEvents.Count > 0;
+	public bool HasHistoryEvents => HistoryEvents.Count > 0;
 	public bool HasNoOrganizedEvents => !HasOrganizedEvents;
 	public bool HasNoRequestedEvents => !HasRequestedEvents;
 	public bool ShowNoOrganizedEvents => HasNoOrganizedEvents && HasRequestedEvents;
 	public bool ShowNoRequestedEvents => HasNoRequestedEvents && HasOrganizedEvents;
-	public bool HasNoEvents => !HasOrganizedEvents && !HasRequestedEvents;
+	public bool HasNoEvents =>
+		!HasOrganizedEvents && !HasRequestedEvents && !HasHistoryEvents;
+	public bool ShowHistoryEvents => HasHistoryEvents && IsHistorySectionExpanded;
+	public string HistoryToggleLabel => IsHistorySectionExpanded
+		? string.Create(
+			CultureInfo.CurrentCulture,
+			$"Hide history ({HistoryEvents.Count})")
+		: string.Create(
+			CultureInfo.CurrentCulture,
+			$"History ({HistoryEvents.Count})");
 	public bool HasQueuedRequests => RequestQueue.Count > 0;
 	public bool HasNoQueuedRequests =>
 		IsDetailVisible
@@ -549,7 +650,7 @@ public partial class MyEventsViewModel : ViewModelBase
 			switch (result.Status)
 			{
 				case CancelEventResultStatus.Success:
-					ReplaceOrganizedEvent(currentEvent with
+					MoveOrganizedEventToHistory(currentEvent with
 					{
 						EventStatus = result.Response!.Status
 					});
@@ -622,6 +723,145 @@ public partial class MyEventsViewModel : ViewModelBase
 			EventJoinRequestStatus.Removed,
 			requiresConfirmation: true,
 			cancellationToken);
+	}
+
+	[RelayCommand(CanExecute = nameof(CanLeaveEvent))]
+	private async Task LeaveEventAsync(
+		RequestedEventViewData? eventItem,
+		CancellationToken cancellationToken)
+	{
+		if (!CanLeaveEvent(eventItem))
+		{
+			return;
+		}
+
+		RequestedEventViewData? currentEvent = RequestedEvents.SingleOrDefault(
+			item => item.EventId == eventItem!.EventId);
+		if (currentEvent is null)
+		{
+			return;
+		}
+
+		var resolutionCancellation =
+			CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+		CancellationToken resolutionToken = resolutionCancellation.Token;
+		_resolutionCancellation = resolutionCancellation;
+		ReplaceRequestedEvent(
+			currentEvent.EventId,
+			item => item with { IsActionInFlight = true });
+		_isConfirmationInProgress = true;
+		NotifyCommandStateChanged();
+
+		try
+		{
+			bool confirmed;
+			try
+			{
+				confirmed = await _feedbackService.ShowConfirmAsync(
+					"Leave this event?",
+					"The organizer will be notified. You can ask to join again later.",
+					"Leave",
+					"Cancel",
+					CancellationToken.None);
+			}
+			finally
+			{
+				_isConfirmationInProgress = false;
+				NotifyCommandStateChanged();
+			}
+
+			if (!confirmed)
+			{
+				return;
+			}
+
+			ResolveJoinRequestResult result = await _apiService.LeaveEventAsync(
+				currentEvent.EventId,
+				resolutionToken);
+			resolutionToken.ThrowIfCancellationRequested();
+
+			if (!ReferenceEquals(_resolutionCancellation, resolutionCancellation))
+			{
+				return;
+			}
+
+			switch (result.Status)
+			{
+				case ResolveJoinRequestResultStatus.Success:
+					MoveRequestedEventToHistory(currentEvent with
+					{
+						Status = result.Response!.Status,
+						UpdatedUtc = result.Response.UpdatedUtc,
+						IsActionInFlight = false,
+						HasFetchedContactPayload = false,
+						IsContactActionInFlight = false,
+						ContactRows = []
+					});
+					await _feedbackService.ShowSnackbarAsync(
+						"You left the event.",
+						resolutionToken);
+					break;
+
+				case ResolveJoinRequestResultStatus.NotFound:
+					await _feedbackService.ShowSnackbarAsync(
+						"This request is no longer available.",
+						resolutionToken);
+					await RefreshRequestedEventStateAsync(resolutionToken);
+					break;
+
+				case ResolveJoinRequestResultStatus.Conflict:
+					await _feedbackService.ShowSnackbarAsync(
+						ConflictMessage(result.ConflictResponse!),
+						resolutionToken);
+					await RefreshRequestedEventStateAsync(resolutionToken);
+					break;
+
+				case ResolveJoinRequestResultStatus.Unauthorized:
+					await _feedbackService.ShowSnackbarAsync(
+						"Your session has expired. Please sign in again.",
+						resolutionToken);
+					break;
+
+				case ResolveJoinRequestResultStatus.Network:
+					await _feedbackService.ShowSnackbarAsync(
+						"The leave could not be confirmed. Check your connection and try again.",
+						resolutionToken);
+					break;
+
+				default:
+					await _feedbackService.ShowSnackbarAsync(
+						"The server response could not be confirmed. Please try again.",
+						resolutionToken);
+					break;
+			}
+		}
+		catch (OperationCanceledException) when (resolutionToken.IsCancellationRequested)
+		{
+		}
+		finally
+		{
+			if (ReferenceEquals(_resolutionCancellation, resolutionCancellation))
+			{
+				_resolutionCancellation = null;
+				ReplaceRequestedEvent(
+					currentEvent.EventId,
+					item => item with { IsActionInFlight = false });
+				NotifyCommandStateChanged();
+			}
+
+			resolutionCancellation.Dispose();
+		}
+	}
+
+	[RelayCommand]
+	private void ToggleHistory()
+	{
+		if (!HasHistoryEvents)
+		{
+			return;
+		}
+
+		IsHistorySectionExpanded = !IsHistorySectionExpanded;
 	}
 
 	[RelayCommand(CanExecute = nameof(CanRejectRequest))]
@@ -799,6 +1039,7 @@ public partial class MyEventsViewModel : ViewModelBase
 		RejectRequestCommand.Cancel();
 		CancelEventCommand.Cancel();
 		RemoveParticipantCommand.Cancel();
+		LeaveEventCommand.Cancel();
 		LoadRequestedContactCommand.Cancel();
 		OpenContactCommand.Cancel();
 		CopyContactCommand.Cancel();
@@ -812,6 +1053,12 @@ public partial class MyEventsViewModel : ViewModelBase
 	{
 		NotifyScreenStateChanged();
 		NotifyCommandStateChanged();
+	}
+
+	partial void OnIsHistorySectionExpandedChanged(bool value)
+	{
+		OnPropertyChanged(nameof(ShowHistoryEvents));
+		OnPropertyChanged(nameof(HistoryToggleLabel));
 	}
 	#endregion
 
@@ -1170,14 +1417,50 @@ public partial class MyEventsViewModel : ViewModelBase
 		await LoadOrganizerContactsAsync(eventId, cancellationToken);
 	}
 
+	private async Task RefreshRequestedEventStateAsync(
+		CancellationToken cancellationToken)
+	{
+		MyEventsResult myEvents = await _apiService.GetMyEventsAsync(cancellationToken);
+		cancellationToken.ThrowIfCancellationRequested();
+
+		if (myEvents.Status == MyEventsResultStatus.Success)
+		{
+			ClearContactState();
+			ApplyMyEventsResponse(myEvents.Response!);
+			return;
+		}
+
+		await _feedbackService.ShowSnackbarAsync(
+			myEvents.Status == MyEventsResultStatus.Network
+				? "The action was processed, but your events could not be refreshed. Check your connection and retry."
+				: "The action was processed, but your events could not be refreshed.",
+			cancellationToken);
+	}
+
 	private void ApplyMyEventsResponse(MyEventsResponse response)
 	{
+		IReadOnlyList<OrganizedEventViewData> organizedEvents = response.OrganizedEvents
+			.Select(OrganizedEventViewData.FromResponse)
+			.ToList();
+		IReadOnlyList<RequestedEventViewData> requestedEvents = response.RequestedEvents
+			.Select(RequestedEventViewData.FromResponse)
+			.ToList();
 		UpdateCollection(
 			OrganizedEvents,
-			response.OrganizedEvents.Select(OrganizedEventViewData.FromResponse));
+			organizedEvents.Where(item => !item.IsHistory));
 		UpdateCollection(
 			RequestedEvents,
-			response.RequestedEvents.Select(RequestedEventViewData.FromResponse));
+			requestedEvents.Where(item => !item.IsHistory));
+		UpdateCollection(
+			HistoryEvents,
+			organizedEvents
+				.Where(item => item.IsHistory)
+				.Select(HistoryEventViewData.FromOrganized)
+				.Concat(
+					requestedEvents
+						.Where(item => item.IsHistory)
+						.Select(HistoryEventViewData.FromRequested))
+				.OrderByDescending(item => item.StartsAtUtc));
 		NotifyScreenStateChanged();
 	}
 
@@ -1335,6 +1618,52 @@ public partial class MyEventsViewModel : ViewModelBase
 		{
 			SelectedOrganizedEvent = updatedEvent;
 		}
+	}
+
+	private void MoveOrganizedEventToHistory(OrganizedEventViewData updatedEvent)
+	{
+		int index = FindIndex(
+			OrganizedEvents,
+			item => item.EventId == updatedEvent.EventId);
+		if (index >= 0)
+		{
+			OrganizedEvents.RemoveAt(index);
+		}
+
+		UpsertHistoryEvent(HistoryEventViewData.FromOrganized(updatedEvent));
+		NotifyScreenStateChanged();
+	}
+
+	private void MoveRequestedEventToHistory(RequestedEventViewData updatedEvent)
+	{
+		int index = FindIndex(
+			RequestedEvents,
+			item => item.EventId == updatedEvent.EventId);
+		if (index >= 0)
+		{
+			RequestedEvents.RemoveAt(index);
+		}
+
+		if (_selectedRequestedContactEventId == updatedEvent.EventId)
+		{
+			_selectedRequestedContactEventId = null;
+			_selectedRequestedContactPayload = null;
+		}
+
+		UpsertHistoryEvent(HistoryEventViewData.FromRequested(updatedEvent));
+		NotifyScreenStateChanged();
+	}
+
+	private void UpsertHistoryEvent(HistoryEventViewData updatedEvent)
+	{
+		UpdateCollection(
+			HistoryEvents,
+			HistoryEvents
+				.Where(item =>
+					item.EventId != updatedEvent.EventId
+					|| item.IsOrganized != updatedEvent.IsOrganized)
+				.Append(updatedEvent)
+				.OrderByDescending(item => item.StartsAtUtc));
 	}
 
 	private void SetAcceptAvailability(bool canAccept)
@@ -1558,6 +1887,16 @@ public partial class MyEventsViewModel : ViewModelBase
 				is { CanRemove: true };
 	}
 
+	private bool CanLeaveEvent(RequestedEventViewData? eventItem)
+	{
+		return eventItem is not null
+			&& !IsBusy
+			&& !_isConfirmationInProgress
+			&& _resolutionCancellation is null
+			&& RequestedEvents.FirstOrDefault(item => item.EventId == eventItem.EventId)
+				is { CanLeave: true };
+	}
+
 	private bool CanLoadRequestedContact(RequestedEventViewData? eventItem)
 	{
 		return eventItem is not null
@@ -1602,11 +1941,14 @@ public partial class MyEventsViewModel : ViewModelBase
 		OnPropertyChanged(nameof(IsDetailVisible));
 		OnPropertyChanged(nameof(HasOrganizedEvents));
 		OnPropertyChanged(nameof(HasRequestedEvents));
+		OnPropertyChanged(nameof(HasHistoryEvents));
 		OnPropertyChanged(nameof(HasNoOrganizedEvents));
 		OnPropertyChanged(nameof(HasNoRequestedEvents));
 		OnPropertyChanged(nameof(ShowNoOrganizedEvents));
 		OnPropertyChanged(nameof(ShowNoRequestedEvents));
 		OnPropertyChanged(nameof(HasNoEvents));
+		OnPropertyChanged(nameof(ShowHistoryEvents));
+		OnPropertyChanged(nameof(HistoryToggleLabel));
 		OnPropertyChanged(nameof(HasQueuedRequests));
 		OnPropertyChanged(nameof(HasNoQueuedRequests));
 		OnPropertyChanged(nameof(ShowInitialLoading));
@@ -1623,6 +1965,7 @@ public partial class MyEventsViewModel : ViewModelBase
 		RejectRequestCommand.NotifyCanExecuteChanged();
 		CancelEventCommand.NotifyCanExecuteChanged();
 		RemoveParticipantCommand.NotifyCanExecuteChanged();
+		LeaveEventCommand.NotifyCanExecuteChanged();
 		LoadRequestedContactCommand.NotifyCanExecuteChanged();
 		OpenContactCommand.NotifyCanExecuteChanged();
 	}

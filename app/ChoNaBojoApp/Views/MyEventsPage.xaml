@@ -51,7 +51,7 @@
                                                     StrokeShape="RoundRectangle 16">
                                                     <Label
                                                         Style="{StaticResource LabelStyle}"
-                                                        Text="{Binding StateLabel}" />
+                                                        Text="{Binding DisplayLabel}" />
                                                 </Border>
                                             </Grid>
 
@@ -168,7 +168,7 @@
                                                     StrokeShape="RoundRectangle 16">
                                                     <Label
                                                         Style="{StaticResource LabelStyle}"
-                                                        Text="{Binding StatusLabel}" />
+                                                        Text="{Binding DisplayLabel}" />
                                                 </Border>
                                             </Grid>
 
@@ -222,6 +222,16 @@
                                                     VerticalOptions="Center" />
                                             </Grid>
 
+                                            <Button
+                                                Style="{StaticResource DestructiveButtonStyle}"
+                                                Margin="0,8,0,0"
+                                                HorizontalOptions="Start"
+                                                Text="{Binding ActionLabel}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:MyEventsViewModel}}, Path=LeaveEventCommand}"
+                                                CommandParameter="{Binding .}"
+                                                IsVisible="{Binding CanLeave}"
+                                                SemanticProperties.Description="{Binding Title, StringFormat='Leave {0}'}" />
+
                                             <views:ContactRevealView
                                                 IsLocked="{Binding IsContactLocked}"
                                                 IsRevealed="{Binding HasRevealedContact}"
@@ -249,6 +259,113 @@
                         <Label
                             Style="{StaticResource BodyStyle}"
                             Text="You have not requested to join an event yet." />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout
+                        Spacing="16"
+                        IsVisible="{Binding HasHistoryEvents}">
+                        <Button
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            HorizontalOptions="Fill"
+                            Text="{Binding HistoryToggleLabel}"
+                            Command="{Binding ToggleHistoryCommand}"
+                            SemanticProperties.Description="Expand or collapse event history" />
+
+                        <VerticalStackLayout
+                            Spacing="16"
+                            IsVisible="{Binding ShowHistoryEvents}"
+                            BindableLayout.ItemsSource="{Binding HistoryEvents}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="viewModels:HistoryEventViewData">
+                                    <Border
+                                        Padding="16"
+                                        BackgroundColor="{StaticResource SurfaceColor}"
+                                        Opacity="{Binding CardOpacity}"
+                                        Shadow="{StaticResource CardShadow}"
+                                        Stroke="{StaticResource DividerColor}"
+                                        StrokeShape="RoundRectangle 16"
+                                        SemanticProperties.Description="{Binding SemanticDescription}">
+                                        <VerticalStackLayout Spacing="8">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <Label
+                                                    Grid.Column="0"
+                                                    Style="{StaticResource TitleStyle}"
+                                                    Text="{Binding Title}" />
+                                                <Border
+                                                    Grid.Column="1"
+                                                    Padding="8,4"
+                                                    BackgroundColor="{StaticResource Gray100}"
+                                                    Stroke="{StaticResource DividerColor}"
+                                                    StrokeShape="RoundRectangle 16">
+                                                    <Border.Triggers>
+                                                        <DataTrigger
+                                                            TargetType="Border"
+                                                            Binding="{Binding IsCancelled}"
+                                                            Value="True">
+                                                            <Setter
+                                                                Property="BackgroundColor"
+                                                                Value="{StaticResource ErrorColor}" />
+                                                            <Setter
+                                                                Property="Stroke"
+                                                                Value="{StaticResource ErrorColor}" />
+                                                        </DataTrigger>
+                                                    </Border.Triggers>
+                                                    <Label
+                                                        Style="{StaticResource LabelStyle}"
+                                                        Text="{Binding DisplayLabel}">
+                                                        <Label.Triggers>
+                                                            <DataTrigger
+                                                                TargetType="Label"
+                                                                Binding="{Binding IsCancelled}"
+                                                                Value="True">
+                                                                <Setter
+                                                                    Property="TextColor"
+                                                                    Value="{StaticResource OnPrimaryColor}" />
+                                                            </DataTrigger>
+                                                        </Label.Triggers>
+                                                    </Label>
+                                                </Border>
+                                            </Grid>
+
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding RoleLabel}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding SportName}" />
+                                            <Label
+                                                Style="{StaticResource BodyStyle}"
+                                                Text="{Binding VenueName}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding VenueAddress}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding StartsAtDisplay, StringFormat='Starts {0}'}" />
+                                            <Label
+                                                Style="{StaticResource LabelStyle}"
+                                                Text="{Binding EstimatedEndsAtDisplay, StringFormat='Ends {0}'}" />
+
+                                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                                                <Label
+                                                    Grid.Column="0"
+                                                    FontFamily="MaterialOutlined"
+                                                    FontSize="24"
+                                                    Text="{x:Static materialSymbols:MaterialOutlined.Group}"
+                                                    TextColor="{StaticResource SecondaryTextColor}"
+                                                    VerticalOptions="Center"
+                                                    AutomationProperties.IsInAccessibleTree="False" />
+                                                <Label
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource LabelStyle}"
+                                                    Text="{Binding ParticipantDisplay}"
+                                                    VerticalOptions="Center" />
+                                            </Grid>
+                                        </VerticalStackLayout>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
                     </VerticalStackLayout>
 
                     <VerticalStackLayout
@@ -307,7 +424,7 @@
                             Text="{Binding SelectedOrganizedEvent.ParticipantDisplay, StringFormat='Participants {0}'}" />
                         <Label
                             Style="{StaticResource LabelStyle}"
-                            Text="{Binding SelectedOrganizedEvent.StateLabel}" />
+                            Text="{Binding SelectedOrganizedEvent.DisplayLabel}" />
                         <Button
                             Style="{StaticResource DestructiveButtonStyle}"
                             Margin="0,8,0,0"
