@@ -110,6 +110,7 @@ builder.Services
 builder.Services.AddSingleton<IPushGateway, FirebasePushGateway>();
 builder.Services.AddScoped<PushOutboxProcessor>();
 builder.Services.AddHostedService<PushDeliveryWorker>();
+builder.Services.AddHostedService<EventAutoCloseWorker>();
 
 var app = builder.Build();
 

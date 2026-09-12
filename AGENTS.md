@@ -37,7 +37,7 @@ Feature requirements and architectural decisions: @context/foundation/prd.md and
 ## Architecture Notes
 
 - The API uses minimal APIs (top-level `Program.cs` with `MapGet`/`MapPost` route handlers).
-- Background jobs will handle event lifecycle such as auto-closing past-end-time events.
+- The API runs `PushDeliveryWorker` for notification delivery and `EventAutoCloseWorker` for closing past-end-time events. Railway must keep the API service continuously running so both workers can process on schedule.
 - Full stack decisions (database, push notifications, deployment target): @context/foundation/tech-stack.md.
 
 ## Google Maps API key
