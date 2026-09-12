@@ -305,6 +305,10 @@ public class ChoNaBojoContext(DbContextOptions<ChoNaBojoContext> options): DbCon
 				.HasColumnType("timestamp with time zone");
 			entity.Property(sportsEvent => sportsEvent.Status)
 				.IsRequired()
+				// EventStatus has no member equal to the CLR default, so the unset value is the
+				// sentinel that lets the database default (Active) apply. Declared explicitly to
+				// silence EF warning 20601 on every startup and dotnet ef invocation.
+				.HasSentinel(default(EventStatus))
 				.HasDefaultValue(EventStatus.Active);
 			entity.Property(sportsEvent => sportsEvent.StatusChangedUtc)
 				.HasColumnType("timestamp with time zone");

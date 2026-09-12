@@ -123,22 +123,23 @@ public sealed record RequestedEventViewData(
 		!IsHistory
 		&& Status == EventJoinRequestStatus.Accepted
 		&& !IsActionInFlight;
+	public bool IsContactAllowed => EventStatus != EventStatus.Cancelled;
 	public bool HasRevealedContact =>
-		EventStatus == EventStatus.Active
+		IsContactAllowed
 		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& HasFetchedContactPayload;
 	public bool IsContactLocked =>
-		EventStatus != EventStatus.Active
+		!IsContactAllowed
 		|| Status != EventJoinRequestStatus.Accepted;
 	public bool CanLoadContact =>
-		EventStatus == EventStatus.Active
+		IsContactAllowed
 		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& !HasFetchedContactPayload
 		&& !IsContactActionInFlight;
 	public bool ShowContactLoadAction =>
-		EventStatus == EventStatus.Active
+		IsContactAllowed
 		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& !HasFetchedContactPayload;
@@ -269,6 +270,7 @@ public sealed record EventJoinRequestViewData(
 	public bool IsPending => Status == EventJoinRequestStatus.Pending;
 	public bool IsResolved => !IsPending;
 	public bool IsEventActive => EventStatus == EventStatus.Active;
+	public bool IsContactAllowed => EventStatus != EventStatus.Cancelled;
 	public bool CanAccept =>
 		IsPending
 		&& IsEventActive
@@ -286,12 +288,12 @@ public sealed record EventJoinRequestViewData(
 		&& !IsEventEnded
 		&& !IsActionInFlight;
 	public bool HasRevealedContact =>
-		IsEventActive
+		IsContactAllowed
 		&&
 		Status == EventJoinRequestStatus.Accepted
 		&& HasFetchedContactPayload;
 	public bool IsContactLocked =>
-		!IsEventActive || Status != EventJoinRequestStatus.Accepted;
+		!IsContactAllowed || Status != EventJoinRequestStatus.Accepted;
 	public string CreatedDisplay => MyEventsFormatting.FormatLocalDateTime(CreatedUtc);
 	public string StatusLabel => IsActionInFlight
 		? "Updating..."
@@ -1541,7 +1543,7 @@ public partial class MyEventsViewModel : ViewModelBase
 		{
 			EventJoinRequestViewData request = RequestQueue[index];
 			EventContactResponse? contact = null;
-			bool hasContact = request.IsEventActive
+			bool hasContact = request.IsContactAllowed
 				&& request.Status == EventJoinRequestStatus.Accepted
 				&& contactsByRequestId.TryGetValue(
 					request.RequestId,

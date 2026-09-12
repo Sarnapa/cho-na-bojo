@@ -410,6 +410,11 @@ public static class EventEndpoints
 		CancellationToken cancellationToken)
 	{
 		Guid organizerUserId = httpContext.GetUserId();
+		// No DbUpdateException guard here, unlike TransitionJoinRequestAsync: that handler exists
+		// to absorb the unique-index collision of two sessions inserting the same join-request
+		// row. Cancellation inserts no uniquely-keyed join row, and the FOR UPDATE event lock
+		// below serialises concurrent cancels so the outbox EventKey cannot collide either.
+		// Any other failure rolls back on transaction dispose.
 		await using var transaction = await dbContext.Database.BeginTransactionAsync(
 			cancellationToken);
 
@@ -651,8 +656,10 @@ public static class EventEndpoints
 		Guid callerUserId = httpContext.GetUserId();
 		var entitlement = await dbContext.SportsEvents
 			.AsNoTracking()
+			// Cancelling revokes contact access; a finished (Closed) event keeps it so an
+			// accepted pair can still coordinate around an overrunning game.
 			.Where(sportsEvent => sportsEvent.Id == eventId
-				&& sportsEvent.Status == EventStatus.Active)
+				&& sportsEvent.Status != EventStatus.Cancelled)
 			.Select(sportsEvent => new
 			{
 				IsOrganizer = sportsEvent.OrganizerUserId == callerUserId,
@@ -1055,6 +1062,10 @@ public static class EventEndpoints
 				"Only removal and departure participation transitions are supported.");
 		}
 
+		// No DbUpdateException guard here, unlike TransitionJoinRequestAsync: removal and
+		// departure only update an existing join-request row, so the unique index that handler
+		// guards against cannot be hit, and the FOR UPDATE event lock serialises concurrent
+		// transitions so the outbox EventKey cannot collide. Other failures roll back on dispose.
 		await using var transaction = await dbContext.Database.BeginTransactionAsync(
 			cancellationToken);
 

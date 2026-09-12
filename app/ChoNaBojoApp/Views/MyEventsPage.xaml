@@ -223,7 +223,7 @@
                                             </Grid>
 
                                             <Button
-                                                Style="{StaticResource DestructiveButtonStyle}"
+                                                Style="{StaticResource DestructiveOutlineButtonStyle}"
                                                 Margin="0,8,0,0"
                                                 HorizontalOptions="Start"
                                                 Text="{Binding ActionLabel}"
@@ -426,7 +426,7 @@
                             Style="{StaticResource LabelStyle}"
                             Text="{Binding SelectedOrganizedEvent.DisplayLabel}" />
                         <Button
-                            Style="{StaticResource DestructiveButtonStyle}"
+                            Style="{StaticResource DestructiveOutlineButtonStyle}"
                             Margin="0,8,0,0"
                             HorizontalOptions="Start"
                             Text="Cancel event"
@@ -499,7 +499,7 @@
                                     </Grid>
 
                                     <Button
-                                        Style="{StaticResource DestructiveButtonStyle}"
+                                        Style="{StaticResource DestructiveOutlineButtonStyle}"
                                         Margin="0,8"
                                         HorizontalOptions="Start"
                                         Text="Remove"

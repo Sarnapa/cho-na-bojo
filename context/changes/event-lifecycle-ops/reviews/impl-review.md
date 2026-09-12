@@ -6,6 +6,7 @@
 - **Date**: 2026-09-12
 - **Verdict**: NEEDS ATTENTION
 - **Findings**: 0 critical, 4 warnings, 3 observations
+- **Triage**: completed 2026-09-12 — **every finding below was triaged and decided by @Sarnapa** (6 fixed, 1 skipped). See [Triage](#triage-2026-09-12).
 
 ## Verdicts
 
@@ -30,6 +31,8 @@
 
 ## Findings
 
+> Each finding's `Decision:` was chosen by @Sarnapa during the 2026-09-12 triage session.
+
 ### F1 — Auto-close silently revokes contact access for finished events
 
 - **Severity**: ⚠️ WARNING
@@ -47,7 +50,7 @@
   - Tradeoff: Introduces a new tunable constant and a second time comparison on the hottest privacy-critical read path; more logic to get wrong than Fix A.
   - Confidence: MEDIUM — behaviourally sound, but the grace period is an unvalidated product guess with no PRD or plan backing.
   - Blind spot: No user research on how long after a game people still need to coordinate.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `GetEventContactsAsync` now gates on `Status != EventStatus.Cancelled` (`server/Events/EventEndpoints.cs:654-657`), and the client mirrors were widened in step with it: `RequestedEventViewData.IsContactAllowed` and `EventJoinRequestViewData.IsContactAllowed` (`app/ChoNaBojoApp/ViewModels/MyEventsViewModel.cs`) now drive `HasRevealedContact` / `IsContactLocked` / `CanLoadContact` / `ShowContactLoadAction` and `ApplyOrganizerContacts`. `CanAccept` / `CanReject` / `CanRemove` / `CanLeave` still require `Active`. Verified on device 2026-09-12.
 
 ### F2 — 60 manual success criteria marked complete with no recorded evidence
 
@@ -66,7 +69,7 @@
   - Tradeoff: Leaves the majority of the matrix unevidenced, so the next reviewer faces this same gap.
   - Confidence: MEDIUM — defensible for an MVP slice, but weaker than the convention the last two slices set.
   - Blind spot: The privacy regression check spans all three actions; verifying it partially may miss the one path that leaks.
-- **Decision**: PENDING
+- **Decision**: SKIPPED — user judged a formal manual-evidence artifact not important for the MVP. The 60 Progress checkboxes stay as-is and no `reviews/manual-verification.md` is produced for this slice.
 
 ### F3 — `DestructiveButtonStyle` restyled globally, changing untouched screens
 
@@ -85,7 +88,7 @@
   - Tradeoff: Ships an unplanned visual change to a screen outside this slice without it ever being reviewed as a design decision.
   - Confidence: MEDIUM — depends entirely on whether the app-wide restyle was deliberate.
   - Blind spot: No screenshots or design reference in the repo to judge the intended look against.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — `DestructiveButtonStyle` restored to its pre-slice filled form (reverting 918c70a) and reserved for dialog confirms, so `ConfirmDialog.xaml:40` (logout) looks as it did before this slice. New `DestructiveOutlineButtonStyle` carries the outlined treatment for inline card actions and is now used by the three new buttons in `MyEventsPage.xaml` (Leave / Cancel event / Remove). Both style comments refreshed; `Value="Transparent"` kept as a literal to match the existing `SecondaryButtonStyle`. Verified on device 2026-09-12.
 
 ### F4 — Outbox `EventKey` deviates from the plan's explicit "do not change" contract
 
@@ -95,7 +98,7 @@
 - **Location**: `server/Push/PushIntentFactory.cs:230` (`BuildEventKey`)
 - **Detail**: Phase 4 item 4 stated the per-attempt `UtcTicks` discriminator was for the revived `JoinRequestCreated` notification only, and instructed: *"Do not change keys for initial joins or the three new lifecycle types."* The implementation routes **every** caller through one `BuildEventKey` that always appends `:{joinRequest.CreatedUtc.Ticks}`, so initial joins and all three lifecycle types now use 5-part keys. The implementation is **more correct than the plan**: `PushOutbox.EventKey` carries a unique index (`server/Data/ChoNaBojoContext.cs:474-475`), and a user who joins → is accepted → leaves → re-joins → is accepted → leaves again would emit a second `ParticipantLeft` with an identical 4-part key and fail the insert. The plan's narrower rule would have produced a 500 on that path. The code's own XML remarks document exactly this reasoning. The only real problem is that the plan still says the opposite, so the next reader may "fix" it back.
 - **Fix**: Amend the Phase 4 item 4 contract in `plan.md` to record that the attempt stamp applies to all join-request-derived keys, citing the repeat-leave collision that makes it necessary.
-- **Decision**: PENDING
+- **Decision**: FIXED — Phase 4 item 4 in `plan.md` now carries an "Amended 2026-09-12 during implementation review (F4)" note stating the attempt stamp applies to every join-request-derived key, with the repeat-leave collision and the `PushOutbox.EventKey` unique index cited. No code change; the implementation was already correct.
 
 ### F5 — Venue map changed despite the "no change to the venue map" guardrail
 
@@ -105,7 +108,7 @@
 - **Location**: `app/ChoNaBojoApp/ViewModels/MapViewModel.cs:93-96,119-134`
 - **Detail**: "What We're NOT Doing" states *"No change to the reject flow, the contact-reveal endpoint's shape, or the venue map."* `EventCardViewData` was nonetheless changed so a `Left` request is re-requestable (`IsRequestable`, `CanJoin` previously required `status is null`) and so `Removed` / `Cancelled` render status labels. This is necessary rather than gratuitous: the venue listing is the only join surface, so without it Phase 4's re-request-after-leaving rule would be unreachable from the UI and manual criterion 6.5 could not pass. The change is small and enabling, not a redesign — but a guardrail was crossed without being recorded.
 - **Fix**: Add a one-line addendum to the plan's "What We're NOT Doing" noting that the venue-map guardrail was narrowed to exclude the re-request affordance required by Phase 4.
-- **Decision**: PENDING
+- **Decision**: FIXED — the venue-map bullet in the plan's "What We're NOT Doing" now carries an "Amended 2026-09-12 during implementation review (F5)" note recording the narrowed guardrail and why Phase 4 required it.
 
 ### F6 — EF Core sentinel warning logged on every API startup
 
@@ -115,7 +118,7 @@
 - **Location**: `server/Data/ChoNaBojoContext.cs` (`SportsEvent.Status` default-value configuration)
 - **Detail**: Configuring `Status` with a database-generated default of `1` while `EventStatus` has no member equal to the CLR default `0` makes EF emit warning `20601` on every startup and on every `dotnet ef` invocation: *"configured with a database-generated default, but has no configured sentinel value."* Behaviour is currently correct — `0` is not a valid `EventStatus`, so falling through to the database default of `Active` is exactly what is wanted — but the warning is permanent log noise that trains readers to ignore EF model-validation output, and it would mask a genuine future warning on the same channel.
 - **Fix**: Declare the sentinel explicitly (`.HasSentinel(0)` on the `Status` property) so the intent is stated and the warning stops.
-- **Decision**: PENDING
+- **Decision**: FIXED — `.HasSentinel(default(EventStatus))` declared before `.HasDefaultValue(EventStatus.Active)` in `server/Data/ChoNaBojoContext.cs` with a comment stating the intent. Verified: `dotnet build server` succeeds and `dotnet ef migrations has-pending-model-changes --project server` now reports "No changes have been made to the model since the last migration" with no 20601 warning.
 
 ### F7 — Cancel and participation transactions omit the template's `DbUpdateException` handling
 
@@ -125,7 +128,7 @@
 - **Location**: `server/Events/EventEndpoints.cs:411` (`CancelEventAsync`), `:1042` (`TransitionParticipationAsync`)
 - **Detail**: Both new transactional handlers rely on `await using var transaction` auto-rollback with no explicit `try`/`catch`, whereas the template they were told to copy — `TransitionJoinRequestAsync` — wraps its save in a `DbUpdateException` handler. The divergence is defensible: the template's handler exists to absorb a unique-index collision when two sessions insert the same join-request row, and neither new path inserts a uniquely-keyed join row, while the `FOR UPDATE` event lock serialises concurrent cancels and removes so the outbox `EventKey` cannot collide either. Rollback-on-dispose is correct on every failure path. Noting it only so the divergence is a recorded decision rather than an oversight the next author copies blindly.
 - **Fix**: No code change required; if the divergence should be explicit, add a short comment at each handler explaining why no `DbUpdateException` guard is needed.
-- **Decision**: PENDING
+- **Decision**: FIXED — explanatory comments added at `CancelEventAsync` and `TransitionParticipationAsync` in `server/Events/EventEndpoints.cs`, each stating why the template's `DbUpdateException` guard is unnecessary (no uniquely-keyed join-row insert; the `FOR UPDATE` event lock serialises concurrent transitions) and that other failures roll back on transaction dispose. No behavioural change.
 
 ## Verified clean
 
@@ -142,6 +145,32 @@ Checked and confirmed correct during this review — recorded so a future review
 - **No shared-project contamination**: the new shared additions are pure DTO/enum/const with no ASP.NET Core, EF Core, Npgsql or MAUI references.
 - **All other "What We're NOT Doing" guardrails held**: no event editing, no un-cancel, no auto-close push, no organizer hand-over, no test project, no outstanding-request cap (correctly deferred into `context/foundation/todo.md`), no reject-flow or contact-endpoint shape change, no iOS code.
 - **Unplanned-but-justified incidental changes**: `PushNotificationPresenter.cs` and `IPushNavigationRouter.cs` had to learn the three new push types or lifecycle notifications would be dropped or crash presentation; `FeedbackService.cs` + `ConfirmDialog.xaml.cs` fix a latent dismiss-result ambiguity that this slice's three new confirm dialogs exposed; `solutions/ChoNaBojo.slnx` and `context/foundation/todo.md` are documentation bookkeeping.
+
+## Triage (2026-09-12)
+
+> **Triaged by @Sarnapa.** Every `Decision:` field in this report records a call made by the repository owner during an interactive `/10x-impl-review` triage session — not an automated or agent-chosen outcome. The agent proposed the fix options and applied the approved edits; the decisions, including the one skip and the on-device verification of F1 and F3, are the user's.
+
+All seven findings triaged. Six fixed, one skipped.
+
+| Finding | Decision (by @Sarnapa) |
+|---|---|
+| F1 — contact access revoked on auto-close | FIXED via Fix A (server gate + client mirrors) |
+| F2 — manual criteria without evidence | SKIPPED — not important for the MVP |
+| F3 — `DestructiveButtonStyle` restyled globally | FIXED via Fix A (filled style restored + new outline style) |
+| F4 — outbox `EventKey` vs. plan contract | FIXED — plan amended, code was already correct |
+| F5 — venue-map guardrail crossed | FIXED — guardrail addendum added to the plan |
+| F6 — EF sentinel warning | FIXED — `.HasSentinel(default(EventStatus))` |
+| F7 — missing `DbUpdateException` guard | FIXED — divergence documented at both handlers |
+
+Post-triage verification:
+
+| Check | Command | Result |
+|---|---|---|
+| Solution builds | `dotnet build solutions/ChoNaBojo.slnx` | PASS — 0 errors, 119 warnings (unchanged `MVVMTK0045` baseline) |
+| Android app builds | `dotnet build app/ChoNaBojoApp -f net10.0-android` | PASS — 0 errors, 9 warnings (unchanged baseline) |
+| No EF model drift | `dotnet ef migrations has-pending-model-changes --project server` | PASS — no pending changes, and the 20601 sentinel warning is gone |
+
+Manual re-verification of the F1 and F3 changes: **DONE on device (2026-09-12)** — contact details remain reachable on a finished (`Closed`) event and still disappear on a cancelled one; the logout confirm dialog renders filled while the Cancel / Remove / Leave card buttons render outlined.
 
 ## Out-of-scope note
 

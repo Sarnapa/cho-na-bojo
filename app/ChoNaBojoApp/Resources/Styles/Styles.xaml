@@ -144,9 +144,39 @@
         </Setter>
     </Style>
 
-    <!-- Destructive confirm (§9): the ErrorColor confirm button in a destructive MD3 dialog
-         (e.g. the logout confirm). Never used for a page-level primary action. -->
+    <!-- Destructive confirm (§9): the filled ErrorColor confirm button in a destructive MD3
+         dialog (e.g. the logout confirm). Never used for a page-level primary action, and never
+         for an inline card action - use DestructiveOutlineButtonStyle there. -->
     <Style x:Key="DestructiveButtonStyle" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="{StaticResource ErrorColor}" />
+        <Setter Property="TextColor" Value="{StaticResource OnPrimaryColor}" />
+        <Setter Property="FontFamily" Value="OpenSansSemibold" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="BorderWidth" Value="0" />
+        <Setter Property="CornerRadius" Value="24" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="HeightRequest" Value="48" />
+        <Setter Property="MinimumWidthRequest" Value="48" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Disabled">
+                        <VisualState.Setters>
+                            <Setter Property="TextColor" Value="{StaticResource Gray950}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Gray200}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="PointerOver" />
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <!-- Destructive inline action (§9): the outlined ErrorColor button for a destructive action
+         that sits inside a card or list row (cancel event, remove participant, leave event).
+         Lower emphasis than DestructiveButtonStyle, which stays reserved for dialog confirms. -->
+    <Style x:Key="DestructiveOutlineButtonStyle" TargetType="Button">
         <Setter Property="BackgroundColor" Value="Transparent" />
         <Setter Property="TextColor" Value="{StaticResource ErrorColor}" />
         <Setter Property="FontFamily" Value="OpenSansRegular" />
