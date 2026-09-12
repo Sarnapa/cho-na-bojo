@@ -625,19 +625,19 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Automated
 
-- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 3.2 Organizer cancel returns 200 with Status Cancelled
-- [x] 3.3 Repeat cancel returns 200, 0 notified, no new outbox rows
-- [x] 3.4 Non-organizer cancel returns 404 `event_not_found`
-- [x] 3.5 Cancel on a past-end event returns 409 `event_ended`
+- [x] 3.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — e0c35a6
+- [x] 3.2 Organizer cancel returns 200 with Status Cancelled — e0c35a6
+- [x] 3.3 Repeat cancel returns 200, 0 notified, no new outbox rows — e0c35a6
+- [x] 3.4 Non-organizer cancel returns 404 `event_not_found` — e0c35a6
+- [x] 3.5 Cancel on a past-end event returns 409 `event_ended` — e0c35a6
 
 #### Manual
 
-- [x] 3.6 Mixed pending/accepted roster yields one outbox row each, delivered within 30s
-- [x] 3.7 Join-request rows read Status 6 with `UpdatedUtc`; event reads Status 2 with `StatusChangedUtc`
-- [x] 3.8 Cancelled event absent from the venue listing for every account
-- [x] 3.9 Contacts return 404 for organizer and previously accepted participant
-- [x] 3.10 Joining a cancelled event returns 409 `event_cancelled`
+- [x] 3.6 Mixed pending/accepted roster yields one outbox row each, delivered within 30s — e0c35a6
+- [x] 3.7 Join-request rows read Status 6 with `UpdatedUtc`; event reads Status 2 with `StatusChangedUtc` — e0c35a6
+- [x] 3.8 Cancelled event absent from the venue listing for every account — e0c35a6
+- [x] 3.9 Contacts return 404 for organizer and previously accepted participant — e0c35a6
+- [x] 3.10 Joining a cancelled event returns 409 `event_cancelled` — e0c35a6
 
 ### Phase 4: Remove Participant and Leave Event Endpoints
 
