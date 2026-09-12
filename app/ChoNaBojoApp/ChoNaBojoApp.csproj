@@ -4,8 +4,7 @@
 	     Must be imported before it is referenced ($(GoogleMapsApiKey) below), or CI's
 	     -p:GoogleMapsApiKey=... override, which MSBuild also resolves before this file's own
 	     property assignments run. -->
-	<Import Project="$(MSBuildThisFileDirectory)..\..\secrets\maps.props"
-	        Condition="Exists('$(MSBuildThisFileDirectory)..\..\secrets\maps.props')" />
+	<Import Project="$(MSBuildThisFileDirectory)..\..\secrets\maps.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\secrets\maps.props')" />
 
 	<PropertyGroup>
 		<TargetFrameworks>net10.0-android</TargetFrameworks>
@@ -43,14 +42,15 @@
 		     time. Value comes from the gitignored secrets/maps.props (local dev) or from
 		     -p:GoogleMapsApiKey=... in CI (see .github/workflows/android-deploy.yml). -->
 		<AndroidManifestPlaceholders Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">GOOGLE_MAPS_KEY=$(GoogleMapsApiKey)</AndroidManifestPlaceholders>
+		<PackageIcon>appicon.png</PackageIcon>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#2E7D32" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" />
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2E7D32" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#FFFFFF" BaseSize="256,256" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
@@ -87,6 +87,13 @@
 	  <ProjectReference Include="..\..\shared\ChoNaBojo.Contracts\ChoNaBojo.Contracts.csproj" />
 	  <ProjectReference Include="..\..\shared\ChoNaBojo.Validation\ChoNaBojo.Validation.csproj" />
 	  <ProjectReference Include="..\..\shared\ChoNaBojo.Utils\ChoNaBojo.Utils.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="Resources\AppIcon\appicon.png">
+	    <Pack>True</Pack>
+	    <PackagePath>\</PackagePath>
+	  </None>
 	</ItemGroup>
 
 	<!-- Android release signing -->
