@@ -643,22 +643,22 @@ For each of cancel, remove and leave, confirm `GET /api/events/{id}/contacts` st
 
 #### Automated
 
-- [x] 4.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx`
-- [x] 4.2 Organizer remove returns 200 with Status Removed
-- [x] 4.3 Repeat remove returns 409 `participant_not_accepted`
-- [x] 4.4 Non-organizer remove returns 404 `request_not_found`
-- [x] 4.5 Accepted participant leave returns 200 with Status Left
-- [x] 4.6 Pending requester leave returns 409 `participant_not_accepted`
-- [x] 4.7 Organizer leave returns 404 `request_not_found`
-- [x] 4.8 Remove and leave on a cancelled event return 409 `event_cancelled`
+- [x] 4.1 Solution builds: `dotnet build solutions/ChoNaBojo.slnx` — 6181a6f
+- [x] 4.2 Organizer remove returns 200 with Status Removed — 6181a6f
+- [x] 4.3 Repeat remove returns 409 `participant_not_accepted` — 6181a6f
+- [x] 4.4 Non-organizer remove returns 404 `request_not_found` — 6181a6f
+- [x] 4.5 Accepted participant leave returns 200 with Status Left — 6181a6f
+- [x] 4.6 Pending requester leave returns 409 `participant_not_accepted` — 6181a6f
+- [x] 4.7 Organizer leave returns 404 `request_not_found` — 6181a6f
+- [x] 4.8 Remove and leave on a cancelled event return 409 `event_cancelled` — 6181a6f
 
 #### Manual
 
-- [x] 4.9 Removed participant notified within 30s and contact access revoked both ways
-- [x] 4.10 Leave notifies the organizer within 30s and frees the slot in the venue listing
-- [x] 4.11 Re-request after leave refreshes `CreatedUtc`, revives the row to Pending with NULL `UpdatedUtc`, and emits one attempt-keyed notification
-- [x] 4.12 Re-request after removal is refused
-- [x] 4.13 Concurrent remove and accept never exceed `ParticipantLimit`
+- [x] 4.9 Removed participant notified within 30s and contact access revoked both ways — 6181a6f
+- [x] 4.10 Leave notifies the organizer within 30s and frees the slot in the venue listing — 6181a6f
+- [x] 4.11 Re-request after leave refreshes `CreatedUtc`, revives the row to Pending with NULL `UpdatedUtc`, and emits one attempt-keyed notification — 6181a6f
+- [x] 4.12 Re-request after removal is refused — 6181a6f
+- [x] 4.13 Concurrent remove and accept never exceed `ParticipantLimit` — 6181a6f
 
 ### Phase 5: Client — Organizer Lifecycle Actions
 
