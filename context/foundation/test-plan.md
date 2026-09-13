@@ -70,15 +70,18 @@ vocabulary and advances only as downstream artifacts land.
 
 ## 4. Stack
 
-The repository currently has no test project, test-runner configuration,
-or test files. Versions and exact package choices remain hypotheses until
-Phase 1 research verifies compatibility with the repository.
+The repository has two .NET 10 test projects:
+`tests\ChoNaBojo.UnitTests\ChoNaBojo.UnitTests.csproj` for Docker-independent
+unit tests and
+`tests\ChoNaBojo.Server.IntegrationTests\ChoNaBojo.Server.IntegrationTests.csproj`
+for API and real-PostgreSQL integration tests. Phase 1 established the
+test-runner configuration and package choices listed below.
 
 | Layer | Tool | Version | Notes |
 |-------|------|---------|-------|
-| unit + integration | xUnit + Microsoft.NET.Test.Sdk | none yet - see Phase 1 | Candidate supported by current .NET 10 documentation |
-| API host | ASP.NET Core WebApplicationFactory/TestServer | none yet - see Phase 1 | Exercise minimal APIs through HTTP rather than calling handlers directly |
-| database integration | Isolated PostgreSQL test database | none yet - see Phase 1 | Required where transaction, locking, constraints, or provider behavior is the signal |
+| unit + integration | xUnit + Microsoft.NET.Test.Sdk | xUnit 2.9.3; Test SDK 17.14.1 | Configured in both test projects |
+| API host | ASP.NET Core WebApplicationFactory/TestServer | Microsoft.AspNetCore.Mvc.Testing 10.0.10 | Configured in the server integration project; exercise minimal APIs through HTTP rather than calling handlers directly |
+| database integration | Testcontainers PostgreSQL + Respawn | Testcontainers.PostgreSql 4.15.0; Respawn 7.0.0 | Configured in the server integration project for transaction, locking, constraints, and provider behavior |
 | external push boundary | Deterministic fake gateway | none yet - see Phase 3 | Assert intent and outcome classification; never wait for Firebase |
 | Android e2e | Appium | none yet - see Phase 4 | One north-star flow only; do not repeat API integration coverage |
 | AI-native review | GitHub Copilot CLI - checked: 2026-09-13 | n/a | Review tests for oracle and implementation-mirror defects; never use as an executable gate or replacement for deterministic assertions |
