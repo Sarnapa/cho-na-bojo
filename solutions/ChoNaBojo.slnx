@@ -113,6 +113,12 @@
     <File Path="../context/archive/2026-09-11-event-lifecycle-ops/reviews/impl-review.md" />
     <File Path="../context/archive/2026-09-11-event-lifecycle-ops/reviews/plan-review.md" />
   </Folder>
+  <Folder Name="/context/archive/2026-09-13-testing-transactional-critical-path-foundation/">
+    <File Path="../context/archive/2026-09-13-testing-transactional-critical-path-foundation/change.md" />
+    <File Path="../context/archive/2026-09-13-testing-transactional-critical-path-foundation/plan-brief.md" />
+    <File Path="../context/archive/2026-09-13-testing-transactional-critical-path-foundation/plan.md" />
+    <File Path="../context/archive/2026-09-13-testing-transactional-critical-path-foundation/research.md" />
+  </Folder>
   <Folder Name="/context/archive/bootstrap-verification/">
     <File Path="../context/archive/bootstrap-verification/verification.md" />
   </Folder>
@@ -121,12 +127,6 @@
   </Folder>
   <Folder Name="/context/changes/">
     <File Path="../context/changes/README.md" />
-  </Folder>
-  <Folder Name="/context/changes/testing-transactional-critical-path-foundation/">
-    <File Path="../context/changes/testing-transactional-critical-path-foundation/change.md" />
-    <File Path="../context/changes/testing-transactional-critical-path-foundation/plan-brief.md" />
-    <File Path="../context/changes/testing-transactional-critical-path-foundation/plan.md" />
-    <File Path="../context/changes/testing-transactional-critical-path-foundation/research.md" />
   </Folder>
   <Folder Name="/context/foundation/">
     <File Path="../context/foundation/infrastructure.md" />
