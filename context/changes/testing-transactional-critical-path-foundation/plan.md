@@ -471,16 +471,16 @@ The `public partial class Program` declaration is a test-host discoverability se
 
 #### Automated
 
-- [x] 3.1 Authentication matrix passes
-- [x] 3.2 Privacy read matrix passes
-- [x] 3.3 Forbidden mutation and leave-state tests pass
-- [x] 3.4 Contact self-publish guard tests pass
-- [x] 3.5 Full integration project passes with reset between scenarios
+- [x] 3.1 Authentication matrix passes — b4d8604
+- [x] 3.2 Privacy read matrix passes — b4d8604
+- [x] 3.3 Forbidden mutation and leave-state tests pass — b4d8604
+- [x] 3.4 Contact self-publish guard tests pass — b4d8604
+- [x] 3.5 Full integration project passes with reset between scenarios — b4d8604
 
 #### Manual
 
-- [x] 3.6 Marker assertion diagnostics are specific and do not print secrets
-- [x] 3.7 Every mapped Events route family is represented in the matrix
+- [x] 3.6 Marker assertion diagnostics are specific and do not print secrets — b4d8604
+- [x] 3.7 Every mapped Events route family is represented in the matrix — b4d8604
 
 ### Phase 4: Prove Final-Slot Serialization and Document the Recipes
 
