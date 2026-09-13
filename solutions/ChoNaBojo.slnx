@@ -124,6 +124,8 @@
   </Folder>
   <Folder Name="/context/changes/testing-transactional-critical-path-foundation/">
     <File Path="../context/changes/testing-transactional-critical-path-foundation/change.md" />
+    <File Path="../context/changes/testing-transactional-critical-path-foundation/plan-brief.md" />
+    <File Path="../context/changes/testing-transactional-critical-path-foundation/plan.md" />
     <File Path="../context/changes/testing-transactional-critical-path-foundation/research.md" />
   </Folder>
   <Folder Name="/context/foundation/">
