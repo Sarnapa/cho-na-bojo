@@ -486,13 +486,13 @@ The `public partial class Program` declaration is a test-host discoverability se
 
 #### Automated
 
-- [x] 4.1 All three deterministic final-slot races pass
-- [x] 4.2 Final-slot tests pass 20 consecutive times without a flaky retry
-- [x] 4.3 Unit and full integration suites pass together
-- [x] 4.4 Canonical solution builds after cookbook and test additions
-- [x] 4.5 Phase 1 cookbook placeholders are replaced with shipped recipes
+- [x] 4.1 All three deterministic final-slot races pass — 31ed740
+- [x] 4.2 Final-slot tests pass 20 consecutive times without a flaky retry — 31ed740
+- [x] 4.3 Unit and full integration suites pass together — 31ed740
+- [x] 4.4 Canonical solution builds after cookbook and test additions — 31ed740
+- [x] 4.5 Phase 1 cookbook placeholders are replaced with shipped recipes — 31ed740
 
 #### Manual
 
-- [x] 4.6 Observer evidence confirms both API sessions waited before lock release
-- [x] 4.7 Forced observer timeout reports diagnostics and releases database resources
+- [x] 4.6 Observer evidence confirms both API sessions waited before lock release — 31ed740
+- [x] 4.7 Forced observer timeout reports diagnostics and releases database resources — 31ed740
