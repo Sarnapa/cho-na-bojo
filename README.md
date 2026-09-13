@@ -153,7 +153,7 @@ The app is distributed through **Google Play internal app sharing**, which means
 
 Once you have been granted access, install the build from:
 
-👉 **https://play.google.com/apps/test/com.cho_na_bojo/10081**
+👉 **https://play.google.com/apps/test/com.cho_na_bojo/10091**
 
 ### You must enable "Internal app sharing" in the Play Store first
 
