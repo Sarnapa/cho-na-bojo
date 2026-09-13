@@ -15,12 +15,17 @@ internal static class TestJwtFactory
 			[
 				new Claim(JwtRegisteredClaimNames.Sub, stableUserId),
 				new Claim(ClaimTypes.NameIdentifier, stableUserId)
-			]);
+			],
+			TestConfiguration.JwtSigningKey,
+			DateTime.UtcNow.AddMinutes(15));
 	}
 
 	public static string CreateTokenWithoutStableIdentity()
 	{
-		return CreateToken([]);
+		return CreateToken(
+			[],
+			TestConfiguration.JwtSigningKey,
+			DateTime.UtcNow.AddMinutes(15));
 	}
 
 	public static string CreateTokenWithInvalidStableIdentity()
@@ -29,7 +34,9 @@ internal static class TestJwtFactory
 			[
 				new Claim(JwtRegisteredClaimNames.Sub, "not-a-guid"),
 				new Claim(ClaimTypes.NameIdentifier, "also-not-a-guid")
-			]);
+			],
+			TestConfiguration.JwtSigningKey,
+			DateTime.UtcNow.AddMinutes(15));
 	}
 
 	public static string CreateTokenWithEmptyStableIdentity()
@@ -39,14 +46,45 @@ internal static class TestJwtFactory
 			[
 				new Claim(JwtRegisteredClaimNames.Sub, emptyUserId),
 				new Claim(ClaimTypes.NameIdentifier, emptyUserId)
-			]);
+			],
+			TestConfiguration.JwtSigningKey,
+			DateTime.UtcNow.AddMinutes(15));
+	}
+
+	public static string CreateExpiredToken(Guid userId)
+	{
+		string stableUserId = userId.ToString();
+		return CreateToken(
+			[
+				new Claim(JwtRegisteredClaimNames.Sub, stableUserId),
+				new Claim(ClaimTypes.NameIdentifier, stableUserId)
+			],
+			TestConfiguration.JwtSigningKey,
+			DateTime.UtcNow.AddMinutes(-2),
+			DateTime.UtcNow.AddMinutes(-17));
+	}
+
+	public static string CreateTokenWithInvalidSignature(Guid userId)
+	{
+		string stableUserId = userId.ToString();
+		return CreateToken(
+			[
+				new Claim(JwtRegisteredClaimNames.Sub, stableUserId),
+				new Claim(ClaimTypes.NameIdentifier, stableUserId)
+			],
+			"ChoNaBojo.IntegrationTests.InvalidSigningKey.2026",
+			DateTime.UtcNow.AddMinutes(15));
 	}
 	#endregion
 
 	#region Private methods
-	private static string CreateToken(IEnumerable<Claim> identityClaims)
+	private static string CreateToken(
+		IEnumerable<Claim> identityClaims,
+		string signingKey,
+		DateTime expiresUtc,
+		DateTime? issuedAtUtc = null)
 	{
-		DateTime issuedAtUtc = DateTime.UtcNow;
+		DateTime issuedAt = issuedAtUtc ?? DateTime.UtcNow;
 		var claims = identityClaims
 			.Append(new Claim(
 				JwtRegisteredClaimNames.Jti,
@@ -57,12 +95,12 @@ internal static class TestJwtFactory
 			Issuer = TestConfiguration.JwtIssuer,
 			Audience = TestConfiguration.JwtAudience,
 			Subject = new ClaimsIdentity(claims),
-			IssuedAt = issuedAtUtc,
-			NotBefore = issuedAtUtc,
-			Expires = issuedAtUtc.AddMinutes(15),
+			IssuedAt = issuedAt,
+			NotBefore = issuedAt,
+			Expires = expiresUtc,
 			SigningCredentials = new SigningCredentials(
 				new SymmetricSecurityKey(
-					Encoding.UTF8.GetBytes(TestConfiguration.JwtSigningKey)),
+					Encoding.UTF8.GetBytes(signingKey)),
 				SecurityAlgorithms.HmacSha256)
 		};
 
