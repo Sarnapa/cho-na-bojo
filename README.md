@@ -17,6 +17,7 @@ You have a free afternoon and a sport in mind, but your friends can't fill the r
 - [Repository layout](#repository-layout)
 - [The `context/` directory — how this app was built with an AI agent](#the-context-directory--how-this-app-was-built-with-an-ai-agent)
 - [Want to test the app?](#want-to-test-the-app)
+- [Automated tests](#automated-tests)
 - [Running it locally](#running-it-locally)
 - [MVP scope and non-goals](#mvp-scope-and-non-goals)
 
@@ -118,6 +119,7 @@ app/ChoNaBojoApp/   .NET MAUI mobile client (Android)
 server/             ASP.NET Core Web API
 shared/             Code shared between client and API
 data/               Venue / sport seed data
+tests/              Unit and API/PostgreSQL integration test projects
 solutions/          ChoNaBojo.slnx
 images/             Screenshots used in this README
 context/            All AI-agent context: PRD, roadmap, plans, reviews, lessons
@@ -133,6 +135,7 @@ context/            All AI-agent context: PRD, roadmap, plans, reviews, lessons
   - [`prd.md`](context/foundation/prd.md) — vision, personas, user stories, functional and non-functional requirements, access control, non-goals.
   - [`roadmap.md`](context/foundation/roadmap.md) — the work sliced into vertical, user-visible milestones (`F-01`…`S-07`) with the North Star called out explicitly.
   - [`tech-stack.md`](context/foundation/tech-stack.md), [`infrastructure.md`](context/foundation/infrastructure.md) — stack and deployment decisions.
+  - [`test-plan.md`](context/foundation/test-plan.md) — the risk-first, phased testing strategy. It favours the cheapest test with a meaningful signal: focused unit tests for shared rules, real-PostgreSQL API integration tests for authorization, privacy, transactions and concurrency, deterministic notification contracts, and one minimal Android North Star smoke test.
   - [`shape-notes.md`](context/foundation/shape-notes.md), [`ui-guidelines.md`](context/foundation/ui-guidelines.md), [`lessons.md`](context/foundation/lessons.md) — discovery notes, UI conventions, and recurring rules harvested from past reviews.
 - [`context/changes/`](context/changes/) — the folder for the change currently in flight (`change.md` → `plan.md` → implementation → review).
 - [`context/archive/`](context/archive/) — one immutable folder per completed change, each keeping its identity note, plan, research and reviews. It is a complete audit trail of how the MVP was delivered, slice by slice.
@@ -166,6 +169,28 @@ The official instructions are in the section **"How authorised testers turn on i
 https://support.google.com/googleplay/android-developer/answer/9844679?hl=en-GB
 
 > Requirements: an Android device running **Android 10 (API 29) or newer**, and the Google account you gave me must be the one signed in to the Play Store.
+
+---
+
+## Automated tests
+
+The test projects live under [`tests/`](tests/):
+
+| Project | Purpose | Requirements |
+| --- | --- | --- |
+| [`ChoNaBojo.UnitTests`](tests/ChoNaBojo.UnitTests/) | Fast, Docker-independent tests for shared validation and domain rules. | .NET 10 SDK. |
+| [`ChoNaBojo.Server.IntegrationTests`](tests/ChoNaBojo.Server.IntegrationTests/) | End-to-end HTTP tests against the real ASP.NET Core host and a disposable PostgreSQL/PostGIS database, including authorization, contact privacy and concurrent final-slot acceptance. | .NET 10 SDK and a reachable Linux Docker engine capable of running `postgis/postgis:17-3.5` (for example, Docker Desktop in Linux-container mode). |
+
+Run the projects separately from the repository root:
+
+```powershell
+dotnet test tests\ChoNaBojo.UnitTests\ChoNaBojo.UnitTests.csproj
+dotnet test tests\ChoNaBojo.Server.IntegrationTests\ChoNaBojo.Server.IntegrationTests.csproj
+```
+
+The integration suite starts its own PostGIS container, applies EF Core migrations and resets mutable data between scenarios. It does not require a manually configured PostgreSQL connection string, access to Supabase/Railway, or Firebase credentials. If the image is not available locally, Docker downloads it on the first run.
+
+The complete testing strategy, risk map, rollout status and test-authoring patterns are documented in [`context/foundation/test-plan.md`](context/foundation/test-plan.md).
 
 ---
 
