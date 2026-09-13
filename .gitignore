@@ -367,6 +367,7 @@ FodyWeavers.xsd
 *.pfx
 *.env
 secrets/
+internal/
 /server/Properties/serviceDependencies.local.json
 
 # Includes materials from the training
