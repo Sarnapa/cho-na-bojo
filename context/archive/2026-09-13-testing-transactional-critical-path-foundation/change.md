@@ -1,10 +1,10 @@
 ---
 change_id: testing-transactional-critical-path-foundation
 title: Establish transactional critical-path test foundation
-status: implemented
+status: archived
 created: 2026-09-13
 updated: 2026-09-13
-archived_at: null
+archived_at: 2026-09-13T10:34:35Z
 ---
 
 ## Notes
