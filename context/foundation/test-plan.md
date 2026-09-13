@@ -111,16 +111,46 @@ These recipes fill in as rollout phases ship.
 
 ### 6.1 Adding a shared-rule unit test
 
-- TBD - see §3 Phase 1 for independent-oracle validation and policy tests.
+- Put Docker-independent tests in `tests\ChoNaBojo.UnitTests` and exercise
+  only public shared behavior.
+- Derive literal expected values from the PRD, accepted lessons, and domain
+  constants before reading the implementation. Parameterize accepted and
+  rejected boundaries, including null, blank, and malformed inputs.
+- Keep the project free of server, ASP.NET Core, EF Core, Npgsql, and MAUI
+  references. Canonical examples:
+  `Validation\ContactPatternGuardTests.cs`, `Validation\AuthValidationTests.cs`,
+  and `Validation\EventValidationTests.cs`.
 
 ### 6.2 Adding an API/database integration test
 
-- TBD - see §3 Phase 1 for multi-identity privacy and capacity patterns.
+- Add tests to the serialized `PostGIS integration tests` collection and use
+  the shared `PostgisFixture`; call `ResetAsync` before each scenario.
+- Exercise routes through `ChoNaBojoApiFactory` with production-shaped tokens
+  from `TestJwtFactory`. Seed through the real `ChoNaBojoContext`, then assert
+  committed state through a fresh scope with `AsNoTracking`.
+- For privacy, assign unique markers to every identity and inspect raw JSON.
+  Assert forbidden keys and marker values are absent rather than relying only
+  on DTO deserialization. Reuse `EventScenarioBuilder`,
+  `JsonPrivacyAssertions`, and `HttpTestAssertions`.
+- Do not replace PostgreSQL with EF InMemory/SQLite, call endpoint handlers
+  directly, copy authorization predicates into tests, or wrap API requests in
+  one ambient rollback transaction.
 
 ### 6.3 Adding a concurrency regression test
 
-- TBD - see §3 Phase 1 for coordinated final-slot attempts and §3 Phase 2
-  for interleaved lifecycle transitions.
+- Seed the smallest committed state that exposes the invariant, then use
+  `PostgresLockCoordinator` to lock the aggregate event row from a
+  `ChoNaBojo.Integration.Control` session.
+- Start both real HTTP operations while the control lock is held. Release only
+  after the `ChoNaBojo.Integration.Observer` session sees two
+  `ChoNaBojo.Integration.Api` backends waiting on the production
+  `SportsEvents ... FOR UPDATE` query.
+- Assert winner-independent HTTP outcomes first, dispose both responses, and
+  query persisted state through a fresh context. Bound observer polling and
+  retain PID, state, wait-event, query, and blocker diagnostics on timeout.
+- Never use sleeps, `Task.WhenAll` alone, a mocked store, retry-until-green, or
+  an assertion that pins which contender wins. Canonical example:
+  `Events\FinalSlotCapacityTests.cs`.
 
 ### 6.4 Adding a notification-pipeline test
 
@@ -133,7 +163,26 @@ These recipes fill in as rollout phases ship.
 
 ### 6.6 Per-rollout-phase notes
 
-- TBD - each rollout phase appends concise lessons and canonical references.
+- **Phase 1 — transactional critical-path foundation**
+  - Commands: `dotnet test tests\ChoNaBojo.UnitTests\ChoNaBojo.UnitTests.csproj`
+    and
+    `dotnet test tests\ChoNaBojo.Server.IntegrationTests\ChoNaBojo.Server.IntegrationTests.csproj`.
+    Run the final-slot stability gate with the 20-iteration command recorded in
+    the Phase 1 change plan.
+  - Prerequisite: a reachable Linux Docker engine capable of running
+    `postgis/postgis:17-3.5`. Integration tests fail clearly and never skip,
+    mock, or fall back to an external database when Docker is unavailable.
+  - Isolation: one migrated disposable PostGIS container is shared by the
+    serialized collection; Respawn clears mutable tables between scenarios
+    while preserving migrations, `Sports`, and `spatial_ref_sys`.
+  - Canonical infrastructure:
+    `Infrastructure\PostgisFixture.cs`,
+    `Infrastructure\ChoNaBojoApiFactory.cs`,
+    `Infrastructure\EventScenarioBuilder.cs`, and
+    `Infrastructure\PostgresLockCoordinator.cs`.
+  - Anti-patterns: no development/Supabase/Railway database, EF InMemory,
+    SQLite, mocked handlers, copied authorization predicates, shared ambient
+    transaction, unbounded polling, or background workers in the test host.
 
 ## 7. What We Deliberately Don't Test
 
