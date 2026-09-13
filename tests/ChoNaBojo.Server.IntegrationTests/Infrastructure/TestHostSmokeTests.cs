@@ -26,7 +26,7 @@ public sealed class TestHostSmokeTests(PostgisFixture fixture) :
 	}
 	#endregion
 
-	#region Facts
+	#region Test methods
 	[Fact]
 	public async Task Health_RespondsThroughProductionPipeline()
 	{
