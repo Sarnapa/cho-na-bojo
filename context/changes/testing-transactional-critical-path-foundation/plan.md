@@ -459,13 +459,13 @@ The `public partial class Program` declaration is a test-host discoverability se
 
 #### Automated
 
-- [x] 2.1 All unit tests pass without Docker
-- [x] 2.2 Unit tests remain free of server and framework dependencies
-- [x] 2.3 Every protected rule has accepted and rejected boundary cases
+- [x] 2.1 All unit tests pass without Docker — 19c0f53
+- [x] 2.2 Unit tests remain free of server and framework dependencies — 19c0f53
+- [x] 2.3 Every protected rule has accepted and rejected boundary cases — 19c0f53
 
 #### Manual
 
-- [x] 2.4 Unit-test names and expected values pass independent-oracle review
+- [x] 2.4 Unit-test names and expected values pass independent-oracle review — 19c0f53
 
 ### Phase 3: Prove the Event Privacy and Authorization Matrix
 
