@@ -445,15 +445,15 @@ The `public partial class Program` declaration is a test-host discoverability se
 
 #### Automated
 
-- [x] 1.1 Test projects restore successfully
-- [x] 1.2 Unit and integration projects compile
-- [x] 1.3 Host and database smoke tests pass
-- [x] 1.4 Canonical solution builds with both test projects
+- [x] 1.1 Test projects restore successfully — 74d370d
+- [x] 1.2 Unit and integration projects compile — 74d370d
+- [x] 1.3 Host and database smoke tests pass — 74d370d
+- [x] 1.4 Canonical solution builds with both test projects — 74d370d
 
 #### Manual
 
-- [x] 1.5 Docker-unavailable execution fails clearly without a skip, mock, or external database fallback
-- [x] 1.6 Docker-backed execution cleans up its container without changing development data
+- [x] 1.5 Docker-unavailable execution fails clearly without a skip, mock, or external database fallback — 74d370d
+- [x] 1.6 Docker-backed execution cleans up its container without changing development data — 74d370d
 
 ### Phase 2: Protect Independent Pure Rules
 
