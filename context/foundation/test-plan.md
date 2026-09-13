@@ -63,7 +63,7 @@ vocabulary and advances only as downstream artifacts land.
 
 | # | Phase name | Goal (one line) | Risks covered | Test types | Status | Change folder |
 |---|------------|-----------------|----------------|------------|--------|---------------|
-| 1 | Transactional critical-path foundation | Bootstrap the runner and prove capacity and privacy invariants at the API/database boundary | #1, #2 | unit + real-database integration | not started | - |
+| 1 | Transactional critical-path foundation | Bootstrap the runner and prove capacity and privacy invariants at the API/database boundary | #1, #2 | unit + real-database integration | change opened | testing-transactional-critical-path-foundation |
 | 2 | Lifecycle, session, and validation boundaries | Prove state revocation, refresh behavior, and server-authoritative rejection or replay | #4, #5, #6 | unit + integration | not started | - |
 | 3 | Deterministic notification pipeline | Prove outbox, recipient, idempotency, retry, and terminal-failure behavior without waiting for Firebase | #3 | integration + gateway contract | not started | - |
 | 4 | Android matchmaking smoke and quality floor | Prove one full matchmaking flow and enforce the shipped test floor without duplicating cheaper checks | #1-#6 cross-cutting | minimal Appium e2e + selective AI-native review + gates | not started | - |
