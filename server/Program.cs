@@ -77,6 +77,19 @@ builder.Services
 			ValidateLifetime = true,
 			ClockSkew = TimeSpan.FromSeconds(30)
 		};
+		jwtBearerOptions.Events = new JwtBearerEvents
+		{
+			OnTokenValidated = context =>
+			{
+				if (context.Principal is null
+					|| !context.Principal.TryGetUserId(out _))
+				{
+					context.Fail("The token does not contain a valid stable user identity.");
+				}
+
+				return Task.CompletedTask;
+			}
+		};
 	});
 
 builder.Services.AddAuthorization();
@@ -163,3 +176,5 @@ static string ResolveRuntimeAppDbConnectionString(string? connectionString)
 
 	return builder.ConnectionString;
 }
+
+public partial class Program;

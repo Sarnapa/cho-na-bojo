@@ -153,6 +153,10 @@
     <Project Path="../shared/ChoNaBojo.Utils/ChoNaBojo.Utils.csproj" />
     <Project Path="../shared/ChoNaBojo.Validation/ChoNaBojo.Validation.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="../tests/ChoNaBojo.Server.IntegrationTests/ChoNaBojo.Server.IntegrationTests.csproj" />
+    <Project Path="../tests/ChoNaBojo.UnitTests/ChoNaBojo.UnitTests.csproj" />
+  </Folder>
   <Folder Name="/workflows/" />
   <Folder Name="/workflows/.github/">
     <File Path="../.github/workflows/android-deploy.yml" />

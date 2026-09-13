@@ -11,20 +11,42 @@ public static class CurrentUser
 	/// </summary>
 	public static Guid GetUserId(this ClaimsPrincipal principal)
 	{
-		string? userIdClaim = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
-			?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+		if (principal.TryGetUserId(out Guid userId))
+		{
+			return userId;
+		}
 
-		if (string.IsNullOrWhiteSpace(userIdClaim))
+		bool hasIdentityClaim = principal.Claims.Any(claim =>
+			claim.Type is JwtRegisteredClaimNames.Sub or ClaimTypes.NameIdentifier
+				&& !string.IsNullOrWhiteSpace(claim.Value));
+		if (!hasIdentityClaim)
 		{
 			throw new InvalidOperationException("Authenticated user id claim is missing.");
 		}
 
-		if (!Guid.TryParse(userIdClaim, out var userId))
+		throw new InvalidOperationException("Authenticated user id claim is invalid.");
+	}
+
+	public static bool TryGetUserId(this ClaimsPrincipal principal, out Guid userId)
+	{
+		foreach (string claimType in new[]
+			{
+				JwtRegisteredClaimNames.Sub,
+				ClaimTypes.NameIdentifier
+			})
 		{
-			throw new InvalidOperationException("Authenticated user id claim is invalid.");
+			foreach (Claim claim in principal.FindAll(claimType))
+			{
+				if (Guid.TryParse(claim.Value, out userId)
+					&& userId != Guid.Empty)
+				{
+					return true;
+				}
+			}
 		}
 
-		return userId;
+		userId = Guid.Empty;
+		return false;
 	}
 
 	public static Guid GetUserId(this HttpContext httpContext)
