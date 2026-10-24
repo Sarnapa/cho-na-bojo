@@ -374,4 +374,3 @@ internal/
 .github/.10x-cli-manifest.json
 .github/prompts
 .github/skills
-/app/ChoNaBojoApp/Platforms/Android/google-services.json
