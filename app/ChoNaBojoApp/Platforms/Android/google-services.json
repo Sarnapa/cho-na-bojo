@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1039728482760",
+    "project_id": "cho-na-bojo",
+    "storage_bucket": "cho-na-bojo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039728482760:android:1f5d6b53aae60ad8cc08fd",
+        "android_client_info": {
+          "package_name": "com.cho_na_bojo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADs6k84uAh3kxWe9x6yyoVGysBEOpkJvI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
